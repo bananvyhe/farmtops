@@ -1,0 +1,29 @@
+<section class="panel">
+  <h1>Пользователи</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>E-mail</th>
+        <th>Тариф</th>
+        <th>Баланс</th>
+        <th>Роль</th>
+        <th>Списание/час</th>
+        <th>Доступ</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @users.each do |user| %>
+        <tr>
+          <td><%= user.email %></td>
+          <td><%= user.tariff_name %></td>
+          <td><%= rubles(user.balance_cents) %></td>
+          <td><%= user.role %></td>
+          <td><%= rubles(user.effective_hourly_rate_cents) %></td>
+          <td><%= user.active? ? "активен" : "отключён" %></td>
+          <td><%= link_to "Изменить", edit_admin_user_path(user), class: "button secondary" %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</section>

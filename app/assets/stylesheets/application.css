@@ -1,0 +1,221 @@
+:root {
+  --bg: #f4efe7;
+  --paper: #fffaf3;
+  --ink: #1c1b19;
+  --muted: #665f54;
+  --line: #d8cdbb;
+  --accent: #c45c2a;
+  --accent-dark: #8e3914;
+  --success: #2f7d48;
+  --danger: #9d2f2f;
+  --shadow: 0 18px 40px rgba(73, 45, 18, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, rgba(196, 92, 42, 0.14), transparent 26%),
+    linear-gradient(180deg, #f7f1e7 0%, #efe3cf 100%);
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+}
+
+.shell {
+  width: min(1100px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 24px 0 40px;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.brand {
+  text-decoration: none;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.topbar nav {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.hero,
+.panel {
+  background: rgba(255, 250, 243, 0.92);
+  border: 1px solid rgba(216, 205, 187, 0.9);
+  border-radius: 28px;
+  box-shadow: var(--shadow);
+}
+
+.hero {
+  padding: 40px;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+}
+
+.hero h1,
+.panel h1,
+.panel h2,
+.panel h3 {
+  margin-top: 0;
+}
+
+.grid {
+  display: grid;
+  gap: 20px;
+}
+
+.grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.panel {
+  padding: 28px;
+}
+
+.metric {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.metric strong {
+  display: block;
+  font-size: 1.85rem;
+  margin-top: 8px;
+}
+
+.button,
+button,
+input[type="submit"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--accent);
+  color: #fff9f0;
+  border: none;
+  border-radius: 999px;
+  padding: 12px 18px;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button.secondary {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.button.danger {
+  background: var(--danger);
+}
+
+form {
+  display: grid;
+  gap: 16px;
+}
+
+label {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #fffdf8;
+  padding: 12px 14px;
+  font: inherit;
+  color: var(--ink);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.flash {
+  padding: 12px 16px;
+  border-radius: 16px;
+  margin-bottom: 16px;
+}
+
+.flash.notice {
+  background: rgba(196, 92, 42, 0.12);
+  color: var(--accent-dark);
+}
+
+.flash.alert {
+  background: rgba(157, 47, 47, 0.12);
+  color: var(--danger);
+}
+
+.flash.success {
+  background: rgba(47, 125, 72, 0.12);
+  color: var(--success);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.stack {
+  display: grid;
+  gap: 12px;
+}
+
+@media (max-width: 800px) {
+  .hero,
+  .grid.two,
+  .grid.three {
+    grid-template-columns: 1fr;
+  }
+
+  .shell {
+    width: min(100% - 20px, 1100px);
+  }
+
+  .panel,
+  .hero {
+    padding: 24px;
+  }
+}

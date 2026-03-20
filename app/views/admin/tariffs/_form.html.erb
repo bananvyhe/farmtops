@@ -1,0 +1,36 @@
+<%= form_with model: [:admin, tariff] do |form| %>
+  <% if tariff.errors.any? %>
+    <div class="flash alert"><%= tariff.errors.full_messages.to_sentence %></div>
+  <% end %>
+
+  <label>
+    Название
+    <%= form.text_field :name, required: true %>
+  </label>
+
+  <label>
+    Цена за месяц, коп.
+    <%= form.number_field :monthly_price_cents, min: 0, step: 1, required: true %>
+  </label>
+
+  <label>
+    Длительность расчётного периода, дней
+    <%= form.number_field :billing_period_days, min: 1, step: 1, required: true %>
+  </label>
+
+  <label>
+    Описание
+    <%= form.text_area :description, rows: 3 %>
+  </label>
+
+  <label>
+    Активен
+    <%= form.select :active, [["Да", true], ["Нет", false]] %>
+  </label>
+
+  <p class="muted">
+    Почасовое списание рассчитывается автоматически из месячной цены и длительности периода.
+  </p>
+
+  <%= form.submit "Сохранить" %>
+<% end %>

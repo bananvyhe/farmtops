@@ -1,0 +1,44 @@
+# Dev Notes
+
+- Local manual edits from the user in the editor are expected and should be treated as intentional.
+- Do not flag unrelated user changes as accidental; only modify files needed for the current task.
+- For future projects based on this repo, keep/update the bootstrap cheat sheet:
+  - `docs/NEW_PROJECT_CHEATSHEET.md`
+- Project rules:
+  - Frontend is always `Vue 3 Composition API`.
+  - Rails is backend/API and executes all security-sensitive logic.
+  - Keep local development environment fully running while working:
+    - PostgreSQL
+    - Redis
+    - Rails
+    - Sidekiq
+    - Vite frontend
+  - Periodic jobs are scheduled through `sidekiq-cron`.
+  - Production deploy is Docker-only.
+  - Use `./scripts/deploy_prod.sh` for VPS deploys from the local machine.
+  - In this template `config/credentials.yml.enc` is baked into the Docker image.
+  - After any credentials change, rebuild affected app containers; `restart` is not enough.
+  - For new projects, store app secrets in `Rails credentials` immediately; keep only infra secrets in `.env.production`.
+  - Billing: balances may go negative. Do not block hourly charges on negative balances.
+  - Billing schedule:
+    - Development: every 3 minutes (Sidekiq cron).
+    - Production: every 60 minutes (Sidekiq cron).
+    - Interval can be overridden with `BILLING_INTERVAL_MINUTES`.
+  - Keep infrastructure secrets in server `.env.production` only when they are needed before Rails boot:
+    - `RAILS_MASTER_KEY`
+    - `POSTGRES_PASSWORD`
+  - App secrets belong in `Rails credentials`:
+    - `jwt`
+    - `sidekiq`
+    - `yoomoney`
+    - app-level production notes
+  - `Sidekiq Web` auth is separate from site users.
+  - Imported users do not guarantee billing works:
+    - verify tariffs/manual hourly rates after import
+    - verify scheduler enqueue and `hourly_charge` ledger rows in production
+
+- Recent clone pitfalls (Farmspot):
+  - If Rails/Vite were already running from another project, ports `3000/5173` will be taken and new services will exit immediately.
+  - Sidekiq must be started after Redis and the DB exist; otherwise `sidekiq-cron` will crash on boot.
+  - For fast debugging, run `rails server`, `sidekiq`, and `vite` in the foreground to see errors.
+  - Do a sweep for leftover branding/env vars (examples: `PIXELUP` in templates, `PIXELUP_DATABASE_PASSWORD` in `config/database.yml`).

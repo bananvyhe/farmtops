@@ -1,0 +1,95 @@
+<section class="grid">
+  <div class="grid three">
+    <div class="metric">
+      Баланс
+      <strong><%= rubles(@user.balance_cents) %></strong>
+    </div>
+    <div class="metric">
+      Списание в час
+      <strong><%= rubles(@user.effective_hourly_rate_cents) %></strong>
+    </div>
+    <div class="metric">
+      Хватит примерно на
+      <strong><%= remaining_days_label(@user) %></strong>
+    </div>
+  </div>
+
+  <div class="grid two">
+    <section class="panel">
+      <h2>Пополнить баланс</h2>
+      <p class="muted">
+        На баланс пользователя будет зачислена вся сумма, которую он оплатит.
+        Комиссии сервиса вы берёте на себя.
+      </p>
+
+      <%= form_with model: @payment_transaction, url: payment_transactions_path do |form| %>
+        <label>
+          Сумма пополнения, руб.
+          <%= form.number_field :amount_rubles, min: 1, step: "0.01", required: true %>
+        </label>
+        <%= form.submit "Создать платёж" %>
+      <% end %>
+    </section>
+
+    <section class="panel">
+      <h2>Параметры аккаунта</h2>
+      <div class="stack muted">
+        <div><strong>E-mail:</strong> <%= @user.email %></div>
+        <div><strong>Роль:</strong> <%= @user.role %></div>
+        <div><strong>Тариф:</strong> <%= @user.tariff_name %></div>
+        <div><strong>Доступ:</strong> <%= @user.active? ? "активен" : "отключён" %></div>
+        <% if @user.last_hourly_charge_at.present? %>
+          <div><strong>Последнее списание:</strong> <%= @user.last_hourly_charge_at.to_fs(:short) %></div>
+        <% end %>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <h2>Последние платежи</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Сумма</th>
+          <th>Статус</th>
+          <th>Создан</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% @recent_payments.each do |payment| %>
+          <tr>
+            <td><%= link_to payment.label, payment_transaction_path(payment) %></td>
+            <td><%= rubles(payment.requested_amount_cents) %></td>
+            <td><%= payment.status %></td>
+            <td><%= payment.created_at.to_fs(:short) %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <h2>Движение средств</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Дата</th>
+          <th>Тип</th>
+          <th>Сумма</th>
+          <th>Баланс после</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% @recent_entries.each do |entry| %>
+          <tr>
+            <td><%= entry.created_at.to_fs(:short) %></td>
+            <td><%= entry.kind %></td>
+            <td><%= rubles(entry.amount_cents) %></td>
+            <td><%= rubles(entry.balance_after_cents) %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </section>
+</section>

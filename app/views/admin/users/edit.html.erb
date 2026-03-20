@@ -1,0 +1,38 @@
+<section class="panel" style="max-width: 640px;">
+  <h1>Настройки пользователя</h1>
+  <p class="muted"><%= @user.email %></p>
+
+  <%= form_with model: [:admin, @user] do |form| %>
+    <% if @user.errors.any? %>
+      <div class="flash alert">
+        <%= @user.errors.full_messages.to_sentence %>
+      </div>
+    <% end %>
+
+    <label>
+      Роль
+      <%= form.select :role, User.roles.keys.map { |role| [role, role] } %>
+    </label>
+
+    <label>
+      Месячный тариф
+      <%= form.collection_select :tariff_id, @tariffs, :id, :name, include_blank: "Индивидуальная настройка" %>
+    </label>
+
+    <label>
+      Ручное списание в час, коп.
+      <%= form.number_field :hourly_rate_cents, min: 0, step: 1 %>
+    </label>
+
+    <p class="muted">
+      Если выбран тариф, списание в час берётся из него. Поле ручного списания используется только без тарифа.
+    </p>
+
+    <label>
+      Активен
+      <%= form.select :active, [["Да", true], ["Нет", false]] %>
+    </label>
+
+    <%= form.submit "Сохранить" %>
+  <% end %>
+</section>

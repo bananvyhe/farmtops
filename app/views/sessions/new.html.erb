@@ -1,0 +1,18 @@
+<section class="panel" style="max-width: 520px; margin: 0 auto;">
+  <h1>Вход</h1>
+  <p class="muted">Используется JWT-сессия на базе `jwt_sessions` с refresh-token в cookie.</p>
+
+  <%= form_with url: session_path, method: :post do |form| %>
+    <label>
+      E-mail
+      <%= form.email_field :email, required: true, autofocus: true %>
+    </label>
+
+    <label>
+      Пароль
+      <%= form.password_field :password, required: true %>
+    </label>
+
+    <%= form.submit "Войти" %>
+  <% end %>
+</section>
