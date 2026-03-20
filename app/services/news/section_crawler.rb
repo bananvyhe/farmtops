@@ -1,0 +1,572 @@
+require "digest"
+require "nokogiri"
+require "set"
+
+module News
+  class SectionCrawler
+    Result = Struct.new(:pages_visited, :articles_found, :articles_saved, :articles_skipped, :errors, keyword_init: true)
+
+    DEFAULT_MAX_ARTICLES = 7
+    DEFAULT_MAX_PAGES = 20
+    DEFAULT_MAX_RETRIES = 3
+
+    def initialize(section:, client: HttpClient.new, sleeper: PoliteSleeper.new, logger: Rails.logger,
+      max_articles: DEFAULT_MAX_ARTICLES, max_pages: DEFAULT_MAX_PAGES, max_retries: DEFAULT_MAX_RETRIES)
+      @section = section
+      @source = section.news_source
+      @client = client
+      @sleeper = sleeper
+      @logger = logger
+      @max_articles = max_articles
+      @max_pages = max_pages
+      @max_retries = max_retries
+    end
+
+    def call
+      result = Result.new(pages_visited: 0, articles_found: 0, articles_saved: 0, articles_skipped: 0, errors: [])
+      seen_keys = Set.new
+      page_url = listing_page_url
+      visited = 0
+
+      while page_url.present? && visited < max_pages && result.articles_saved < max_articles
+        document = fetch_document(page_url, xml: feed_mode?)
+        result.pages_visited += 1
+        visited += 1
+
+        candidates = extract_listing_items(document, page_url)
+
+        candidates.each do |candidate|
+          result.articles_found += 1
+          break if result.articles_saved >= max_articles
+
+          save_result = crawl_article(candidate, page_url, seen_keys)
+          if save_result[:saved]
+            result.articles_saved += 1
+          else
+            result.articles_skipped += 1
+            result.errors << save_result[:error] if save_result[:error].present?
+          end
+        end
+
+        next_page = next_page_url(document, page_url, article_count: candidates.size)
+        break if next_page.blank? || next_page == page_url
+
+        page_url = next_page
+      end
+
+      section.update_column(:last_crawled_at, Time.current)
+      result
+    end
+
+    private
+
+    attr_reader :section, :source, :client, :sleeper, :logger, :max_articles, :max_pages, :max_retries
+
+    Candidate = Struct.new(:url, :title, :preview_text, :image_url, :source_article_id, :raw_payload, keyword_init: true)
+
+    def fetch_document(url, xml: false)
+      html = with_retry(url) { client.fetch(url) }
+      sleep_between_requests
+      xml ? Nokogiri::XML(html) : Nokogiri::HTML(html)
+    end
+
+    def with_retry(url)
+      attempts = 0
+      begin
+        attempts += 1
+        yield
+      rescue StandardError => e
+        raise if attempts >= max_retries
+
+        logger.warn("[News::SectionCrawler] retrying #{url}: #{e.class} #{e.message}")
+        sleep((attempts * 0.4) + rand * 0.4)
+        retry
+      end
+    end
+
+    def sleep_between_requests
+      sleeper.pause!
+    end
+
+    def extract_listing_items(document, page_url)
+      return extract_feed_items(document, page_url) if feed_mode?
+
+      list_selector = config_value("list_item_selector", "article")
+      title_selector = config_value("listing_title_selector", "h1, h2, h3, a")
+      url_selector = config_value("listing_url_selector", "a[href]")
+      preview_selector = config_value("listing_preview_selector", "p")
+      image_selector = config_value("listing_image_selector", "img")
+
+      document.css(list_selector).filter_map do |node|
+        link = node.at_css(url_selector) || node.at_css("a[href]")
+        href = link&.[]("href").presence
+        next if href.blank?
+
+        Candidate.new(
+          url: normalize_url(href, page_url),
+          title: extract_text(node, title_selector) || link&.text.to_s.strip,
+          preview_text: extract_text(node, preview_selector),
+          image_url: extract_image_url(node, image_selector, page_url),
+          source_article_id: extract_source_article_id(node, href, page_url),
+          raw_payload: {
+            listing_title: extract_text(node, title_selector),
+            listing_url: href,
+            listing_preview: extract_text(node, preview_selector)
+          }
+        )
+      end
+    end
+
+    def extract_feed_items(document, page_url)
+      items = document.css("item, entry")
+      items.filter_map do |node|
+        link = feed_item_link(node)
+        href = link.presence
+        next if href.blank?
+
+        Candidate.new(
+          url: normalize_url(href, page_url),
+          title: extract_text(node, "title") || feed_item_title(node),
+          preview_text: extract_text(node, "description, summary, content") || feed_item_preview(node),
+          image_url: feed_item_image_url(node, page_url),
+          source_article_id: feed_item_id(node, href, page_url),
+          raw_payload: {
+            feed_title: extract_text(node, "title"),
+            feed_link: href,
+            feed_preview: extract_text(node, "description, summary, content"),
+            feed_description_html: node.at_css("description")&.inner_html.to_s,
+            published_at: feed_item_published_at(node)
+          }
+        )
+      end
+    end
+
+    def extract_image_url(node, selector, page_url)
+      image_node = node.at_css(selector) || node.at_css("img")
+      return unless image_node
+
+      image = image_node["content"].presence || image_node["src"].presence || image_node["data-src"].presence
+      normalize_url(image, page_url)
+    end
+
+    def crawl_article(candidate, page_url, seen_keys)
+      if feed_mode? && candidate.raw_payload[:feed_description_html].present?
+        article_data = extract_feed_article(candidate, page_url)
+        return save_article(article_data, seen_keys, candidate)
+      end
+
+      article_document = fetch_document(candidate.url)
+      article_data = extract_article(article_document, candidate, page_url)
+      save_article(article_data, seen_keys, candidate)
+    end
+
+    def save_article(article_data, seen_keys, candidate)
+      unique_keys = [article_data[:source_article_id].presence, article_data[:content_hash]].compact
+
+      return { saved: false, duplicate: true } if unique_keys.any? { |key| seen_keys.include?(key) }
+
+      existing = find_existing_article(article_data)
+      if existing.present?
+        if refresh_existing_article?(existing, article_data)
+          existing.update!(article_data)
+          unique_keys.each { |key| seen_keys << key }
+          return { saved: true, article: existing, updated: true }
+        end
+
+        unique_keys.each { |key| seen_keys << key }
+        return { saved: false, duplicate: true }
+      end
+
+      article = section.news_articles.build(article_data)
+      article.save!
+      unique_keys.each { |key| seen_keys << key }
+      { saved: true, article: }
+    rescue StandardError => e
+      logger.warn("[News::SectionCrawler] skipped #{candidate.url}: #{e.class} #{e.message}")
+      { saved: false, error: "#{candidate.url}: #{e.class} #{e.message}" }
+    ensure
+      sleep_between_requests
+    end
+
+    def refresh_existing_article?(existing, article_data)
+      new_body_html = article_data[:body_html].to_s.strip
+      return false if new_body_html.blank?
+
+      existing_body_html = existing.body_html.to_s.strip
+      return true if existing_body_html.blank?
+
+      new_body_html.length > existing_body_html.length + 10
+    end
+
+    def extract_feed_article(candidate, page_url)
+      fragment = Nokogiri::HTML.fragment(candidate.raw_payload[:feed_description_html].to_s)
+      title = candidate.title
+      body_html = sanitize_news_html(rewrite_fragment_urls(fragment.to_html, candidate.url))
+      body_text = extract_fragment_body_text(Nokogiri::HTML.fragment(body_html))
+      preview_text = preview_excerpt(body_text, candidate.preview_text)
+      image_url = fragment.at_css("img")&.[]("src").presence || candidate.image_url
+      published_at = candidate.raw_payload[:published_at]
+      source_article_id = candidate.source_article_id.presence || candidate.url
+      content_hash = Digest::SHA256.hexdigest([
+        source.id,
+        title,
+        body_text,
+        image_url
+      ].map(&:to_s).join("|"))
+
+      {
+        news_source: source,
+        news_section: section,
+        source_article_id:,
+        canonical_url: candidate.url,
+        title: normalize_text(title),
+        preview_text: normalize_text(preview_text),
+        body_text: normalize_text(body_text),
+        body_html: body_html,
+        image_url: normalize_url(image_url, candidate.url),
+        published_at:,
+        fetched_at: Time.current,
+        content_hash:,
+        raw_payload: {
+          source_page_url: page_url,
+          article_url: candidate.url,
+          canonical_url: candidate.url,
+          source_article_id: source_article_id,
+          title: title,
+          preview_text: preview_text
+        }.compact
+      }
+    end
+
+    def extract_article(document, candidate, page_url)
+      article_url = canonical_url(document, candidate.url)
+      title = extract_text(document, config_value("article_title_selector", "h1")) ||
+        meta_content(document, "og:title") ||
+        candidate.title
+      body_html = extract_body_html(document, candidate.url)
+      body_text = extract_body_text_from_html(body_html).presence || extract_body_text(document)
+      preview_text = extract_text(document, config_value("article_preview_selector", "header p, .lead, .excerpt")) ||
+        preview_excerpt(body_text, candidate.preview_text)
+      image_url = article_image_url(document, candidate)
+      published_at = extract_datetime(document)
+      source_article_id = candidate.source_article_id.presence ||
+        extract_source_article_id_from_document(document, article_url)
+      content_hash = Digest::SHA256.hexdigest([
+        source.id,
+        title,
+        body_text,
+        image_url
+      ].map(&:to_s).join("|"))
+
+      {
+        news_source: source,
+        news_section: section,
+        source_article_id:,
+        canonical_url: article_url,
+        title: normalize_text(title),
+        preview_text: normalize_text(preview_text),
+        body_text: normalize_text(body_text),
+        body_html: body_html,
+        image_url: image_url.presence || candidate.image_url,
+        published_at:,
+        fetched_at: Time.current,
+        content_hash:,
+        raw_payload: {
+          source_page_url: page_url,
+          article_url: candidate.url,
+          canonical_url: article_url,
+          source_article_id: source_article_id,
+          title: title,
+          preview_text: preview_text
+        }.compact
+      }
+    end
+
+    def find_existing_article(article_data)
+      scope = section.news_articles
+      scope.find_by(source_article_id: article_data[:source_article_id]) ||
+        scope.find_by(content_hash: article_data[:content_hash])
+    end
+
+    def next_page_url(document, page_url, article_count: nil)
+      return nil if feed_mode?
+
+      selector = config_value("next_page_selector", "a[rel='next'], .next a, a.next")
+      link = document.at_css(selector) || document.at_css("a[rel='next']")
+      return normalize_url(link["href"], page_url) if link&.[]("href").present?
+
+      return nil unless pagination_mode_configured?
+      return nil if article_count.to_i <= 0
+
+      derive_next_page_url(page_url, config_value("pagination_mode", "path"))
+    end
+
+    def extract_body_text(document)
+      selector = config_value("article_body_selector", "[itemprop='articleBody'], .article-body, article")
+      nodes = document.css(selector)
+      paragraphs = nodes.flat_map do |node|
+        node.css("p").map(&:text)
+      end
+      paragraphs = [extract_text(document, selector)] if paragraphs.empty?
+      paragraphs = paragraphs.compact.map { |text| normalize_text(text) }.reject(&:blank?)
+      filter_body_paragraphs(paragraphs).join("\n\n")
+    end
+
+    def extract_body_text_from_html(html)
+      fragment = Nokogiri::HTML.fragment(html.to_s)
+      extract_fragment_body_text(fragment)
+    end
+
+    def extract_fragment_body_text(fragment)
+      paragraphs = fragment.css("p").map(&:text)
+      paragraphs = [fragment.text] if paragraphs.empty?
+      paragraphs = paragraphs.compact.map { |text| normalize_text(text) }.reject(&:blank?)
+      filter_body_paragraphs(paragraphs).join("\n\n")
+    end
+
+    def extract_body_html(document, base_url)
+      json_ld_body = extract_json_ld_article_body(document)
+      if json_ld_body.present?
+        return sanitize_news_html(rewrite_fragment_urls(json_ld_body, base_url))
+      end
+
+      selector = config_value("article_body_selector", "[itemprop='articleBody'], .article-body, article")
+      node = document.at_css(selector) || document.at_css("article")
+      return "" unless node
+
+      sanitize_news_html(rewrite_fragment_urls(node.inner_html, base_url))
+    end
+
+    def article_image_url(document, candidate)
+      selector = config_value("article_image_selector", "meta[property='og:image'], img")
+      image = document.at_css("meta[property='og:image']")&.[]("content").presence ||
+        document.at_css(selector)&.[]("content").presence ||
+        document.at_css(selector)&.[]("src").presence
+      normalize_url(image, candidate.url)
+    end
+
+    def extract_datetime(document)
+      time_tag = document.at_css("time[datetime]")
+      Time.zone.parse(time_tag["datetime"]) if time_tag&.[]("datetime").present?
+    rescue StandardError
+      nil
+    end
+
+    def meta_content(document, property_name)
+      document.at_css(%(meta[property="#{property_name}"]))&.[]("content").to_s.strip.presence
+    end
+
+    def canonical_url(document, fallback_url)
+      meta_content(document, "og:url").presence ||
+        document.at_css('link[rel="canonical"]')&.[]("href").to_s.strip.presence ||
+        fallback_url
+    end
+
+    def extract_source_article_id(node, href, page_url)
+      node["data-id"].presence || node["data-article-id"].presence || normalize_url(href, page_url)
+    end
+
+    def extract_source_article_id_from_document(document, fallback_url)
+      meta_content(document, "article:id").presence || fallback_url
+    end
+
+    def extract_text(node, selector)
+      node.at_css(selector)&.text.to_s.strip.presence
+    end
+
+    def normalize_text(value)
+      value.to_s.gsub(/\s+/, " ").strip.presence
+    end
+
+    def filter_body_paragraphs(paragraphs)
+      markers = [
+        /\Ashare\z/i,
+        /\Asource:/i,
+        /\Aprevious article/i,
+        /\Anext article/i,
+        /\Atags?\z/i,
+        /\Asubscribe/i,
+        /\Aload all comments/i,
+        /\Acommenting faq/i
+      ]
+
+      paragraphs.reject do |paragraph|
+        markers.any? { |marker| paragraph.match?(marker) }
+      end
+    end
+
+    def normalize_url(url, base_url)
+      return if url.blank?
+
+      uri = URI.parse(url)
+      uri = URI.join(base_url.to_s, url) if uri.relative?
+      uri.fragment = nil
+      if uri.query.present?
+        params = URI.decode_www_form(uri.query).reject { |key, _| key.to_s.start_with?("utm_") || key == "fbclid" }
+        uri.query = params.any? ? URI.encode_www_form(params) : nil
+      end
+      uri.to_s
+    rescue URI::InvalidURIError, URI::Error
+      url.to_s
+    end
+
+    def config_value(key, fallback)
+      section.config[key] || source.config[key] || fallback
+    end
+
+    def pagination_mode_configured?
+      section.config.key?("pagination_mode") ||
+        source.config.key?("pagination_mode") ||
+        section.config.key?("feed_url") ||
+        source.config.key?("feed_url")
+    end
+
+    def listing_page_url
+      return feed_url if feed_mode?
+
+      section.url
+    end
+
+    def feed_mode?
+      config_value("pagination_mode", "path").to_s == "feed" || explicit_feed_url.present?
+    end
+
+    def feed_url
+      explicit_feed_url.presence || derived_feed_url
+    end
+
+    def explicit_feed_url
+      section.config["feed_url"].presence || source.config["feed_url"].presence
+    end
+
+    def derived_feed_url
+      base = section.url.to_s.sub(%r{/?\z}, "/")
+      return if base.blank?
+
+      "#{base}feed/"
+    end
+
+    def feed_item_link(node)
+      node.at_css("link[rel='alternate']")&.[]("href").presence ||
+        node.at_css("link")&.[]("href").presence ||
+        node.at_css("link")&.text.to_s.strip.presence ||
+        node.at_css("guid")&.text.to_s.strip.presence
+    end
+
+    def feed_item_title(node)
+      extract_text(node, "title")
+    end
+
+    def feed_item_preview(node)
+      extract_text(node, "description, summary")
+    end
+
+    def feed_item_published_at(node)
+      value = extract_text(node, "pubDate, published, updated")
+      return if value.blank?
+
+      Time.zone.parse(value)
+    rescue StandardError
+      nil
+    end
+
+    def feed_item_image_url(node, page_url)
+      enclosure = node.at_css("enclosure")
+      image = enclosure&.[]("url").presence ||
+        node.at_xpath(".//*[local-name()='content']")&.[]("url").presence
+      normalize_url(image, page_url)
+    end
+
+    def feed_item_id(node, href, page_url)
+      node.at_css("guid")&.text.to_s.strip.presence ||
+        node["id"].presence ||
+        extract_source_article_id(node, href, page_url)
+    end
+
+    def derive_next_page_url(page_url, mode = "path")
+      uri = URI.parse(page_url)
+      path = uri.path.to_s
+
+      if mode.to_s == "query"
+        current_page = uri.query.to_s[/\bpage=(\d+)/, 1].to_i
+        next_page = current_page > 0 ? current_page + 1 : 2
+        params = uri.query.present? ? URI.decode_www_form(uri.query) : []
+        params.reject! { |key, _| key == "page" }
+        params << ["page", next_page.to_s]
+        uri.query = URI.encode_www_form(params)
+        uri.fragment = nil
+        uri.to_s
+      elsif mode.to_s == "start"
+        current_start = uri.query.to_s[/\bstart=(\d+)/, 1].to_i
+        step = config_value("pagination_step", 20).to_i
+        next_start = current_start.positive? ? current_start + step : step
+        params = uri.query.present? ? URI.decode_www_form(uri.query) : []
+        params.reject! { |key, _| key == "start" }
+        params << ["start", next_start.to_s]
+        uri.query = URI.encode_www_form(params)
+        uri.fragment = nil
+        uri.to_s
+      else
+        if path.match?(%r{/page/\d+/?\z})
+          next_path = path.sub(%r{/page/(\d+)/?\z}) { "/page/#{$1.to_i + 1}/" }
+        else
+          next_path = path.end_with?("/") ? "#{path}page/2/" : "#{path}/page/2/"
+        end
+
+        uri.path = next_path
+        uri.query = nil
+        uri.fragment = nil
+        uri.to_s
+      end
+    rescue URI::InvalidURIError, URI::Error
+      nil
+    end
+
+    def rewrite_fragment_urls(html, base_url)
+      fragment = Nokogiri::HTML.fragment(html.to_s)
+      fragment.css("a[href], img[src], img[data-src], source[src], iframe[src], video[poster]").each do |node|
+        %w[href src data-src poster].each do |attribute|
+          next if node[attribute].blank?
+
+          node[attribute] = normalize_url(node[attribute], base_url) if %w[href src data-src poster].include?(attribute)
+        end
+      end
+      fragment.to_html
+    end
+
+    def sanitize_news_html(html)
+      ActionController::Base.helpers.sanitize(
+        html.to_s,
+        tags: %w[p br div span strong em b i u s ul ol li blockquote figure figcaption a img h1 h2 h3 h4 h5 h6 iframe video source],
+        attributes: %w[href src alt title width height class style allow allowfullscreen frameborder loading referrerpolicy rel target data-src data-lazy-src poster]
+      )
+    end
+
+    def extract_json_ld_article_body(document)
+      document.css('script[type="application/ld+json"]').each do |script|
+        json = JSON.parse(script.text)
+        next unless json.present?
+
+        articles = json.is_a?(Array) ? json : [json]
+        articles.each do |entry|
+          next unless entry.is_a?(Hash)
+          next unless entry["@type"].to_s == "NewsArticle" || entry["@type"].to_s == "Article"
+
+          body = entry["articleBody"].to_s
+          return body if body.present?
+        end
+      rescue JSON::ParserError
+        next
+      end
+
+      nil
+    end
+
+    def preview_excerpt(body_text, fallback)
+      text = body_text.to_s.strip.presence || fallback.to_s.strip
+      return if text.blank?
+
+      text.truncate(360, omission: "…")
+    end
+  end
+end

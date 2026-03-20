@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,100..900;1,100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-tertiary-container": "#415368",
+              "surface": "#0e0e0e",
+              "surface-bright": "#2b2c2c",
+              "secondary-dim": "#9c9ea0",
+              "on-error-container": "#ff9993",
+              "surface-container": "#191a1a",
+              "error-dim": "#bb5551",
+              "surface-variant": "#252626",
+              "background": "#0e0e0e",
+              "on-secondary": "#1e2122",
+              "surface-container-low": "#131313",
+              "tertiary": "#e9f1ff",
+              "tertiary-fixed-dim": "#c3d6ef",
+              "on-secondary-container": "#bebfc1",
+              "on-tertiary-fixed": "#2f4155",
+              "secondary-fixed-dim": "#d3d4d6",
+              "secondary": "#9c9ea0",
+              "on-tertiary": "#495c71",
+              "surface-dim": "#0e0e0e",
+              "on-background": "#e7e5e5",
+              "on-surface": "#e7e5e5",
+              "on-secondary-fixed-variant": "#595c5e",
+              "on-surface-variant": "#acabaa",
+              "on-primary-container": "#a5d6ff",
+              "primary-fixed-dim": "#aed9ff",
+              "on-secondary-fixed": "#3d4041",
+              "inverse-on-surface": "#565555",
+              "primary": "#93cdfc",
+              "tertiary-fixed": "#d1e4fe",
+              "surface-container-highest": "#252626",
+              "on-tertiary-fixed-variant": "#4b5d72",
+              "error": "#ee7d77",
+              "outline-variant": "#484848",
+              "on-primary": "#004467",
+              "primary-container": "#004b71",
+              "tertiary-container": "#d1e4fe",
+              "on-error": "#490106",
+              "secondary-container": "#393c3d",
+              "surface-container-high": "#1f2020",
+              "secondary-fixed": "#e1e2e4",
+              "inverse-surface": "#fcf9f8",
+              "error-container": "#7f2927",
+              "primary-dim": "#85bfed",
+              "surface-tint": "#93cdfc",
+              "on-primary-fixed-variant": "#1d608a",
+              "outline": "#767575",
+              "tertiary-dim": "#c3d6ef",
+              "primary-fixed": "#cbe6ff",
+              "surface-container-lowest": "#000000",
+              "on-primary-fixed": "#004366",
+              "inverse-primary": "#22648e"
+            },
+            fontFamily: {
+              "headline": ["Work Sans"],
+              "body": ["Work Sans"],
+              "label": ["Work Sans"]
+            },
+            borderRadius: {"DEFAULT": "0px", "lg": "0px", "xl": "0px", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #0e0e0e;
+        }
+        .editorial-shadow {
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary selection:text-on-primary">
+<header class="fixed top-0 left-0 z-50 w-full bg-[#191a1a] dark:bg-[#191a1a] flex justify-between items-center px-6 py-3">
+<div class="font-['Work_Sans'] tracking-tighter font-bold uppercase text-xl font-black text-[#e7e5e5]">
+        CURATOR
+    </div>
+<div class="flex items-center gap-2">
+<button class="text-[#acabaa] hover:bg-[#2b2c2c] transition-colors duration-200 p-2 scale-90 active:opacity-80">
+<span class="material-symbols-outlined" data-icon="search">search</span>
+</button>
+<button class="text-[#acabaa] hover:bg-[#2b2c2c] transition-colors duration-200 p-2 scale-90 active:opacity-80">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+</button>
+</div>
+</header>
+<main class="mt-16 mb-20 max-w-4xl mx-auto px-4 md:px-6">
+<div class="mb-6 border-l-4 border-primary pl-4">
+<p class="font-label text-[10px] tracking-[0.2em] text-secondary uppercase mb-1">Daily Dispatch</p>
+<h1 class="font-headline text-2xl md:text-3xl font-extrabold tracking-tighter text-on-surface">MORNING BRIEFING</h1>
+</div>
+<div class="flex flex-col gap-3">
+<article class="group relative bg-surface-container-high flex flex-row editorial-shadow transition-all duration-300 hover:bg-surface-bright overflow-hidden">
+<div class="w-32 md:w-40 lg:w-48 h-auto shrink-0 overflow-hidden">
+<img alt="Satellite view of earth glowing circuits" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDtI-7zCCYJrGpg9qBkaDl9TJrGx5O9n2twU5sAy0XfrdSGyLkw_7XCgd-gJnFSZbZELLCYxPcEzCXdE_w5is0Q2b3ENQXB0GvGik2KBr4UsvSDTPWELU8odyInTu9Rmw3Y7ers6w54KDEDnaanAoZ_7e0M4nkigqQ36oM3Vb798ZDzDET4GM4CVOIj6a_FPapzuVt0jViG1Mp9o6oJsoIdHRN2R5ovo1VkLDkVuY4GR8fWZoysA3zCRYZTv-IA8WNNLe8vSDava2qb"/>
+</div>
+<div class="p-4 flex flex-col justify-between flex-1 min-w-0">
+<div>
+<div class="flex items-center gap-2 mb-1.5">
+<span class="bg-secondary-container text-on-secondary-container px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest">Technology</span>
+<span class="text-on-surface-variant text-[10px]">4 min read</span>
+</div>
+<h2 class="font-headline text-lg md:text-xl font-bold tracking-tight text-on-surface mb-1 leading-tight group-hover:text-primary transition-colors truncate md:whitespace-normal md:line-clamp-2">The Quantum Leap: Infrastructure for the Next Decade</h2>
+<p class="text-on-surface-variant text-sm leading-snug line-clamp-1 md:line-clamp-2 mb-2">Global networks are facing an unprecedented transformation as quantum-resistant encryption becomes the new standard.</p>
+</div>
+<div class="flex items-center justify-between mt-auto">
+<div class="flex gap-3 items-center">
+<button class="text-primary font-bold text-[11px] tracking-tight hover:underline">Read Full Story</button>
+<span class="w-[1px] h-3 bg-outline-variant opacity-30"></span>
+<a class="text-on-surface-variant text-[9px] uppercase tracking-wider hover:text-on-surface transition-colors" href="#">Reuters</a>
+</div>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="bookmark">bookmark</span>
+</button>
+</div>
+</div>
+</article>
+<article class="group relative bg-surface-container-high flex flex-row editorial-shadow transition-all duration-300 hover:bg-surface-bright overflow-hidden">
+<div class="w-32 md:w-40 lg:w-48 h-auto shrink-0 overflow-hidden">
+<img alt="Modern architecture skyscraper against dark sky" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCmMv_DZSzJ1JQZbKjwHy62Y6mtoeGd6NaTtmYTCT_9TN9vXgHj4WQjK7oWQhjszXp2lytrDKGfUj6AYV4GZzWfW8dXEeR3A1gkaWb4W2vuwkckKUizgKTpu0bv7G_aWgKi_LuW8GU_KmSDFqMpTe4gPAbHxGBncrx9zwXA7gfEO_fm5L1mbNidgqegr6sUpHgOpFDD3xopT-g4C0NwYvcWYJv4oeQL-O2FH3CAwOnHqd2qa4-U19t7tUr-R8Nc6yA9koikea-PaQsF"/>
+</div>
+<div class="p-4 flex flex-col justify-between flex-1 min-w-0">
+<div>
+<div class="flex items-center gap-2 mb-1.5">
+<span class="bg-secondary-container text-on-secondary-container px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest">Economics</span>
+<span class="text-on-surface-variant text-[10px]">7 min read</span>
+</div>
+<h2 class="font-headline text-lg md:text-xl font-bold tracking-tight text-on-surface mb-1 leading-tight group-hover:text-primary transition-colors truncate md:whitespace-normal md:line-clamp-2">Urban Density and the Future of Corporate Real Estate</h2>
+<p class="text-on-surface-variant text-sm leading-snug line-clamp-1 md:line-clamp-2 mb-2">Major metropolitan hubs are seeing a shift toward mixed-use vertical ecosystems as traditional offices face vacancy.</p>
+</div>
+<div class="flex items-center justify-between mt-auto">
+<div class="flex gap-3 items-center">
+<button class="text-primary font-bold text-[11px] tracking-tight hover:underline">Read Full Story</button>
+<span class="w-[1px] h-3 bg-outline-variant opacity-30"></span>
+<a class="text-on-surface-variant text-[9px] uppercase tracking-wider hover:text-on-surface transition-colors" href="#">Bloomberg</a>
+</div>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="bookmark">bookmark</span>
+</button>
+</div>
+</div>
+</article>
+<article class="group relative bg-surface-container-high flex flex-row editorial-shadow transition-all duration-300 hover:bg-surface-bright overflow-hidden">
+<div class="w-32 md:w-40 lg:w-48 h-auto shrink-0 overflow-hidden">
+<img alt="Scientific glassware in a dark laboratory" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAYr630ZdfhTtG80KGwV7IXNbMtoCkkY5GbZylsn3TA9-mI-Fqq-cEH7AH_6NJ-z0SgaZtAWwRjFLx1vPCc6ChAxGA3oCYSWcdU0ftKUYBkzSZeGEtnwtBY62yecbw7I5rRxYxmHx25MxR9CV4XB73j4xn2MPVbctXVZrqvk093W2PiGIh3QAJPYZcg0YmtlmgN9GgYyB8WiaEheiDNXDM5Y2ccWsrDD5_K2Y5kCfxaBcbwhu-Wp9kEkwDx8l7TF9F86wMzJsRI-FK0"/>
+</div>
+<div class="p-4 flex flex-col justify-between flex-1 min-w-0">
+<div>
+<div class="flex items-center gap-2 mb-1.5">
+<span class="bg-secondary-container text-on-secondary-container px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest">Science</span>
+<span class="text-on-surface-variant text-[10px]">5 min read</span>
+</div>
+<h2 class="font-headline text-lg md:text-xl font-bold tracking-tight text-on-surface mb-1 leading-tight group-hover:text-primary transition-colors truncate md:whitespace-normal md:line-clamp-2">Sustainable Synthetics: Redefining Material Science</h2>
+<p class="text-on-surface-variant text-sm leading-snug line-clamp-1 md:line-clamp-2 mb-2">Researchers have identified a new polymer sequence that allows for full decomposition in saltwater environments.</p>
+</div>
+<div class="flex items-center justify-between mt-auto">
+<div class="flex gap-3 items-center">
+<button class="text-primary font-bold text-[11px] tracking-tight hover:underline">Read Full Story</button>
+<span class="w-[1px] h-3 bg-outline-variant opacity-30"></span>
+<a class="text-on-surface-variant text-[9px] uppercase tracking-wider hover:text-on-surface transition-colors" href="#">Nature</a>
+</div>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="bookmark">bookmark</span>
+</button>
+</div>
+</div>
+</article>
+<article class="group relative bg-surface-container-high flex flex-row editorial-shadow transition-all duration-300 hover:bg-surface-bright overflow-hidden">
+<div class="w-32 md:w-40 lg:w-48 h-auto shrink-0 overflow-hidden">
+<img alt="Aerial view of a dark mountain landscape" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBcSqn2DeIxKXCi8eTElCtZ0FkXGcI0yHEK5bFXNTE8JMS188UDqhiI9SgzKoZz1FdbawIrrXeRE5ifEutCT8lJaMAoaURitL_SKCHIZTK5YFTgnTEINAsUctE63v9g8mxaMDzmyHyi9WvJGdQgTfEoU79o-PLFCwcSFKFfaxPo1kDZWWX--NV-sfM9rBAgBBcKl9QRNcHbZbRRfbzacM7myhuQW2mynjI5yi0ao8YERQKLySQ_flBPEun0w1XL_thzC_eJVDSiuXJm"/>
+</div>
+<div class="p-4 flex flex-col justify-between flex-1 min-w-0">
+<div>
+<div class="flex items-center gap-2 mb-1.5">
+<span class="bg-secondary-container text-on-secondary-container px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest">Environment</span>
+<span class="text-on-surface-variant text-[10px]">6 min read</span>
+</div>
+<h2 class="font-headline text-lg md:text-xl font-bold tracking-tight text-on-surface mb-1 leading-tight group-hover:text-primary transition-colors truncate md:whitespace-normal md:line-clamp-2">The Re-Wilding Initiative: A Continental Strategy</h2>
+<p class="text-on-surface-variant text-sm leading-snug line-clamp-1 md:line-clamp-2 mb-2">A multi-national agreement seeks to connect isolated forest habitats to facilitate natural migratory patterns.</p>
+</div>
+<div class="flex items-center justify-between mt-auto">
+<div class="flex gap-3 items-center">
+<button class="text-primary font-bold text-[11px] tracking-tight hover:underline">Read Full Story</button>
+<span class="w-[1px] h-3 bg-outline-variant opacity-30"></span>
+<a class="text-on-surface-variant text-[9px] uppercase tracking-wider hover:text-on-surface transition-colors" href="#">The Guardian</a>
+</div>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="bookmark">bookmark</span>
+</button>
+</div>
+</div>
+</article>
+</div>
+<div class="mt-8 flex justify-center pb-8">
+<button class="px-6 py-2.5 bg-primary text-on-primary font-bold tracking-widest uppercase text-[10px] hover:brightness-110 active:scale-95 transition-all">
+            Load Archive
+        </button>
+</div>
+</main>
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-safe h-14 bg-[#191a1a]/90 dark:bg-[#191a1a]/90 backdrop-blur-xl z-50 border-t border-white/5">
+<a class="flex flex-col items-center justify-center text-[#9c9ea0] p-1.5 hover:text-[#e7e5e5] transition-all scale-95" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="explore">explore</span>
+<span class="font-['Work_Sans'] text-[9px] font-bold uppercase tracking-widest mt-0.5">Discover</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#93cdfc] bg-[#252626] p-1.5 rounded-none transition-all scale-95" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="newspaper">newspaper</span>
+<span class="font-['Work_Sans'] text-[9px] font-bold uppercase tracking-widest mt-0.5">Briefing</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#9c9ea0] p-1.5 hover:text-[#e7e5e5] transition-all scale-95" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="bookmark">bookmark</span>
+<span class="font-['Work_Sans'] text-[9px] font-bold uppercase tracking-widest mt-0.5">Saved</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#9c9ea0] p-1.5 hover:text-[#e7e5e5] transition-all scale-95" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="settings">settings</span>
+<span class="font-['Work_Sans'] text-[9px] font-bold uppercase tracking-widest mt-0.5">Settings</span>
+</a>
+</nav>
+
+</body></html>

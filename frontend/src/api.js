@@ -36,6 +36,16 @@ async function request(url, options = {}) {
   return data
 }
 
+function withQuery(path, params = {}) {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === null || value === undefined || value === "") return
+    search.set(key, value)
+  })
+  const query = search.toString()
+  return query ? `${path}?${query}` : path
+}
+
 export const api = {
   currentSession: () => request("/api/session"),
   login: (payload) => request("/api/session", { method: "POST", body: JSON.stringify(payload) }),
@@ -49,5 +59,18 @@ export const api = {
   adminTariffs: () => request("/api/admin/tariffs"),
   createTariff: (payload) => request("/api/admin/tariffs", { method: "POST", body: JSON.stringify(payload) }),
   updateTariff: (id, payload) => request(`/api/admin/tariffs/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
-  deleteTariff: (id) => request(`/api/admin/tariffs/${id}`, { method: "DELETE" })
+  deleteTariff: (id) => request(`/api/admin/tariffs/${id}`, { method: "DELETE" }),
+  news: (params = {}) => request(withQuery("/api/news", params)),
+  newsArticle: (id) => request(`/api/news/${id}`),
+  adminNewsSources: () => request("/api/admin/news_sources"),
+  createNewsSource: (payload) => request("/api/admin/news_sources", { method: "POST", body: JSON.stringify(payload) }),
+  updateNewsSource: (id, payload) => request(`/api/admin/news_sources/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteNewsSource: (id) => request(`/api/admin/news_sources/${id}`, { method: "DELETE" }),
+  crawlNewsSource: (id) => request(`/api/admin/news_sources/${id}/crawl`, { method: "POST" }),
+  createNewsSection: (sourceId, payload) =>
+    request(`/api/admin/news_sources/${sourceId}/news_sections`, { method: "POST", body: JSON.stringify(payload) }),
+  updateNewsSection: (sourceId, id, payload) =>
+    request(`/api/admin/news_sources/${sourceId}/news_sections/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteNewsSection: (sourceId, id) =>
+    request(`/api/admin/news_sources/${sourceId}/news_sections/${id}`, { method: "DELETE" })
 }

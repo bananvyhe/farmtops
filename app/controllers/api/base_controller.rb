@@ -72,5 +72,81 @@ module Api
         created_at: entry.created_at
       }
     end
+
+    def news_source_payload(source)
+      {
+        id: source.id,
+        name: source.name,
+        base_url: source.base_url,
+        active: source.active,
+        crawl_delay_min_seconds: source.crawl_delay_min_seconds,
+        crawl_delay_max_seconds: source.crawl_delay_max_seconds,
+        config: source.config,
+        sections: source.news_sections.order(:name).map { |section| news_section_payload(section) },
+        last_crawl_run: news_crawl_run_payload(source.news_crawl_runs.order(started_at: :desc).first)
+      }
+    end
+
+    def news_section_payload(section)
+      {
+        id: section.id,
+        news_source_id: section.news_source_id,
+        source_name: section.news_source.name,
+        name: section.name,
+        url: section.url,
+        active: section.active,
+        config: section.config,
+        last_crawled_at: section.last_crawled_at,
+        articles_count: section.news_articles.size
+      }
+    end
+
+    def news_article_payload(article)
+      {
+        id: article.id,
+        news_source_id: article.news_source_id,
+        news_section_id: article.news_section_id,
+        source_name: article.news_source.name,
+        section_name: article.news_section.name,
+        source_article_id: article.source_article_id,
+        canonical_url: article.canonical_url,
+        title: article.title,
+        preview_text: article.preview_text,
+        body_text: article.body_text,
+        body_html: sanitized_news_html(article.body_html),
+        image_url: article.image_url,
+        published_at: article.published_at,
+        fetched_at: article.fetched_at,
+        content_hash: article.content_hash,
+        raw_payload: article.raw_payload
+      }
+    end
+
+    def sanitized_news_html(html)
+      ActionController::Base.helpers.sanitize(
+        html.to_s,
+        tags: %w[p br div span strong em b i u s ul ol li blockquote figure figcaption a img h1 h2 h3 h4 h5 h6 iframe video source],
+        attributes: %w[href src alt title width height class style allow allowfullscreen frameborder loading referrerpolicy rel target data-src data-lazy-src poster]
+      )
+    end
+
+    def news_crawl_run_payload(run)
+      return unless run
+
+      {
+        id: run.id,
+        news_source_id: run.news_source_id,
+        news_section_id: run.news_section_id,
+        status: run.status,
+        started_at: run.started_at,
+        finished_at: run.finished_at,
+        pages_visited: run.pages_visited,
+        articles_found: run.articles_found,
+        articles_saved: run.articles_saved,
+        articles_skipped: run.articles_skipped,
+        errors: run.errors,
+        metadata: run.metadata
+      }
+    end
   end
 end

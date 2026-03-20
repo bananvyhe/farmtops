@@ -4,6 +4,8 @@ import App from "./App.vue"
 import LoginPage from "./pages/LoginPage.vue"
 import DashboardPage from "./pages/DashboardPage.vue"
 import AdminPage from "./pages/AdminPage.vue"
+import NewsPage from "./pages/NewsPage.vue"
+import NewsArticlePage from "./pages/NewsArticlePage.vue"
 import vuetify from "./plugins/vuetify"
 import "./styles.css"
 
@@ -23,8 +25,10 @@ if (import.meta.env.PROD) {
 }
 
 const routes = [
-  { path: "/", redirect: "/login" },
+  { path: "/", redirect: "/news" },
   { path: "/login", component: LoginPage },
+  { path: "/news", component: NewsPage },
+  { path: "/news/:id", component: NewsArticlePage },
   { path: "/dashboard", component: DashboardPage },
   { path: "/admin", component: AdminPage }
 ]

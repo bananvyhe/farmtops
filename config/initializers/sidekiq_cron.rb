@@ -11,4 +11,11 @@ if defined?(Sidekiq) && Sidekiq.server?
       "cron" => cron_expression
     }
   )
+
+  Sidekiq::Cron::Job.load_from_hash(
+    "news_crawl_sources" => {
+      "class" => "NewsCrawlSourcesJob",
+      "cron" => News::Scheduler.cron_expression
+    }
+  )
 end

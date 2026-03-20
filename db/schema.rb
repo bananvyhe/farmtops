@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_03_06_143400) do
+ActiveRecord::Schema[8.0].define(version: 2026_03_20_190000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -25,6 +25,75 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_06_143400) do
     t.datetime "updated_at", null: false
     t.index ["payment_transaction_id"], name: "index_balance_ledger_entries_on_payment_transaction_id"
     t.index ["user_id"], name: "index_balance_ledger_entries_on_user_id"
+  end
+
+  create_table "news_articles", force: :cascade do |t|
+    t.bigint "news_source_id", null: false
+    t.bigint "news_section_id", null: false
+    t.string "source_article_id"
+    t.string "canonical_url", null: false
+    t.string "title"
+    t.text "preview_text"
+    t.text "body_text"
+    t.string "image_url"
+    t.datetime "published_at"
+    t.datetime "fetched_at", null: false
+    t.string "content_hash", null: false
+    t.jsonb "raw_payload", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.text "body_html", default: "", null: false
+    t.index ["canonical_url"], name: "index_news_articles_on_canonical_url"
+    t.index ["news_section_id"], name: "index_news_articles_on_news_section_id"
+    t.index ["news_source_id", "content_hash"], name: "index_news_articles_on_news_source_id_and_content_hash", unique: true
+    t.index ["news_source_id", "source_article_id"], name: "index_news_articles_on_news_source_id_and_source_article_id", unique: true, where: "(source_article_id IS NOT NULL)"
+    t.index ["news_source_id"], name: "index_news_articles_on_news_source_id"
+    t.index ["published_at"], name: "index_news_articles_on_published_at"
+  end
+
+  create_table "news_crawl_runs", force: :cascade do |t|
+    t.bigint "news_source_id", null: false
+    t.bigint "news_section_id"
+    t.integer "status", default: 0, null: false
+    t.datetime "started_at", null: false
+    t.datetime "finished_at"
+    t.integer "pages_visited", default: 0, null: false
+    t.integer "articles_found", default: 0, null: false
+    t.integer "articles_saved", default: 0, null: false
+    t.integer "articles_skipped", default: 0, null: false
+    t.jsonb "errors", default: [], null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["news_section_id"], name: "index_news_crawl_runs_on_news_section_id"
+    t.index ["news_source_id", "status"], name: "index_news_crawl_runs_on_news_source_id_and_status"
+    t.index ["news_source_id"], name: "index_news_crawl_runs_on_news_source_id"
+    t.index ["started_at"], name: "index_news_crawl_runs_on_started_at"
+  end
+
+  create_table "news_sections", force: :cascade do |t|
+    t.bigint "news_source_id", null: false
+    t.string "name", null: false
+    t.string "url", null: false
+    t.boolean "active", default: true, null: false
+    t.jsonb "config", default: {}, null: false
+    t.datetime "last_crawled_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["news_source_id", "name"], name: "index_news_sections_on_news_source_id_and_name", unique: true
+    t.index ["news_source_id"], name: "index_news_sections_on_news_source_id"
+  end
+
+  create_table "news_sources", force: :cascade do |t|
+    t.string "name", null: false
+    t.string "base_url", null: false
+    t.boolean "active", default: true, null: false
+    t.integer "crawl_delay_min_seconds", default: 1, null: false
+    t.integer "crawl_delay_max_seconds", default: 3, null: false
+    t.jsonb "config", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["name"], name: "index_news_sources_on_name", unique: true
   end
 
   create_table "payment_transactions", force: :cascade do |t|
@@ -78,6 +147,11 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_06_143400) do
 
   add_foreign_key "balance_ledger_entries", "payment_transactions"
   add_foreign_key "balance_ledger_entries", "users"
+  add_foreign_key "news_articles", "news_sections"
+  add_foreign_key "news_articles", "news_sources"
+  add_foreign_key "news_crawl_runs", "news_sections"
+  add_foreign_key "news_crawl_runs", "news_sources"
+  add_foreign_key "news_sections", "news_sources"
   add_foreign_key "payment_transactions", "users"
   add_foreign_key "users", "tariffs"
 end

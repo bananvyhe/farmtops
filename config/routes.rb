@@ -24,10 +24,15 @@ Rails.application.routes.draw do
     resource :registration, only: :create
     resource :dashboard, only: :show, controller: :dashboard
     resources :payment_transactions, path: "payments", only: %i[create show]
+    resources :news, only: %i[index show]
 
     namespace :admin do
       resources :users, only: %i[index update]
       resources :tariffs, only: %i[index create update destroy]
+      resources :news_sources do
+        post :crawl, on: :member
+        resources :news_sections, only: %i[create update destroy]
+      end
     end
   end
 

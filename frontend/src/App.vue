@@ -1,13 +1,16 @@
 <script setup>
-import { onMounted, onUnmounted } from "vue"
+import { computed, onMounted, onUnmounted } from "vue"
 import { useRouter } from "vue-router"
 import { clearSession, loadSession, logout, sessionState } from "./useSession"
 
 const router = useRouter()
+const publicPaths = new Set(["/login", "/news"])
+const currentPath = computed(() => router.currentRoute.value.path)
+const isPublicNewsRoute = computed(() => currentPath.value === "/news" || currentPath.value.startsWith("/news/"))
 
 async function handleUnauthorized() {
   clearSession()
-  if (router.currentRoute.value.path !== "/login") {
+  if (!publicPaths.has(currentPath.value)) {
     await router.replace("/login")
   }
 }
@@ -17,15 +20,15 @@ onMounted(async () => {
 
   try {
     await loadSession()
-    if (sessionState.authenticated && router.currentRoute.value.path === "/login") {
+    if (sessionState.authenticated && currentPath.value === "/login") {
       router.replace(sessionState.user?.role === "admin" ? "/admin" : "/dashboard")
     }
-    if (!sessionState.authenticated && router.currentRoute.value.path !== "/login") {
-      router.replace("/login")
+    if (!sessionState.authenticated && !publicPaths.has(currentPath.value) && !isPublicNewsRoute.value) {
+      router.replace("/news")
     }
   } catch {
-    if (router.currentRoute.value.path !== "/login") {
-      router.replace("/login")
+    if (!publicPaths.has(currentPath.value) && !isPublicNewsRoute.value) {
+      router.replace("/news")
     }
   }
 })
@@ -36,7 +39,7 @@ onUnmounted(() => {
 
 async function handleLogout() {
   await logout()
-  router.replace("/login")
+  router.replace("/news")
 }
 </script>
 
@@ -45,12 +48,13 @@ async function handleLogout() {
     <header class="topbar">
       <div>
         <div class="eyebrow">farmspot.ru</div>
-        <!-- <h1>ммо /h1> -->
       </div>
-      <nav class="nav" v-if="sessionState.authenticated">
-        <RouterLink to="/dashboard" class="ghost">Кабинет</RouterLink>
-        <RouterLink v-if="sessionState.user?.role === 'admin'" to="/admin" class="ghost">Админка</RouterLink>
-        <button class="danger" @click="handleLogout">Выйти</button>
+      <nav class="nav">
+        <RouterLink to="/news" class="ghost">Новости</RouterLink>
+        <RouterLink v-if="!sessionState.authenticated" to="/login" class="ghost">Войти</RouterLink>
+        <RouterLink v-if="sessionState.authenticated" to="/dashboard" class="ghost">Кабинет</RouterLink>
+        <RouterLink v-if="sessionState.authenticated && sessionState.user?.role === 'admin'" to="/admin" class="ghost">Админка</RouterLink>
+        <button v-if="sessionState.authenticated" class="danger" @click="handleLogout">Выйти</button>
       </nav>
     </header>
     <RouterView />
