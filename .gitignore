@@ -4,6 +4,8 @@
 !/tmp/.keep
 !/tmp/pids/
 !/tmp/pids/.keep
+/tmp/pids/*
+!/tmp/pids/.keep
 /storage/*
 !/storage/.keep
 /node_modules
