@@ -16,7 +16,6 @@ Rails.application.routes.draw do
   end
 
   get "up" => "rails/health#show", as: :rails_health_check
-  root "home#index"
   mount protected_sidekiq_web, at: "/sidekiq"
 
   namespace :api do
@@ -36,23 +35,7 @@ Rails.application.routes.draw do
     end
   end
 
-  resource :session, only: %i[new create destroy]
-  resource :dashboard, only: :show, controller: :dashboard
-  resources :payment_transactions, path: "payments", only: %i[create show]
-
   post "payments/yoomoney/notifications", to: "yoo_money_notifications#create", as: :yoo_money_notifications
   # Legacy YooMoney webhook path seen in logs.
   post "api/v1/inb", to: "yoo_money_notifications#create"
-
-  namespace :admin do
-    resources :tariffs, except: %i[show destroy]
-    resources :users, only: %i[index edit update]
-
-    if Rails.env.development? || Rails.env.test?
-      get "db", to: "db_tables#index", as: :db_tables
-      get "db/:table", to: "db_tables#show", as: :db_table
-      get "db/:table/:id/edit", to: "db_tables#edit", as: :edit_db_table_record
-      patch "db/:table/:id", to: "db_tables#update", as: :db_table_record
-    end
-  end
 end
