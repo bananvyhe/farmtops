@@ -1,3 +1,5 @@
+require Rails.root.join("app/services/news/scheduler")
+
 if defined?(Sidekiq) && Sidekiq.server?
   interval_minutes =
     ENV.fetch("BILLING_INTERVAL_MINUTES", Rails.env.development? ? "20" : "60").to_i

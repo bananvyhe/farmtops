@@ -11,7 +11,19 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 5173,
     proxy: {
-      "/api": "http://127.0.0.1:3000"
+      "/api": "http://127.0.0.1:3000",
+      "/admin": {
+        target: "http://127.0.0.1:3000",
+        changeOrigin: true
+      },
+      "/sidekiq": {
+        target: "http://127.0.0.1:3000",
+        changeOrigin: true
+      },
+      "/up": {
+        target: "http://127.0.0.1:3000",
+        changeOrigin: true
+      }
     }
   }
 })

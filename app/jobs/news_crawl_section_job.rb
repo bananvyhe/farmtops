@@ -25,13 +25,13 @@ class NewsCrawlSectionJob
       articles_found: result.articles_found,
       articles_saved: result.articles_saved,
       articles_skipped: result.articles_skipped,
-      errors: result.errors
+      crawl_errors: result.errors
     )
   rescue StandardError => e
     run&.update!(
       status: :failed,
       finished_at: Time.current,
-      errors: Array(run&.errors) + [{ message: e.message, class: e.class.name }]
+      crawl_errors: Array(run&.crawl_errors) + [{ message: e.message, class: e.class.name }]
     )
     raise
   end

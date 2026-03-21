@@ -38,6 +38,9 @@
             <% if current_user.admin? %>
               <%= link_to "Админ", admin_users_path, class: "button secondary" %>
               <%= link_to "Тарифы", admin_tariffs_path, class: "button secondary" %>
+              <% if Rails.env.development? || Rails.env.test? %>
+                <%= link_to "БД", admin_db_tables_path, class: "button secondary" %>
+              <% end %>
             <% end %>
             <%= button_to "Выйти", session_path, method: :delete, class: "button danger" %>
           <% else %>

@@ -144,7 +144,7 @@ module Api
         articles_found: run.articles_found,
         articles_saved: run.articles_saved,
         articles_skipped: run.articles_skipped,
-        errors: run.errors,
+        crawl_errors: run.crawl_errors,
         metadata: run.metadata
       }
     end

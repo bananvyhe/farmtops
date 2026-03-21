@@ -1,15 +1,28 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { useIntersectionObserver, useSessionStorage, useWindowScroll, watchThrottled } from "@vueuse/core"
 import { api } from "../api"
+
+const STORAGE_KEY = "news-wall-state"
+const RESTORE_FLAG_KEY = "news-wall-restore"
 
 const articles = ref([])
 const sources = ref([])
 const sections = ref([])
 const loading = ref(false)
+const loadingMore = ref(false)
 const error = ref("")
 const selectedSourceId = ref(null)
 const selectedSectionId = ref(null)
+const nextCursor = ref(null)
+const hasMore = ref(true)
+const sentinel = ref(null)
+const restoredAt = ref(0)
+const hydrated = ref(false)
+const restoringState = ref(false)
 let requestToken = 0
+const { y: scrollY } = useWindowScroll()
+const pageState = useSessionStorage(STORAGE_KEY, null)
 
 const sourceItems = computed(() => [
   { title: "Все источники", value: null },
@@ -39,22 +52,29 @@ const formatDate = (value) => {
 async function loadFeed() {
   const currentToken = ++requestToken
   loading.value = true
+  loadingMore.value = false
   error.value = ""
+  articles.value = []
+  nextCursor.value = null
+  hasMore.value = true
 
   try {
     const data = await api.news({
       source_id: selectedSourceId.value,
       section_id: selectedSectionId.value,
-      limit: 100
+      limit: 20
     })
     if (currentToken !== requestToken) return
     articles.value = data.articles
     sources.value = data.sources
     sections.value = data.sections
+    nextCursor.value = data.next_cursor || null
+    hasMore.value = Boolean(data.has_more)
 
     if (selectedSectionId.value && !sectionItems.value.some((item) => item.value === selectedSectionId.value)) {
       selectedSectionId.value = null
     }
+    persistState()
   } catch (err) {
     if (currentToken !== requestToken) return
     error.value = err.message
@@ -64,20 +84,137 @@ async function loadFeed() {
   }
 }
 
+function persistState(extra = {}) {
+  pageState.value = {
+    articles: articles.value,
+    sources: sources.value,
+    sections: sections.value,
+    selectedSourceId: selectedSourceId.value,
+    selectedSectionId: selectedSectionId.value,
+    nextCursor: nextCursor.value,
+    hasMore: hasMore.value,
+    scrollY: scrollY.value,
+    restoredAt: restoredAt.value,
+    savedAt: Date.now(),
+    ...extra
+  }
+}
+
+function restoreState() {
+  const state = pageState.value
+  const shouldRestore = sessionStorage.getItem(RESTORE_FLAG_KEY) === "1"
+  const isFreshEnough = state?.savedAt && Date.now() - state.savedAt < 30 * 60 * 1000
+
+  if (!shouldRestore || !state || !Array.isArray(state.articles) || !state.articles.length || !isFreshEnough) {
+    sessionStorage.removeItem(RESTORE_FLAG_KEY)
+    return false
+  }
+
+  restoringState.value = true
+  articles.value = state.articles
+  sources.value = state.sources || []
+  sections.value = state.sections || []
+  selectedSourceId.value = state.selectedSourceId ?? null
+  selectedSectionId.value = state.selectedSectionId ?? null
+  nextCursor.value = state.nextCursor || null
+  hasMore.value = Boolean(state.hasMore)
+  restoredAt.value = state.savedAt || 0
+  loading.value = false
+  loadingMore.value = false
+
+  nextTick(() => {
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: state.scrollY || 0, behavior: "auto" })
+      restoringState.value = false
+      sessionStorage.removeItem(RESTORE_FLAG_KEY)
+    })
+  })
+
+  return true
+}
+
+async function loadMore() {
+  if (!hasMore.value || loading.value || loadingMore.value || !nextCursor.value) return
+
+  const currentToken = requestToken
+  loadingMore.value = true
+  error.value = ""
+
+  try {
+    const data = await api.news({
+      source_id: selectedSourceId.value,
+      section_id: selectedSectionId.value,
+      limit: 20,
+      cursor: nextCursor.value
+    })
+    if (currentToken !== requestToken) return
+
+    const existingIds = new Set(articles.value.map((article) => article.id))
+    const incoming = data.articles.filter((article) => !existingIds.has(article.id))
+    articles.value = [...articles.value, ...incoming]
+    nextCursor.value = data.next_cursor || null
+    hasMore.value = Boolean(data.has_more)
+    persistState()
+  } catch (err) {
+    if (currentToken !== requestToken) return
+    error.value = err.message
+  } finally {
+    if (currentToken !== requestToken) return
+    loadingMore.value = false
+  }
+}
+
 const articlePath = (article) => `/news/${article.id}`
 
 watch(selectedSourceId, () => {
+  if (!hydrated.value || restoringState.value) return
   if (selectedSectionId.value && sectionItems.value.every((item) => item.value !== selectedSectionId.value)) {
     selectedSectionId.value = null
+    return
   }
   loadFeed()
 })
 
 watch(selectedSectionId, () => {
+  if (!hydrated.value || restoringState.value) return
   loadFeed()
 })
 
-onMounted(loadFeed)
+watchThrottled(
+  scrollY,
+  () => {
+    if (!hydrated.value || restoringState.value) return
+    persistState()
+  },
+  { throttle: 250, trailing: true }
+)
+
+useIntersectionObserver(
+  sentinel,
+  ([entry]) => {
+    if (entry?.isIntersecting) loadMore()
+  },
+  { threshold: 0.1 }
+)
+
+onMounted(async () => {
+  if (typeof window !== "undefined") {
+    window.history.scrollRestoration = "manual"
+  }
+
+  hydrated.value = true
+  if (!restoreState()) {
+    await loadFeed()
+  }
+})
+
+onBeforeUnmount(() => {
+  persistState()
+  sessionStorage.setItem(RESTORE_FLAG_KEY, "1")
+  if (typeof window !== "undefined") {
+    window.history.scrollRestoration = "auto"
+  }
+})
 </script>
 
 <template>
@@ -116,9 +253,9 @@ onMounted(loadFeed)
 
     <section v-if="loading" class="news-feed">
       <article v-for="index in 4" :key="index" class="news-card card">
-        <v-skeleton-loader type="image, article, button" />
-      </article>
-    </section>
+          <v-skeleton-loader type="image, article, button" />
+        </article>
+      </section>
 
     <section v-else class="news-feed">
       <article v-for="article in articles" :key="article.id" class="news-card card">
@@ -151,6 +288,10 @@ onMounted(loadFeed)
           </div>
         </div>
       </article>
+
+      <div v-if="hasMore" ref="sentinel" class="news-sentinel" aria-hidden="true" role="presentation">
+        <v-progress-linear v-if="loadingMore" indeterminate color="primary" />
+      </div>
     </section>
 
     <section v-if="!loading && !articles.length" class="news-empty card">
@@ -324,6 +465,12 @@ onMounted(loadFeed)
 
 .news-error {
   color: #ee7d77;
+}
+
+.news-sentinel {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
 }
 
 @media (max-width: 900px) {

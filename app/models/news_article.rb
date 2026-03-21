@@ -7,5 +7,5 @@ class NewsArticle < ApplicationRecord
   validates :content_hash, presence: true, uniqueness: { scope: :news_source_id }
   validates :source_article_id, uniqueness: { scope: :news_source_id, allow_nil: true }
 
-  scope :recent, -> { order(published_at: :desc, fetched_at: :desc, created_at: :desc) }
+  scope :recent, -> { order(Arel.sql("COALESCE(published_at, fetched_at, created_at) DESC"), id: :desc) }
 end

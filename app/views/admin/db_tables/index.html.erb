@@ -1,0 +1,23 @@
+<section class="panel">
+  <div class="topbar" style="margin-bottom: 16px;">
+    <h1>База данных</h1>
+    <p class="muted">Локальный read-only обзор таблиц с возможностью редактировать записи.</p>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Таблица</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @table_names.each do |table_name| %>
+        <tr>
+          <td><%= table_name %></td>
+          <td><%= link_to "Открыть", admin_db_table_path(table_name), class: "button secondary" %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</section>

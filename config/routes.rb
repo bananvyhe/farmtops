@@ -47,5 +47,12 @@ Rails.application.routes.draw do
   namespace :admin do
     resources :tariffs, except: %i[show destroy]
     resources :users, only: %i[index edit update]
+
+    if Rails.env.development? || Rails.env.test?
+      get "db", to: "db_tables#index", as: :db_tables
+      get "db/:table", to: "db_tables#show", as: :db_table
+      get "db/:table/:id/edit", to: "db_tables#edit", as: :edit_db_table_record
+      patch "db/:table/:id", to: "db_tables#update", as: :db_table_record
+    end
   end
 end
