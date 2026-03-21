@@ -2,12 +2,12 @@
 
 Rails 8 приложение с:
 
-- входом через `jwt_sessions`
+- Rails API как backend
 - frontend на `Vue 3 Composition API`
 - ролями `admin`, `user`, `client`
 - кабинетом клиента с балансом и расчётом оставшихся дней
 - пополнением через YooMoney
-- админкой со списком пользователей и редактированием прав
+- Vue-админкой со списком пользователей, тарифами и новостными источниками
 - почасовым списанием средств через `Sidekiq`
 - расписанием периодических задач через `sidekiq-cron`
 - импортом пользователей из CSV
@@ -33,6 +33,8 @@ Rails 8 приложение с:
 8. Запустить воркер (он же планировщик):
    `bundle exec sidekiq -C config/sidekiq.yml`
    - В dev можно ускорить списания, задав `BILLING_INTERVAL_MINUTES=3`
+9. Однократно прогнать краул текущих источников:
+   `./scripts/news_crawl_once.sh`
 
 Либо поднять dev-сервисы одной командой:
 
@@ -183,6 +185,12 @@ OLD_DATABASE_URL=postgres://USER:PASS@127.0.0.1:55432/DBNAME bundle exec rake us
 
 ```bash
 bundle exec rake news:import_sites FILE=sites.txt
+```
+
+Одноразовый запуск краула по текущей настройке:
+
+```bash
+./scripts/news_crawl_once.sh
 ```
 
 Поддерживаемые поля:
