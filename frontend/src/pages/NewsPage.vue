@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { useRoute, useRouter } from "vue-router"
 import { useIntersectionObserver, useSessionStorage, useWindowScroll, watchThrottled } from "@vueuse/core"
 import { api } from "../api"
 
@@ -20,9 +21,45 @@ const sentinel = ref(null)
 const restoredAt = ref(0)
 const hydrated = ref(false)
 const restoringState = ref(false)
+const activeQueryKey = ref("")
 let requestToken = 0
+const route = useRoute()
+const router = useRouter()
 const { y: scrollY } = useWindowScroll()
 const pageState = useSessionStorage(STORAGE_KEY, null)
+
+function parseQueryId(value) {
+  if (Array.isArray(value)) value = value[0]
+  if (value === null || value === undefined || value === "") return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function filtersFromRoute() {
+  return {
+    sourceId: parseQueryId(route.query.source_id),
+    sectionId: parseQueryId(route.query.section_id)
+  }
+}
+
+function routeQueryForFilters() {
+  const query = {}
+  if (selectedSourceId.value !== null && selectedSourceId.value !== undefined) query.source_id = String(selectedSourceId.value)
+  if (selectedSectionId.value !== null && selectedSectionId.value !== undefined) query.section_id = String(selectedSectionId.value)
+  return query
+}
+
+async function syncRouteQuery() {
+  const nextQuery = routeQueryForFilters()
+  const currentQuery = {
+    ...(route.query.source_id ? { source_id: String(route.query.source_id) } : {}),
+    ...(route.query.section_id ? { section_id: String(route.query.section_id) } : {})
+  }
+
+  if (JSON.stringify(nextQuery) === JSON.stringify(currentQuery)) return
+
+  await router.replace({ path: "/news", query: nextQuery })
+}
 
 const sourceItems = computed(() => [
   { title: "Все источники", value: null },
@@ -50,7 +87,9 @@ const formatDate = (value) => {
 }
 
 async function loadFeed() {
+  const queryKey = `${selectedSourceId.value ?? ""}:${selectedSectionId.value ?? ""}`
   const currentToken = ++requestToken
+  activeQueryKey.value = queryKey
   loading.value = true
   loadingMore.value = false
   error.value = ""
@@ -64,7 +103,7 @@ async function loadFeed() {
       section_id: selectedSectionId.value,
       limit: 20
     })
-    if (currentToken !== requestToken) return
+    if (currentToken !== requestToken || activeQueryKey.value !== queryKey) return
     articles.value = data.articles
     sources.value = data.sources
     sections.value = data.sections
@@ -76,16 +115,17 @@ async function loadFeed() {
     }
     persistState()
   } catch (err) {
-    if (currentToken !== requestToken) return
+    if (currentToken !== requestToken || activeQueryKey.value !== queryKey) return
     error.value = err.message
   } finally {
-    if (currentToken !== requestToken) return
+    if (currentToken !== requestToken || activeQueryKey.value !== queryKey) return
     loading.value = false
   }
 }
 
 function persistState(extra = {}) {
   pageState.value = {
+    filterKey: `${selectedSourceId.value ?? ""}:${selectedSectionId.value ?? ""}`,
     articles: articles.value,
     sources: sources.value,
     sections: sections.value,
@@ -104,8 +144,14 @@ function restoreState() {
   const state = pageState.value
   const shouldRestore = sessionStorage.getItem(RESTORE_FLAG_KEY) === "1"
   const isFreshEnough = state?.savedAt && Date.now() - state.savedAt < 30 * 60 * 1000
+  const routeKey = `${filtersFromRoute().sourceId ?? ""}:${filtersFromRoute().sectionId ?? ""}`
 
   if (!shouldRestore || !state || !Array.isArray(state.articles) || !state.articles.length || !isFreshEnough) {
+    sessionStorage.removeItem(RESTORE_FLAG_KEY)
+    return false
+  }
+
+  if (routeKey !== ":" && state.filterKey !== routeKey) {
     sessionStorage.removeItem(RESTORE_FLAG_KEY)
     return false
   }
@@ -130,6 +176,8 @@ function restoreState() {
     })
   })
 
+  syncRouteQuery()
+
   return true
 }
 
@@ -137,6 +185,7 @@ async function loadMore() {
   if (!hasMore.value || loading.value || loadingMore.value || !nextCursor.value) return
 
   const currentToken = requestToken
+  const queryKey = activeQueryKey.value
   loadingMore.value = true
   error.value = ""
 
@@ -147,7 +196,7 @@ async function loadMore() {
       limit: 20,
       cursor: nextCursor.value
     })
-    if (currentToken !== requestToken) return
+    if (currentToken !== requestToken || activeQueryKey.value !== queryKey) return
 
     const existingIds = new Set(articles.value.map((article) => article.id))
     const incoming = data.articles.filter((article) => !existingIds.has(article.id))
@@ -156,27 +205,29 @@ async function loadMore() {
     hasMore.value = Boolean(data.has_more)
     persistState()
   } catch (err) {
-    if (currentToken !== requestToken) return
+    if (currentToken !== requestToken || activeQueryKey.value !== queryKey) return
     error.value = err.message
   } finally {
-    if (currentToken !== requestToken) return
+    if (currentToken !== requestToken || activeQueryKey.value !== queryKey) return
     loadingMore.value = false
   }
 }
 
 const articlePath = (article) => `/news/${article.id}`
 
-watch(selectedSourceId, () => {
+watch([selectedSourceId, selectedSectionId], () => {
   if (!hydrated.value || restoringState.value) return
+
   if (selectedSectionId.value && sectionItems.value.every((item) => item.value !== selectedSectionId.value)) {
     selectedSectionId.value = null
     return
   }
-  loadFeed()
-})
 
-watch(selectedSectionId, () => {
-  if (!hydrated.value || restoringState.value) return
+  if (typeof window !== "undefined") {
+    window.scrollTo({ top: 0, behavior: "auto" })
+  }
+
+  syncRouteQuery()
   loadFeed()
 })
 
@@ -202,9 +253,15 @@ onMounted(async () => {
     window.history.scrollRestoration = "manual"
   }
 
-  hydrated.value = true
+  const initialFilters = filtersFromRoute()
+  selectedSourceId.value = initialFilters.sourceId
+  selectedSectionId.value = initialFilters.sectionId
+
   if (!restoreState()) {
+    hydrated.value = true
     await loadFeed()
+  } else {
+    hydrated.value = true
   }
 })
 
@@ -277,13 +334,13 @@ onBeforeUnmount(() => {
             <span class="news-card__time">{{ formatDate(article.published_at || article.fetched_at) }}</span>
           </div>
 
-          <RouterLink class="news-card__title" :to="articlePath(article)">
+          <RouterLink class="news-card__title" :to="{ path: articlePath(article), query: routeQueryForFilters() }">
             <h2>{{ article.title }}</h2>
           </RouterLink>
           <p class="news-card__preview">{{ article.preview_text || article.body_text }}</p>
 
           <div class="news-card__actions">
-            <RouterLink class="news-card__link" :to="articlePath(article)">Читать полностью</RouterLink>
+            <RouterLink class="news-card__link" :to="{ path: articlePath(article), query: routeQueryForFilters() }">Читать полностью</RouterLink>
             <a :href="article.canonical_url" target="_blank" rel="noreferrer">Открыть источник</a>
           </div>
         </div>

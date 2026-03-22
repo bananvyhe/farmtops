@@ -33,13 +33,13 @@ module Authentication
   def require_authentication
     return if user_signed_in?
 
-    redirect_to new_session_path, alert: "Сначала войдите в систему."
+    redirect_to "/login", alert: "Сначала войдите в систему."
   end
 
   def require_admin!
     return if current_user&.admin?
 
-    redirect_to dashboard_path, alert: "Раздел доступен только администратору."
+    redirect_to "/dashboard", alert: "Раздел доступен только администратору."
   end
 
   def sign_in!(user)

@@ -23,7 +23,9 @@ Rails.application.routes.draw do
     resource :registration, only: :create
     resource :dashboard, only: :show, controller: :dashboard
     resources :payment_transactions, path: "payments", only: %i[create show]
-    resources :news, only: %i[index show]
+    resources :news, only: %i[index show] do
+      get :image, on: :member
+    end
 
     namespace :admin do
       resources :users, only: %i[index update]

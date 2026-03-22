@@ -38,6 +38,7 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
     assert_nil json_response["next_cursor"]
     assert_equal false, json_response["has_more"]
     assert_equal "Hello", json_response["articles"].first["title"]
+    assert_equal "/api/news/#{@article.id}/image", json_response["articles"].first["image_url"]
     assert_equal "Example", json_response["sources"].first["name"]
     assert_equal "Main", json_response["sections"].first["name"]
     assert_equal "Example", json_response["sections"].first["source_name"]
@@ -49,6 +50,7 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_equal "Body", json_response.dig("article", "body_text")
     assert_equal "news-1", json_response.dig("article", "source_article_id")
+    assert_equal "/api/news/#{@article.id}/image", json_response.dig("article", "image_url")
   end
 
   test "paginates with cursor" do

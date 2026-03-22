@@ -145,12 +145,26 @@ module News
       image_node = node.at_css(selector) || node.at_css("img")
       return unless image_node
 
-      image = image_node["content"].presence || image_node["src"].presence || image_node["data-src"].presence
+      image = image_node["content"].presence ||
+        image_node["data-src"].presence ||
+        image_node["data-lazy-src"].presence ||
+        image_node["data-original"].presence ||
+        srcset_first_url(image_node["data-srcset"]) ||
+        srcset_first_url(image_node["srcset"]) ||
+        image_node["src"].presence
       normalize_url(image, page_url)
     end
 
     def crawl_article(candidate, page_url, seen_keys)
       if feed_mode? && candidate.raw_payload[:feed_description_html].present?
+        begin
+          article_document = fetch_document(candidate.url)
+          article_data = extract_article(article_document, candidate, page_url)
+          return save_article(article_data, seen_keys, candidate)
+        rescue StandardError => e
+          logger.warn("[News::SectionCrawler] article page fallback for #{candidate.url}: #{e.class} #{e.message}")
+        end
+
         article_data = extract_feed_article(candidate, page_url)
         return save_article(article_data, seen_keys, candidate)
       end
@@ -167,12 +181,6 @@ module News
 
       existing = find_existing_article(article_data)
       if existing.present?
-        if refresh_existing_article?(existing, article_data)
-          existing.update!(article_data)
-          unique_keys.each { |key| seen_keys << key }
-          return { saved: true, article: existing, updated: true }
-        end
-
         unique_keys.each { |key| seen_keys << key }
         return { saved: false, duplicate: true }
       end
@@ -188,23 +196,13 @@ module News
       sleep_between_requests
     end
 
-    def refresh_existing_article?(existing, article_data)
-      new_body_html = article_data[:body_html].to_s.strip
-      return false if new_body_html.blank?
-
-      existing_body_html = existing.body_html.to_s.strip
-      return true if existing_body_html.blank?
-
-      new_body_html.length > existing_body_html.length + 10
-    end
-
     def extract_feed_article(candidate, page_url)
       fragment = Nokogiri::HTML.fragment(candidate.raw_payload[:feed_description_html].to_s)
       title = candidate.title
       body_html = sanitize_news_html(rewrite_fragment_urls(fragment.to_html, candidate.url))
       body_text = extract_fragment_body_text(Nokogiri::HTML.fragment(body_html))
       preview_text = preview_excerpt(body_text, candidate.preview_text)
-      image_url = fragment.at_css("img")&.[]("src").presence || candidate.image_url
+      image_url = image_node_url(fragment.at_css("img")).presence || candidate.image_url
       published_at = candidate.raw_payload[:published_at]
       source_article_id = candidate.source_article_id.presence || candidate.url
       content_hash = Digest::SHA256.hexdigest([
@@ -267,7 +265,7 @@ module News
         preview_text: normalize_text(preview_text),
         body_text: normalize_text(body_text),
         body_html: body_html,
-        image_url: image_url.presence || candidate.image_url,
+        image_url: better_image_url(image_url, candidate.image_url),
         published_at:,
         fetched_at: Time.current,
         content_hash:,
@@ -327,21 +325,19 @@ module News
     def extract_body_html(document, base_url)
       json_ld_body = extract_json_ld_article_body(document)
       if json_ld_body.present?
-        return sanitize_news_html(rewrite_fragment_urls(json_ld_body, base_url))
+        return sanitize_news_html(normalize_lazy_images(strip_article_noise(json_ld_body), base_url))
       end
 
       selector = config_value("article_body_selector", "[itemprop='articleBody'], .article-body, article")
       node = document.at_css(selector) || document.at_css("article")
       return "" unless node
 
-      sanitize_news_html(rewrite_fragment_urls(node.inner_html, base_url))
+      sanitize_news_html(normalize_lazy_images(strip_article_noise(node.inner_html), base_url))
     end
 
     def article_image_url(document, candidate)
       selector = config_value("article_image_selector", "meta[property='og:image'], img")
-      image = document.at_css("meta[property='og:image']")&.[]("content").presence ||
-        document.at_css(selector)&.[]("content").presence ||
-        document.at_css(selector)&.[]("src").presence
+      image = prioritized_image_url(document, selector)
       normalize_url(image, candidate.url)
     end
 
@@ -376,6 +372,91 @@ module News
 
     def normalize_text(value)
       value.to_s.gsub(/\s+/, " ").strip.presence
+    end
+
+    def strip_article_noise(html)
+      fragment = Nokogiri::HTML.fragment(html.to_s)
+      Array(config_value("article_body_exclude_selectors", "")).flat_map { |value| value.to_s.split(",") }.map(&:strip).reject(&:blank?).each do |selector|
+        fragment.css(selector).each(&:remove)
+      end
+      fragment.to_html
+    end
+
+    def prioritized_image_url(document, selector_list)
+      selectors = selector_list.to_s.split(",").map(&:strip).reject(&:blank?)
+
+      selectors.each do |selector|
+        if selector.start_with?("meta[")
+          image = document.at_css(selector)&.[]("content").presence
+          return image if image.present? && !image_placeholder?(image)
+          next
+        end
+
+        document.css(selector).each do |node|
+          image = image_node_url(node)
+          return image if image.present? && !image_placeholder?(image)
+        end
+      end
+
+      nil
+    end
+
+    def image_node_url(node)
+      return unless node
+
+      node["data-src"].presence ||
+        node["data-lazy-src"].presence ||
+        node["data-original"].presence ||
+        node["data-url"].presence ||
+        node["data-zoom-image"].presence ||
+        node["src"].presence ||
+        srcset_first_url(node["srcset"])
+    end
+
+    def srcset_first_url(value)
+      value.to_s.split(",").map(&:strip).map { |part| part.split(/\s+/).first }.compact.first.presence
+    end
+
+    def better_image_url(primary, fallback)
+      primary = primary.presence
+      fallback = fallback.presence
+
+      return fallback if primary.blank? || image_placeholder?(primary)
+      return primary if fallback.blank? || image_placeholder?(fallback)
+
+      primary
+    end
+
+    def image_placeholder?(url)
+      value = url.to_s
+      value.match?(%r{\Ahttps?://(?:assets\.playtoearn\.com/img/load\.png|www\.tbstat\.com/cdn-cgi/image/format=webp)\z}i) ||
+        value.match?(%r{playtoearn\.com/blog_images/.*\.(?:png|jpg|jpeg|webp)\z}i) ||
+        value.match?(%r{cdn-cgi/image/format=webp\z}i)
+    end
+
+    def normalize_lazy_images(html, base_url)
+      fragment = Nokogiri::HTML.fragment(html.to_s)
+      fragment.css("img").each do |img|
+        image = img["src"].presence
+        lazy_image = img["data-src"].presence ||
+          img["data-lazy-src"].presence ||
+          img["data-original"].presence ||
+          img["data-url"].presence ||
+          srcset_first_url(img["data-srcset"]) ||
+          srcset_first_url(img["srcset"])
+
+        if lazy_image.present? && (image.blank? || image.match?(/load\.png|placeholder|data:/i))
+          img["src"] = lazy_image
+        end
+
+        img.remove_attribute("data-src")
+        img.remove_attribute("data-lazy-src")
+        img.remove_attribute("data-original")
+        img.remove_attribute("data-url")
+        img.remove_attribute("data-srcset")
+      end
+
+      rewrite_fragment_urls(fragment.to_html, base_url)
     end
 
     def filter_body_paragraphs(paragraphs)

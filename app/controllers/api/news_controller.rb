@@ -1,5 +1,7 @@
 require "base64"
 require "json"
+require "net/http"
+require "uri"
 
 module Api
   class NewsController < BaseController
@@ -19,6 +21,24 @@ module Api
     def show
       article = NewsArticle.includes(:news_source, :news_section).find(params[:id])
       render json: { article: news_article_payload(article) }
+    end
+
+    def image
+      article = NewsArticle.find(params[:id])
+      url = article.image_url.to_s.strip
+
+      return render_error("Image not available", status: :not_found) if url.blank?
+
+      response = fetch_image_response(url)
+      unless response.is_a?(Net::HTTPSuccess)
+        return render_error("Image not available", status: :bad_gateway)
+      end
+
+      content_type = response["content-type"].presence || "application/octet-stream"
+      send_data response.body.to_s, type: content_type, disposition: "inline"
+    rescue StandardError => e
+      Rails.logger.warn("[Api::NewsController] image proxy failed for #{params[:id]}: #{e.class} #{e.message}")
+      render_error("Image not available", status: :bad_gateway)
     end
 
     private
@@ -68,6 +88,43 @@ module Api
     def decode_cursor(cursor)
       values = JSON.parse(Base64.urlsafe_decode64(cursor.to_s))
       [Time.zone.parse(values[0].to_s), values[1].to_i]
+    end
+
+    def fetch_image_response(url)
+      uri = URI.parse(url)
+      raise ArgumentError, "Unsupported image URL" unless %w[http https].include?(uri.scheme)
+
+      redirects = 0
+      loop do
+        response = perform_image_request(uri)
+        case response
+        when Net::HTTPSuccess
+          return response
+        when Net::HTTPRedirection
+          redirects += 1
+          raise ArgumentError, "Too many redirects" if redirects > 5
+
+          location = response["location"]
+          raise ArgumentError, "Redirect without location" if location.blank?
+
+          uri = URI.parse(location)
+          uri = URI.join(url, location) if uri.relative?
+        else
+          return response
+        end
+      end
+    end
+
+    def perform_image_request(uri)
+      Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https", open_timeout: 10, read_timeout: 20) do |http|
+        request = Net::HTTP::Get.new(uri)
+        request["User-Agent"] = ENV.fetch("NEWS_USER_AGENT", "FarmspotNewsCrawler/1.0")
+        request["Accept"] = "image/avif,image/webp,image/*,*/*;q=0.8"
+        request["Accept-Language"] = "en-US,en;q=0.9"
+        request["Cache-Control"] = "no-cache"
+        request["Pragma"] = "no-cache"
+        http.request(request)
+      end
     end
   end
 end

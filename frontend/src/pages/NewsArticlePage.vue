@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from "vue"
+import { computed, onMounted, ref, watch } from "vue"
 import { useRoute } from "vue-router"
 import { api } from "../api"
 
@@ -56,6 +56,10 @@ async function loadArticle() {
 }
 
 watch(() => route.params.id, loadArticle, { immediate: true })
+
+onMounted(() => {
+  window.scrollTo({ top: 0, behavior: "auto" })
+})
 </script>
 
 <template>
@@ -66,7 +70,7 @@ watch(() => route.params.id, loadArticle, { immediate: true })
       </div>
 
       <div v-else-if="article">
-        <RouterLink to="/news" class="news-article-back">← Назад к ленте</RouterLink>
+        <RouterLink :to="{ path: '/news', query: route.query }" class="news-article-back">← Назад к ленте</RouterLink>
 
         <div class="news-article-meta">
           <span>{{ article.source_name }}</span>
@@ -87,7 +91,7 @@ watch(() => route.params.id, loadArticle, { immediate: true })
 
         <div class="news-article-links">
           <a :href="article.canonical_url" target="_blank" rel="noreferrer">Открыть оригинал</a>
-          <v-btn to="/news" color="primary" variant="flat" class="news-article-close">Закрыть</v-btn>
+          <v-btn :to="{ path: '/news', query: route.query }" color="primary" variant="flat" class="news-article-close">Закрыть</v-btn>
         </div>
       </div>
 

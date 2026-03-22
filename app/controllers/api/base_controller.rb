@@ -114,7 +114,7 @@ module Api
         preview_text: article.preview_text,
         body_text: article.body_text,
         body_html: sanitized_news_html(article.body_html),
-        image_url: article.image_url,
+        image_url: news_article_image_url(article),
         published_at: article.published_at,
         fetched_at: article.fetched_at,
         content_hash: article.content_hash,
@@ -128,6 +128,12 @@ module Api
         tags: %w[p br div span strong em b i u s ul ol li blockquote figure figcaption a img h1 h2 h3 h4 h5 h6 iframe video source],
         attributes: %w[href src alt title width height class style allow allowfullscreen frameborder loading referrerpolicy rel target data-src data-lazy-src poster]
       )
+    end
+
+    def news_article_image_url(article)
+      return if article.image_url.blank?
+
+      "/api/news/#{article.id}/image"
     end
 
     def news_crawl_run_payload(run)

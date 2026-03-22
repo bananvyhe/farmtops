@@ -178,13 +178,13 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
       ),
       "https://feed.example.com/posts/one" => article_page(
         title: "Feed One",
-        body: "Feed body one",
+        body: "Feed body one with significantly more context than the feed preview, including additional background and details for readers.",
         image_url: "https://cdn.example.com/feed-one.jpg",
         canonical_url: "https://feed.example.com/posts/one"
       ),
       "https://feed.example.com/posts/two" => article_page(
         title: "Feed Two",
-        body: "Feed body two",
+        body: "Feed body two with significantly more context than the feed preview, including additional background and details for readers.",
         image_url: "https://cdn.example.com/feed-two.jpg",
         canonical_url: "https://feed.example.com/posts/two"
       )
@@ -203,6 +203,225 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     assert_equal 1, result.pages_visited
     assert_equal 2, section.news_articles.count
     assert_equal "Feed One", section.news_articles.find_by!(canonical_url: "https://feed.example.com/posts/one").title
+    assert_includes section.news_articles.find_by!(canonical_url: "https://feed.example.com/posts/one").body_text, "significantly more context"
+  end
+
+  test "uses the full article page for feed sources when it is richer than the feed excerpt" do
+    source = NewsSource.create!(
+      name: "MassivelyOP",
+      base_url: "https://massivelyop.com",
+      active: true,
+      crawl_delay_min_seconds: 0,
+      crawl_delay_max_seconds: 0,
+      config: {
+        "pagination_mode" => "feed"
+      }
+    )
+    section = source.news_sections.create!(
+      name: "Patch",
+      url: "https://massivelyop.com/category/patch/",
+      active: true,
+      config: {
+        "pagination_mode" => "feed"
+      }
+    )
+
+    pages = {
+      "https://massivelyop.com/category/patch/feed/" => feed_page(
+        [
+          {
+            title: "Patch Article",
+            link: "https://massivelyop.com/2026/03/20/patch-article/",
+            description: "Short feed preview",
+            guid: "patch-article"
+          }
+        ]
+      ),
+      "https://massivelyop.com/2026/03/20/patch-article/" => article_page(
+        title: "Patch Article",
+        body: "This is the full article body with far more detail than the feed preview.",
+        image_url: "https://massivelyop.com/wp-content/uploads/2026/03/patch.jpg",
+        canonical_url: "https://massivelyop.com/2026/03/20/patch-article/",
+        article_body_html: <<~HTML
+          <div><img src="https://massivelyop.com/wp-content/uploads/2026/03/patch.jpg"></div>
+          <p>This is the full article body with far more detail than the feed preview.</p>
+          <p>Another paragraph that should not be lost.</p>
+        HTML
+      )
+    }
+
+    result = News::SectionCrawler.new(
+      section:,
+      client: FakeClient.new(pages),
+      sleeper: NullSleeper.new,
+      max_articles: 12,
+      max_pages: 2,
+      max_retries: 1
+    ).call
+
+    assert_equal 1, result.articles_saved
+    article = section.news_articles.find_by!(canonical_url: "https://massivelyop.com/2026/03/20/patch-article/")
+    assert_includes article.body_text, "far more detail"
+    assert_includes article.body_html, "Another paragraph"
+    refute_includes article.body_text, "Short feed preview"
+  end
+
+  test "prefers lazy preview images from listing pages" do
+    source = NewsSource.create!(
+      name: "PlayToEarn",
+      base_url: "https://playtoearn.com",
+      active: true,
+      crawl_delay_min_seconds: 0,
+      crawl_delay_max_seconds: 0,
+      config: {
+        "list_item_selector" => "article",
+        "listing_url_selector" => "a[href]",
+        "listing_title_selector" => "h2 a",
+        "listing_preview_selector" => "p",
+        "listing_image_selector" => "img",
+        "article_title_selector" => "h1",
+        "article_body_selector" => "article",
+        "article_image_selector" => "meta[property='og:image'], img"
+      }
+    )
+    section = source.news_sections.create!(
+      name: "News",
+      url: "https://playtoearn.com/news/category/News",
+      active: true,
+      config: source.config
+    )
+
+    pages = {
+      "https://playtoearn.com/news/category/News" => <<~HTML,
+        <html>
+          <body>
+            <article>
+              <h2><a href="/news/lazy-image">Lazy image</a></h2>
+              <p class="preview">Preview text</p>
+              <img src="https://assets.playtoearn.com/img/load.png" data-src="https://img.playtoearn.com/news/lazy-image.jpg">
+            </article>
+          </body>
+        </html>
+      HTML
+      "https://playtoearn.com/news/lazy-image" => article_page(
+        title: "Lazy image",
+        body: "Body with lazy image",
+        image_url: "https://img.playtoearn.com/news/lazy-image.jpg",
+        canonical_url: "https://playtoearn.com/news/lazy-image"
+      )
+    }
+
+    result = News::SectionCrawler.new(
+      section:,
+      client: FakeClient.new(pages),
+      sleeper: NullSleeper.new,
+      max_articles: 12,
+      max_pages: 2,
+      max_retries: 1
+    ).call
+
+    assert_equal 1, result.articles_saved
+    article = section.news_articles.find_by!(canonical_url: "https://playtoearn.com/news/lazy-image")
+    assert_equal "https://img.playtoearn.com/news/lazy-image.jpg", article.image_url
+  end
+
+  test "strips playtoearn footer links from the article body" do
+    source = NewsSource.create!(
+      name: "PlayToEarn Footer",
+      base_url: "https://playtoearn.com",
+      active: true,
+      crawl_delay_min_seconds: 0,
+      crawl_delay_max_seconds: 0,
+      config: {
+        "article_body_exclude_selectors" => ".__Info, footer"
+      }
+    )
+    section = source.news_sections.create!(
+      name: "News",
+      url: "https://playtoearn.com/news/category/News",
+      active: true,
+      config: source.config
+    )
+
+    pages = {
+      "https://playtoearn.com/news/category/News" => <<~HTML,
+        <html>
+          <body>
+            <article>
+              <h2><a href="/news/footer-article">Footer article</a></h2>
+              <p class="preview">Feed preview</p>
+            </article>
+          </body>
+        </html>
+      HTML
+      "https://playtoearn.com/news/footer-article" => article_page(
+        title: "Footer article",
+        body: "Body with footer and much more surrounding context so the full article page is clearly richer than the feed preview.",
+        image_url: "https://img.playtoearn.com/news/footer.jpg",
+        canonical_url: "https://playtoearn.com/news/footer-article",
+        article_body_html: <<~HTML
+          <article>
+            <p>Intro</p>
+            <div class="__Info">
+              <a href="/news/category/News">News on PlayToEarn</a>
+              <a href="/about">About</a>
+            </div>
+            <p>Outro</p>
+          </article>
+        HTML
+      )
+    }
+
+    result = News::SectionCrawler.new(
+      section:,
+      client: FakeClient.new(pages),
+      sleeper: NullSleeper.new,
+      max_articles: 12,
+      max_pages: 2,
+      max_retries: 1
+    ).call
+
+    assert_equal 1, result.articles_saved
+    article = section.news_articles.find_by!(canonical_url: "https://playtoearn.com/news/footer-article")
+    refute_includes article.body_html, "News on PlayToEarn"
+    refute_includes article.body_html, "/about"
+    assert_includes article.body_text, "Intro"
+    assert_includes article.body_text, "Outro"
+  end
+
+  test "promotes lazy loaded body images to real src attributes" do
+    pages = {
+      "https://example.com/news" => listing_page(
+        [
+          { title: "Lazy image", href: "/news/lazy-image", preview: "Preview lazy image" }
+        ]
+      ),
+      "https://example.com/news/lazy-image" => article_page(
+        title: "Lazy image",
+        body: "Body with lazy image",
+        image_url: "https://example.com/images/hero.jpg",
+        canonical_url: "https://example.com/news/lazy-image",
+        article_body_html: <<~HTML
+          <p>Intro paragraph</p>
+          <img src="https://assets.playtoearn.com/img/load.png" class="lazy" data-src="https://img.example.com/body-image.jpg" alt="Body image">
+          <p>Second paragraph</p>
+        HTML
+      )
+    }
+
+    result = News::SectionCrawler.new(
+      section: @section,
+      client: FakeClient.new(pages),
+      sleeper: NullSleeper.new,
+      max_articles: 12,
+      max_pages: 2,
+      max_retries: 1
+    ).call
+
+    assert_equal 1, result.articles_saved
+    article = @section.news_articles.find_by!(canonical_url: "https://example.com/news/lazy-image")
+    assert_includes article.body_html, "https://img.example.com/body-image.jpg"
+    refute_includes article.body_html, "load.png"
   end
 
   test "prefers json ld article body html when present" do
@@ -245,7 +464,7 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     assert_includes article.body_text, "Second paragraph"
   end
 
-  test "refreshes existing article when the new body html is richer" do
+  test "skips existing article when it already exists" do
     NewsArticle.create!(
       news_source: @source,
       news_section: @section,
@@ -289,12 +508,114 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
       max_retries: 1
     ).call
 
-    assert_equal 1, result.articles_saved
+    assert_equal 0, result.articles_saved
+    assert_equal 1, result.articles_skipped
     article = @section.news_articles.find_by!(source_article_id: "https://example.com/news/rich")
-    assert_includes article.body_html, "Updated paragraph one"
-    assert_includes article.body_html, "Updated paragraph two"
-    assert_includes article.body_text, "Updated paragraph one"
-    assert_equal "https://cdn.example.com/new.jpg", article.image_url
+    assert_equal "Old text", article.body_text
+    assert_equal "https://cdn.example.com/old.jpg", article.image_url
+  end
+
+  test "prefers data-src and srcset images over placeholder src values" do
+    pages = {
+      "https://example.com/news" => listing_page(
+        [
+          { title: "Lazy image", href: "/news/lazy-image", preview: "Preview lazy image" }
+        ]
+      ),
+      "https://example.com/news/lazy-image" => <<~HTML
+        <html>
+          <head>
+            <title>Lazy image</title>
+          </head>
+          <body>
+            <article class="story-body">
+              <h1>Lazy image</h1>
+              <p>Body with lazy image</p>
+              <img src="https://assets.playtoearn.com/img/load.png" data-src="https://img.example.com/body-image.jpg" alt="Body image">
+            </article>
+          </body>
+        </html>
+      HTML
+    }
+
+    result = News::SectionCrawler.new(
+      section: @section,
+      client: FakeClient.new(pages),
+      sleeper: NullSleeper.new,
+      max_articles: 12,
+      max_pages: 2,
+      max_retries: 1
+    ).call
+
+    assert_equal 1, result.articles_saved
+    article = @section.news_articles.find_by!(canonical_url: "https://example.com/news/lazy-image")
+    assert_equal "https://img.example.com/body-image.jpg", article.image_url
+  end
+
+  test "extracts the unique content block for massivelyop articles" do
+    source = NewsSource.create!(
+      name: "MassivelyOP",
+      base_url: "https://massivelyop.com",
+      active: true,
+      crawl_delay_min_seconds: 0,
+      crawl_delay_max_seconds: 0,
+      config: {
+        "article_body_selector" => ".td-post-content",
+        "article_body_exclude_selectors" => ".td-post-content .td-page-meta, .td-post-content .td-post-sharing, .td-post-content .related, .td-post-content footer",
+        "article_image_selector" => "meta[property='og:image'], .td-post-content img, img"
+      }
+    )
+    section = source.news_sections.create!(
+      name: "Patch",
+      url: "https://massivelyop.com/category/patch/",
+      active: true,
+      config: source.config
+    )
+
+    pages = {
+      "https://massivelyop.com/category/patch/" => listing_page(
+        [
+          { title: "Patch Article", href: "/2026/03/20/patch-article/", preview: "Feed preview" }
+        ]
+      ),
+      "https://massivelyop.com/2026/03/20/patch-article/" => <<~HTML
+        <html>
+          <head>
+            <meta property="og:image" content="https://massivelyop.com/wp-content/uploads/2026/03/patch.jpg">
+            <link rel="canonical" href="https://massivelyop.com/2026/03/20/patch-article/">
+            <title>Patch Article</title>
+          </head>
+          <body>
+            <article class="td-post-content">
+              <div class="td-page-content">
+                <img src="https://massivelyop.com/wp-content/uploads/2026/03/patch.jpg">
+                <p>This is the unique body paragraph that should remain.</p>
+                <p>Another important paragraph with the article text.</p>
+              </div>
+              <footer>
+                <a href="/code-of-conduct">Code of Conduct</a>
+              </footer>
+            </article>
+          </body>
+        </html>
+      HTML
+    }
+
+    result = News::SectionCrawler.new(
+      section:,
+      client: FakeClient.new(pages),
+      sleeper: NullSleeper.new,
+      max_articles: 12,
+      max_pages: 2,
+      max_retries: 1
+    ).call
+
+    assert_equal 1, result.articles_saved
+    article = section.news_articles.find_by!(canonical_url: "https://massivelyop.com/2026/03/20/patch-article/")
+    assert_includes article.body_text, "unique body paragraph"
+    assert_includes article.body_text, "Another important paragraph"
+    refute_includes article.body_text, "Code of Conduct"
+    assert_equal "https://massivelyop.com/wp-content/uploads/2026/03/patch.jpg", article.image_url
   end
 
   test "increments start pagination offsets" do

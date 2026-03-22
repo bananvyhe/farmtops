@@ -45,8 +45,9 @@ namespace :news do
     when "massivelyop.com"
       {
         "article_title_selector" => "h1",
-        "article_body_selector" => "article",
-        "article_image_selector" => "meta[property='og:image'], img",
+        "article_body_selector" => ".td-post-content",
+        "article_body_exclude_selectors" => ".td-post-content .td-page-meta, .td-post-content .td-author-name, .td-post-content .td-social-sharing, .td-post-content .td-post-sharing, .td-post-content .td-post-source-tags, .td-post-content .td-post-share-title, .td-post-content .td-post-sharing-bottom, .td-post-content .td-post-footer, .td-post-content .td-post-related, .td-post-content .related, .td-post-content .related-posts, .td-post-content .post-tags, .td-post-content .tags, .td-post-content .share, .td-post-content .social-share, .td-post-content footer, .td-post-content .footer, .td-post-content div[style*='Montserrat']",
+        "article_image_selector" => "meta[property='og:image'], .td-post-content img, img.wp-post-image, img",
         "pagination_mode" => "feed"
       }
     when "playtoearn.com"
@@ -55,10 +56,11 @@ namespace :news do
         "listing_url_selector" => "h2 a[href], h3 a[href], a[href]",
         "listing_title_selector" => "h2 a, h3 a",
         "listing_preview_selector" => "p",
-        "listing_image_selector" => "img",
+        "listing_image_selector" => "img[data-src], img[data-lazy-src], img[data-original], img[srcset], img",
         "article_title_selector" => "h1",
         "article_body_selector" => "article",
-        "article_image_selector" => "meta[property='og:image'], img",
+        "article_body_exclude_selectors" => ".__Info, footer, .footer, .related, .related-posts, .post-tags, .tags, .share, .social-share, .entry-footer, .post-tags-wrap, .wp-block-separator, .wp-block-group.has-background",
+        "article_image_selector" => "meta[property='og:image'], meta[property='twitter:image'], article img[data-src], article img[data-lazy-src], article img[data-original], article img[srcset], article img, img[data-src], img[data-lazy-src], img[data-original], img[srcset], img",
         "next_page_selector" => "a[rel='next']",
         "pagination_mode" => "query"
       }
@@ -68,10 +70,10 @@ namespace :news do
         "listing_url_selector" => "a[href*='/post/']",
         "listing_title_selector" => "h2 a, h3 a, a[href*='/post/']",
         "listing_preview_selector" => "p",
-        "listing_image_selector" => "img",
+        "listing_image_selector" => "img[data-src], img[data-lazy-src], img[data-original], img[srcset], img",
         "article_title_selector" => "h1",
         "article_body_selector" => "article",
-        "article_image_selector" => "meta[property='og:image'], img",
+        "article_image_selector" => "meta[property='og:image'], meta[property='twitter:image'], article img[data-src], article img[data-lazy-src], article img[data-original], article img[srcset], article img, img[data-src], img[data-lazy-src], img[data-original], img[srcset], img",
         "next_page_selector" => "a[rel='next']",
         "pagination_mode" => "start",
         "pagination_step" => 10
