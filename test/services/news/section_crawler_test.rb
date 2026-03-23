@@ -16,6 +16,28 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     end
   end
 
+  class FakeTranslator
+    def initialize(title:, preview_text:, body_text:, model: "fake-translator")
+      @title = title
+      @preview_text = preview_text
+      @body_text = body_text
+      @model = model
+    end
+
+    def translate_article(**_kwargs)
+      News::Translation::Result.new(
+        request_id: "req-1",
+        translated_title: @title,
+        translated_preview_text: @preview_text,
+        translated_body_text: @body_text,
+        model: @model,
+        latency_ms: 12,
+        status: "ok",
+        error: nil
+      )
+    end
+  end
+
   setup do
     @source = NewsSource.create!(
       name: "Example",
@@ -101,6 +123,94 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     assert_equal "First", @section.news_articles.find_by!(canonical_url: "https://example.com/news/first-a").title
     assert_equal "Body one", @section.news_articles.find_by!(canonical_url: "https://example.com/news/first-a").body_text
     assert_equal "https://cdn.example.com/first.jpg", @section.news_articles.find_by!(canonical_url: "https://example.com/news/first-a").image_url
+  end
+
+  test "translates and preserves the source article text before saving" do
+    pages = {
+      "https://example.com/news" => listing_page(
+        [
+          { title: "First", href: "/news/first-a", preview: "Preview first" }
+        ]
+      ),
+      "https://example.com/news/first-a" => article_page(
+        title: "First",
+        body: "Body one\n\nSecond paragraph",
+        image_url: "https://cdn.example.com/first.jpg",
+        canonical_url: "https://example.com/news/first-a"
+      )
+    }
+
+    result = News::SectionCrawler.new(
+      section: @section,
+      client: FakeClient.new(pages),
+      sleeper: NullSleeper.new,
+      translator: FakeTranslator.new(
+        title: "Первый",
+        preview_text: "Превью первое",
+        body_text: "Тело одно\n\nВторой абзац"
+      ),
+      max_articles: 12,
+      max_pages: 5,
+      max_retries: 1
+    ).call
+
+    assert_equal 1, result.articles_saved
+    article = @section.news_articles.find_by!(canonical_url: "https://example.com/news/first-a")
+    assert_equal "Первый", article.title
+    assert_equal "Превью первое", article.preview_text
+    assert_includes article.body_text, "Тело одно"
+    assert_includes article.body_text, "Второй абзац"
+    assert_includes article.body_text, "\n\n"
+    assert_equal "First", article.source_title
+    assert_includes article.source_preview_text, "Body one"
+    assert_includes article.source_preview_text, "Second paragraph"
+    assert_includes article.source_body_text, "Body one"
+    assert_includes article.source_body_text, "Second paragraph"
+    assert_equal "fake-translator", article.translation_model
+    assert_equal "ru", article.translation_target_locale
+    assert_equal "en", article.translation_source_locale
+    assert_includes article.body_html, "<p>Тело одно</p>"
+    assert_includes article.body_html, "<p>Второй абзац</p>"
+  end
+
+  test "falls back to the source article when translation fails" do
+    pages = {
+      "https://example.com/news" => listing_page(
+        [
+          { title: "First", href: "/news/first-a", preview: "Preview first" }
+        ]
+      ),
+      "https://example.com/news/first-a" => article_page(
+        title: "First",
+        body: "Body one",
+        image_url: "https://cdn.example.com/first.jpg",
+        canonical_url: "https://example.com/news/first-a"
+      )
+    }
+
+    failing_translator = Class.new do
+      def translate_article(**)
+        raise StandardError, "offline"
+      end
+    end.new
+
+    result = News::SectionCrawler.new(
+      section: @section,
+      client: FakeClient.new(pages),
+      sleeper: NullSleeper.new,
+      translator: failing_translator,
+      max_articles: 12,
+      max_pages: 5,
+      max_retries: 1
+    ).call
+
+    assert_equal 1, result.articles_saved
+    assert_equal 0, result.articles_skipped
+    article = @section.news_articles.find_by!(canonical_url: "https://example.com/news/first-a")
+    assert_equal "First", article.title
+    assert_equal "Body one", article.preview_text
+    assert_equal "Body one", article.body_text
+    assert_nil article.translated_at
   end
 
   test "stops after twelve saved articles" do
@@ -266,6 +376,49 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     refute_includes article.body_text, "Short feed preview"
   end
 
+  test "captures listing preview html while deriving card preview text from the full article body" do
+    pages = {
+      "https://example.com/news" => <<~HTML,
+        <html>
+          <body>
+            <article>
+              <h2><a href="/news/rich-preview">Rich preview</a></h2>
+              <div class="preview"><p>Listing <strong>preview</strong> with <em>markup</em>.</p></div>
+            </article>
+          </body>
+        </html>
+      HTML
+      "https://example.com/news/rich-preview" => article_page(
+        title: "Rich preview",
+        body: "Full body first paragraph.\n\nFull body second paragraph with more details.",
+        image_url: "https://cdn.example.com/rich-preview.jpg",
+        canonical_url: "https://example.com/news/rich-preview",
+        article_body_html: <<~HTML
+          <article class="story-body">
+            <p>Full body first paragraph.</p>
+            <p>Full body second paragraph with more details.</p>
+          </article>
+        HTML
+      )
+    }
+
+    result = News::SectionCrawler.new(
+      section: @section,
+      client: FakeClient.new(pages),
+      sleeper: NullSleeper.new,
+      max_articles: 12,
+      max_pages: 2,
+      max_retries: 1
+    ).call
+
+    assert_equal 1, result.articles_saved
+    article = @section.news_articles.find_by!(canonical_url: "https://example.com/news/rich-preview")
+    assert_includes article.preview_html, "<strong>preview</strong>"
+    assert_includes article.preview_html, "<em>markup</em>"
+    refute_includes article.preview_text, "Listing preview"
+    assert_includes article.preview_text, "Full body first paragraph"
+  end
+
   test "prefers lazy preview images from listing pages" do
     source = NewsSource.create!(
       name: "PlayToEarn",
@@ -422,6 +575,120 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     article = @section.news_articles.find_by!(canonical_url: "https://example.com/news/lazy-image")
     assert_includes article.body_html, "https://img.example.com/body-image.jpg"
     refute_includes article.body_html, "load.png"
+  end
+
+  test "removes duplicate smaller leading images from the article body" do
+    pages = {
+      "https://example.com/news" => listing_page(
+        [
+          { title: "Duplicate images", href: "/news/duplicate-images", preview: "Preview duplicate images" }
+        ]
+      ),
+      "https://example.com/news/duplicate-images" => <<~HTML
+        <html>
+          <head>
+            <meta property="og:image" content="https://example.com/images/hero.jpg">
+            <link rel="canonical" href="https://example.com/news/duplicate-images">
+            <title>Duplicate images</title>
+          </head>
+          <body>
+            <article class="story-body">
+              <div class="hero">
+                <img src="https://example.com/images/hero.jpg" width="1200" height="675">
+              </div>
+              <div class="hero-small">
+                <img src="https://example.com/images/hero-300x169.jpg" width="300" height="169">
+              </div>
+              <p>Main paragraph after the hero image.</p>
+            </article>
+          </body>
+        </html>
+      HTML
+    }
+
+    result = News::SectionCrawler.new(
+      section: @section,
+      client: FakeClient.new(pages),
+      sleeper: NullSleeper.new,
+      max_articles: 12,
+      max_pages: 2,
+      max_retries: 1
+    ).call
+
+    assert_equal 1, result.articles_saved
+    article = @section.news_articles.find_by!(canonical_url: "https://example.com/news/duplicate-images")
+    assert_includes article.body_html, "https://example.com/images/hero.jpg"
+    refute_includes article.body_html, "hero-300x169.jpg"
+  end
+
+  test "chooses the most text rich block from a broad article container" do
+    source = NewsSource.create!(
+      name: "TheBlock",
+      base_url: "https://stage.theblock.co",
+      active: true,
+      crawl_delay_min_seconds: 0,
+      crawl_delay_max_seconds: 0,
+      config: {
+        "article_body_selector" => "article",
+        "article_image_selector" => "meta[property='og:image'], img"
+      }
+    )
+    section = source.news_sections.create!(
+      name: "Latest",
+      url: "https://stage.theblock.co/latest-crypto-news",
+      active: true,
+      config: source.config
+    )
+
+    pages = {
+      "https://stage.theblock.co/latest-crypto-news" => listing_page(
+        [
+          { title: "The Block story", href: "/post/123", preview: "Preview block" }
+        ]
+      ),
+      "https://stage.theblock.co/post/123" => <<~HTML
+        <html>
+          <head>
+            <meta property="og:image" content="https://www.tbstat.com/cdn-cgi/image/format=webp">
+            <link rel="canonical" href="https://www.theblock.co/post/123">
+            <title>The Block story</title>
+          </head>
+          <body>
+            <article>
+              <header>
+                <p class="standfirst">Short intro that should not be the main body.</p>
+              </header>
+              <section class="article-body">
+                <p>First long paragraph of the main story.</p>
+                <p>Second long paragraph of the main story with more detail.</p>
+                <div class="callout">
+                  <p>Third important paragraph in the text block.</p>
+                </div>
+              </section>
+              <aside>
+                <p>Sidebar noise.</p>
+              </aside>
+            </article>
+          </body>
+        </html>
+      HTML
+    }
+
+    result = News::SectionCrawler.new(
+      section:,
+      client: FakeClient.new(pages),
+      sleeper: NullSleeper.new,
+      max_articles: 12,
+      max_pages: 2,
+      max_retries: 1
+    ).call
+
+    assert_equal 1, result.articles_saved
+    article = section.news_articles.find_by!(source_article_id: "https://stage.theblock.co/post/123")
+    assert_includes article.body_html, "First long paragraph"
+    assert_includes article.body_html, "Third important paragraph"
+    refute_includes article.body_html, "Sidebar noise"
+    refute_includes article.body_text, "Short intro that should not be the main body."
   end
 
   test "prefers json ld article body html when present" do
@@ -616,6 +883,50 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     assert_includes article.body_text, "Another important paragraph"
     refute_includes article.body_text, "Code of Conduct"
     assert_equal "https://massivelyop.com/wp-content/uploads/2026/03/patch.jpg", article.image_url
+  end
+
+  test "preserves paragraph blocks when extracting body text" do
+    pages = {
+      "https://example.com/news" => listing_page(
+        [
+          { title: "Block article", href: "/news/block-article", preview: "Preview block article" }
+        ]
+      ),
+      "https://example.com/news/block-article" => <<~HTML
+        <html>
+          <head>
+            <meta property="og:image" content="https://example.com/images/block.jpg">
+            <link rel="canonical" href="https://example.com/news/block-article">
+            <title>Block article</title>
+          </head>
+          <body>
+            <article class="story-body">
+              <div>First block paragraph.</div>
+              <div>Second block paragraph.</div>
+              <blockquote>Quoted block paragraph.</blockquote>
+              <div><span>Third block paragraph inside span.</span></div>
+            </article>
+          </body>
+        </html>
+      HTML
+    }
+
+    result = News::SectionCrawler.new(
+      section: @section,
+      client: FakeClient.new(pages),
+      sleeper: NullSleeper.new,
+      max_articles: 12,
+      max_pages: 2,
+      max_retries: 1
+    ).call
+
+    assert_equal 1, result.articles_saved
+    article = @section.news_articles.find_by!(canonical_url: "https://example.com/news/block-article")
+    assert_includes article.body_text, "First block paragraph."
+    assert_includes article.body_text, "Second block paragraph."
+    assert_includes article.body_text, "Quoted block paragraph."
+    assert_includes article.body_text, "Third block paragraph inside span."
+    assert_includes article.body_text, "\n\n"
   end
 
   test "increments start pagination offsets" do

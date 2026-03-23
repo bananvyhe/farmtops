@@ -1,0 +1,87 @@
+require "json"
+require "net/http"
+require "securerandom"
+require "uri"
+
+module News
+  module Translation
+    Error = Class.new(StandardError)
+
+    class Client
+      DEFAULT_PATH = "/translate"
+
+      def initialize(base_url: ENV.fetch("NEWS_TRANSLATOR_URL"), token: ENV["NEWS_TRANSLATOR_TOKEN"],
+        open_timeout: ENV.fetch("NEWS_TRANSLATOR_OPEN_TIMEOUT_SECONDS", "10").to_i,
+        read_timeout: ENV.fetch("NEWS_TRANSLATOR_READ_TIMEOUT_SECONDS", "180").to_i)
+        @base_url = base_url
+        @token = token
+        @open_timeout = open_timeout
+        @read_timeout = read_timeout
+      end
+
+      def translate_article(request_id: SecureRandom.uuid, source_lang:, target_lang:, title:, preview_text:, body_text:,
+        canonical_url: nil, source_article_id: nil, content_hash: nil)
+        response = post_json(
+          DEFAULT_PATH,
+          {
+            request_id: request_id,
+            source_lang: source_lang,
+            target_lang: target_lang,
+            title: title.to_s,
+            preview_text: preview_text.to_s,
+            body_text: body_text.to_s,
+            canonical_url: canonical_url,
+            source_article_id: source_article_id,
+            content_hash: content_hash
+          }.compact
+        )
+
+        result = Result.new(
+          request_id: response.fetch("request_id", request_id),
+          translated_title: response["translated_title"].to_s,
+          translated_preview_text: response["translated_preview_text"].to_s,
+          translated_body_text: response["translated_body_text"].to_s,
+          model: response["model"].to_s,
+          latency_ms: response["latency_ms"],
+          status: response["status"].to_s,
+          error: response["error"].presence
+        )
+        validate_result!(result)
+        result
+      end
+
+      private
+
+      attr_reader :base_url, :token, :open_timeout, :read_timeout
+
+      def post_json(path, payload)
+        uri = URI.join(base_url.end_with?("/") ? base_url : "#{base_url}/", path.delete_prefix("/"))
+
+        response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https", open_timeout:, read_timeout:) do |http|
+          request = Net::HTTP::Post.new(uri)
+          request["Content-Type"] = "application/json"
+          request["Accept"] = "application/json"
+          request["Authorization"] = "Bearer #{token}" if token.present?
+          request.body = JSON.generate(payload)
+          http.request(request)
+        end
+
+        body_text = response.body.to_s
+        parsed_body = JSON.parse(body_text) rescue {}
+        raise Error, parsed_body["error"].to_s.presence || "Translator returned HTTP #{response.code}" unless response.is_a?(Net::HTTPSuccess)
+
+        JSON.parse(body_text)
+      rescue JSON::ParserError => e
+        raise Error, "Translator returned invalid JSON: #{e.message}"
+      rescue SocketError, SystemCallError, Timeout::Error, Errno::ECONNREFUSED => e
+        raise Error, "Translator unavailable: #{e.message}"
+      end
+
+      def validate_result!(result)
+        raise Error, result.error if result.status != "ok" && result.error.present?
+        raise Error, "Translator response missing translated_title" if result.translated_title.blank?
+        raise Error, "Translator response missing translated_body_text" if result.translated_body_text.blank?
+      end
+    end
+  end
+end

@@ -48,6 +48,8 @@ namespace :news do
         "article_body_selector" => ".td-post-content",
         "article_body_exclude_selectors" => ".td-post-content .td-page-meta, .td-post-content .td-author-name, .td-post-content .td-social-sharing, .td-post-content .td-post-sharing, .td-post-content .td-post-source-tags, .td-post-content .td-post-share-title, .td-post-content .td-post-sharing-bottom, .td-post-content .td-post-footer, .td-post-content .td-post-related, .td-post-content .related, .td-post-content .related-posts, .td-post-content .post-tags, .td-post-content .tags, .td-post-content .share, .td-post-content .social-share, .td-post-content footer, .td-post-content .footer, .td-post-content div[style*='Montserrat']",
         "article_image_selector" => "meta[property='og:image'], .td-post-content img, img.wp-post-image, img",
+        "http_open_timeout_seconds" => 20,
+        "http_read_timeout_seconds" => 40,
         "pagination_mode" => "feed"
       }
     when "playtoearn.com"

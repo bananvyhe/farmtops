@@ -1,9 +1,10 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue"
-import { useRoute } from "vue-router"
+import { useRoute, useRouter } from "vue-router"
 import { api } from "../api"
 
 const route = useRoute()
+const router = useRouter()
 const article = ref(null)
 const loading = ref(false)
 const error = ref("")
@@ -57,6 +58,16 @@ async function loadArticle() {
 
 watch(() => route.params.id, loadArticle, { immediate: true })
 
+function closeArticle() {
+  const backPath = window.history.state?.back
+  if (typeof backPath === "string" && backPath.includes("/news")) {
+    router.back()
+    return
+  }
+
+  router.push({ path: "/news", query: route.query })
+}
+
 onMounted(() => {
   window.scrollTo({ top: 0, behavior: "auto" })
 })
@@ -70,7 +81,7 @@ onMounted(() => {
       </div>
 
       <div v-else-if="article">
-        <RouterLink :to="{ path: '/news', query: route.query }" class="news-article-back">← Назад к ленте</RouterLink>
+        <button type="button" class="news-article-back" @click="closeArticle">← Назад к ленте</button>
 
         <div class="news-article-meta">
           <span>{{ article.source_name }}</span>
@@ -91,7 +102,7 @@ onMounted(() => {
 
         <div class="news-article-links">
           <a :href="article.canonical_url" target="_blank" rel="noreferrer">Открыть оригинал</a>
-          <v-btn :to="{ path: '/news', query: route.query }" color="primary" variant="flat" class="news-article-close">Закрыть</v-btn>
+          <v-btn color="primary" variant="flat" class="news-article-close" @click="closeArticle">Закрыть</v-btn>
         </div>
       </div>
 
@@ -124,6 +135,10 @@ onMounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.12em;
   font-size: 0.82rem;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
 }
 
 .news-article-meta {

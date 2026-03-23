@@ -35,7 +35,12 @@ const routes = [
 
 const router = createRouter({
   history: createWebHistory(),
-  routes
+  routes,
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition
+    if (to.path === "/news" && from.path.startsWith("/news/")) return false
+    return { top: 0 }
+  }
 })
 
 createApp(App).use(router).use(vuetify).mount("#app")

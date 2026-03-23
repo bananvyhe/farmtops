@@ -334,13 +334,13 @@ onBeforeUnmount(() => {
             <span class="news-card__time">{{ formatDate(article.published_at || article.fetched_at) }}</span>
           </div>
 
-          <RouterLink class="news-card__title" :to="{ path: articlePath(article), query: routeQueryForFilters() }">
+          <RouterLink class="news-card__title" :to="{ path: articlePath(article), query: routeQueryForFilters() }" @click="persistState()">
             <h2>{{ article.title }}</h2>
           </RouterLink>
           <p class="news-card__preview">{{ article.preview_text || article.body_text }}</p>
 
           <div class="news-card__actions">
-            <RouterLink class="news-card__link" :to="{ path: articlePath(article), query: routeQueryForFilters() }">Читать полностью</RouterLink>
+            <RouterLink class="news-card__link" :to="{ path: articlePath(article), query: routeQueryForFilters() }" @click="persistState()">Читать полностью</RouterLink>
             <a :href="article.canonical_url" target="_blank" rel="noreferrer">Открыть источник</a>
           </div>
         </div>

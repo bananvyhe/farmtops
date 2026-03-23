@@ -1,6 +1,8 @@
 require "digest"
+require "erb"
 require "nokogiri"
 require "set"
+require "securerandom"
 
 module News
   class SectionCrawler
@@ -9,17 +11,26 @@ module News
     DEFAULT_MAX_ARTICLES = 7
     DEFAULT_MAX_PAGES = 20
     DEFAULT_MAX_RETRIES = 3
+    DEFAULT_SOURCE_LANG = "en"
+    DEFAULT_TARGET_LANG = "ru"
 
-    def initialize(section:, client: HttpClient.new, sleeper: PoliteSleeper.new, logger: Rails.logger,
-      max_articles: DEFAULT_MAX_ARTICLES, max_pages: DEFAULT_MAX_PAGES, max_retries: DEFAULT_MAX_RETRIES)
+    def initialize(section:, client: nil, sleeper: PoliteSleeper.new, logger: Rails.logger,
+      max_articles: DEFAULT_MAX_ARTICLES, max_pages: DEFAULT_MAX_PAGES, max_retries: DEFAULT_MAX_RETRIES,
+      translator: nil, source_lang: DEFAULT_SOURCE_LANG, target_lang: DEFAULT_TARGET_LANG)
       @section = section
       @source = section.news_source
-      @client = client
+      @client = client || HttpClient.new(
+        open_timeout: timeout_config_value("http_open_timeout_seconds", ENV.fetch("NEWS_HTTP_OPEN_TIMEOUT_SECONDS", "10").to_i),
+        read_timeout: timeout_config_value("http_read_timeout_seconds", ENV.fetch("NEWS_HTTP_READ_TIMEOUT_SECONDS", "20").to_i)
+      )
       @sleeper = sleeper
       @logger = logger
       @max_articles = max_articles
       @max_pages = max_pages
       @max_retries = max_retries
+      @translator = translator
+      @source_lang = source_lang
+      @target_lang = target_lang
     end
 
     def call
@@ -60,9 +71,10 @@ module News
 
     private
 
-    attr_reader :section, :source, :client, :sleeper, :logger, :max_articles, :max_pages, :max_retries
+    attr_reader :section, :source, :client, :sleeper, :logger, :max_articles, :max_pages, :max_retries,
+      :translator, :source_lang, :target_lang
 
-    Candidate = Struct.new(:url, :title, :preview_text, :image_url, :source_article_id, :raw_payload, keyword_init: true)
+    Candidate = Struct.new(:url, :title, :preview_text, :preview_html, :image_url, :source_article_id, :raw_payload, keyword_init: true)
 
     def fetch_document(url, xml: false)
       html = with_retry(url) { client.fetch(url) }
@@ -106,12 +118,14 @@ module News
           url: normalize_url(href, page_url),
           title: extract_text(node, title_selector) || link&.text.to_s.strip,
           preview_text: extract_text(node, preview_selector),
+          preview_html: extract_preview_html(node, preview_selector, page_url),
           image_url: extract_image_url(node, image_selector, page_url),
           source_article_id: extract_source_article_id(node, href, page_url),
           raw_payload: {
             listing_title: extract_text(node, title_selector),
             listing_url: href,
-            listing_preview: extract_text(node, preview_selector)
+            listing_preview: extract_text(node, preview_selector),
+            listing_preview_html: extract_preview_html(node, preview_selector, page_url)
           }
         )
       end
@@ -128,12 +142,14 @@ module News
           url: normalize_url(href, page_url),
           title: extract_text(node, "title") || feed_item_title(node),
           preview_text: extract_text(node, "description, summary, content") || feed_item_preview(node),
+          preview_html: feed_item_preview_html(node),
           image_url: feed_item_image_url(node, page_url),
           source_article_id: feed_item_id(node, href, page_url),
           raw_payload: {
             feed_title: extract_text(node, "title"),
             feed_link: href,
             feed_preview: extract_text(node, "description, summary, content"),
+            feed_preview_html: feed_item_preview_html(node),
             feed_description_html: node.at_css("description")&.inner_html.to_s,
             published_at: feed_item_published_at(node)
           }
@@ -185,6 +201,7 @@ module News
         return { saved: false, duplicate: true }
       end
 
+      article_data = translate_article_data(article_data, candidate) if translator.present?
       article = section.news_articles.build(article_data)
       article.save!
       unique_keys.each { |key| seen_keys << key }
@@ -219,7 +236,8 @@ module News
         canonical_url: candidate.url,
         title: normalize_text(title),
         preview_text: normalize_text(preview_text),
-        body_text: normalize_text(body_text),
+        preview_html: sanitize_news_html(rewrite_fragment_urls(candidate.preview_html.to_s.presence || fragment.to_html, candidate.url)),
+        body_text: body_text.to_s.strip.presence,
         body_html: body_html,
         image_url: normalize_url(image_url, candidate.url),
         published_at:,
@@ -231,7 +249,8 @@ module News
           canonical_url: candidate.url,
           source_article_id: source_article_id,
           title: title,
-          preview_text: preview_text
+          preview_text: preview_text,
+          preview_html: candidate.preview_html
         }.compact
       }
     end
@@ -243,8 +262,8 @@ module News
         candidate.title
       body_html = extract_body_html(document, candidate.url)
       body_text = extract_body_text_from_html(body_html).presence || extract_body_text(document)
-      preview_text = extract_text(document, config_value("article_preview_selector", "header p, .lead, .excerpt")) ||
-        preview_excerpt(body_text, candidate.preview_text)
+      preview_html = extract_preview_html(document, config_value("article_preview_selector", "header p, .lead, .excerpt"), candidate.url)
+      preview_text = preview_excerpt(body_text, candidate.preview_text)
       image_url = article_image_url(document, candidate)
       published_at = extract_datetime(document)
       source_article_id = candidate.source_article_id.presence ||
@@ -263,7 +282,8 @@ module News
         canonical_url: article_url,
         title: normalize_text(title),
         preview_text: normalize_text(preview_text),
-        body_text: normalize_text(body_text),
+        preview_html: sanitize_news_html(rewrite_fragment_urls(preview_html.to_s, candidate.url)),
+        body_text: body_text.to_s.strip.presence,
         body_html: body_html,
         image_url: better_image_url(image_url, candidate.image_url),
         published_at:,
@@ -275,13 +295,74 @@ module News
           canonical_url: article_url,
           source_article_id: source_article_id,
           title: title,
-          preview_text: preview_text
+          preview_text: preview_text,
+          preview_html: preview_html
         }.compact
       }
     end
 
+    def translate_article_data(article_data, candidate)
+      translated = translate_article(article_data, candidate)
+      translated_title = translated.translated_title.to_s.strip.presence || article_data[:title]
+      translated_preview_text = translated.translated_preview_text.to_s.strip.presence || article_data[:preview_text]
+      translated_body_text = translated.translated_body_text.to_s.strip.presence || article_data[:body_text]
+
+      article_data.merge(
+        title: normalize_text(translated_title),
+        preview_text: normalize_text(translated_preview_text),
+        body_text: translated_body_text.to_s.strip.presence,
+        body_html: build_translated_body_html(translated_body_text),
+        source_title: article_data[:title],
+        source_preview_text: article_data[:preview_text],
+        source_preview_html: article_data[:preview_html],
+        source_body_text: article_data[:body_text],
+        translated_at: Time.current,
+        translation_model: translated.model.presence,
+        translation_target_locale: target_lang,
+        translation_source_locale: source_lang,
+        raw_payload: article_data[:raw_payload].merge(
+          "source_title" => article_data[:title],
+          "source_preview_text" => article_data[:preview_text],
+          "source_preview_html" => article_data[:preview_html],
+          "source_body_text" => article_data[:body_text],
+          "source_body_html" => article_data[:body_html],
+          "translation_request_id" => translated.request_id,
+          "translation_model" => translated.model,
+          "translation_status" => translated.status
+        ).compact
+      )
+    rescue StandardError => e
+      logger.warn("[News::SectionCrawler] translation skipped for #{candidate.url}: #{e.class} #{e.message}")
+      article_data
+    end
+
+    def translate_article(article_data, candidate)
+      with_retry("translation for #{candidate.url}") do
+        translator.translate_article(
+          request_id: SecureRandom.uuid,
+          source_lang: source_lang,
+          target_lang: target_lang,
+          title: article_data[:title],
+          preview_text: article_data[:preview_text],
+          body_text: article_data[:body_text],
+          canonical_url: article_data[:canonical_url] || candidate.url,
+          source_article_id: article_data[:source_article_id],
+          content_hash: article_data[:content_hash]
+        )
+      end
+    end
+
+    def build_translated_body_html(body_text)
+      paragraphs = body_text.to_s.strip.split(/\n{2,}/).map(&:strip).reject(&:blank?)
+      return "" if paragraphs.empty?
+
+      paragraphs.map do |paragraph|
+        "<p>#{ERB::Util.html_escape(paragraph).gsub(/\n/, "<br>")}</p>"
+      end.join
+    end
+
     def find_existing_article(article_data)
-      scope = section.news_articles
+      scope = source.news_articles
       scope.find_by(source_article_id: article_data[:source_article_id]) ||
         scope.find_by(content_hash: article_data[:content_hash])
     end
@@ -303,7 +384,7 @@ module News
       selector = config_value("article_body_selector", "[itemprop='articleBody'], .article-body, article")
       nodes = document.css(selector)
       paragraphs = nodes.flat_map do |node|
-        node.css("p").map(&:text)
+        block_texts_from_node(node)
       end
       paragraphs = [extract_text(document, selector)] if paragraphs.empty?
       paragraphs = paragraphs.compact.map { |text| normalize_text(text) }.reject(&:blank?)
@@ -316,23 +397,27 @@ module News
     end
 
     def extract_fragment_body_text(fragment)
-      paragraphs = fragment.css("p").map(&:text)
+      paragraphs = block_texts_from_fragment(fragment)
       paragraphs = [fragment.text] if paragraphs.empty?
       paragraphs = paragraphs.compact.map { |text| normalize_text(text) }.reject(&:blank?)
       filter_body_paragraphs(paragraphs).join("\n\n")
     end
 
     def extract_body_html(document, base_url)
-      json_ld_body = extract_json_ld_article_body(document)
-      if json_ld_body.present?
-        return sanitize_news_html(normalize_lazy_images(strip_article_noise(json_ld_body), base_url))
+      selector = config_value("article_body_selector", "[itemprop='articleBody'], .article-body, article")
+      node = best_body_node(document, selector)
+      if node.present?
+        html = sanitize_news_html(normalize_lazy_images(strip_article_noise(node.inner_html), base_url))
+        return html if html.present?
       end
 
-      selector = config_value("article_body_selector", "[itemprop='articleBody'], .article-body, article")
-      node = document.at_css(selector) || document.at_css("article")
-      return "" unless node
+      fallback_html = extract_body_html_from_document(document, base_url)
+      return fallback_html if fallback_html.present?
 
-      sanitize_news_html(normalize_lazy_images(strip_article_noise(node.inner_html), base_url))
+      json_ld_body = extract_json_ld_article_body(document)
+      return "" if json_ld_body.blank?
+
+      sanitize_news_html(normalize_lazy_images(strip_article_noise(json_ld_body), base_url))
     end
 
     def article_image_url(document, candidate)
@@ -374,6 +459,62 @@ module News
       value.to_s.gsub(/\s+/, " ").strip.presence
     end
 
+    def block_texts_from_node(node)
+      block_texts_from_fragment(Nokogiri::HTML.fragment(node.inner_html.to_s))
+    end
+
+    def block_texts_from_fragment(fragment)
+      block_selector = "p, li, h1, h2, h3, h4, h5, h6, blockquote, figcaption, pre"
+      paragraphs = fragment.css(block_selector).map(&:text)
+      paragraphs += fragment.css("div").map(&:text) if fragment.css("p").empty? && fragment.css("div").any?
+      paragraphs = fragment.children.map(&:text) if paragraphs.empty?
+      paragraphs
+    end
+
+    def extract_body_html_from_document(document, base_url)
+      body = document.at_css("body")
+      return "" unless body
+
+      fragment = Nokogiri::HTML::DocumentFragment.parse(body.inner_html.to_s)
+      fragment.css("h1, h2, h3, h4, h5, h6, time, script, style, noscript, meta, link").each(&:remove)
+
+      html = sanitize_news_html(normalize_lazy_images(strip_article_noise(fragment.to_html), base_url))
+      html.presence
+    end
+
+    def best_body_node(document, selector)
+      base_nodes = document.css(selector)
+      base_nodes = document.css("article, main, section, .article-body, .post-content, .entry-content, .td-post-content") if base_nodes.empty?
+      base_nodes = [document.at_css("body")].compact if base_nodes.empty?
+
+      scored = base_nodes.flat_map do |node|
+        body_node_candidates(node).map do |candidate|
+          [candidate, score_body_node(candidate)]
+        end
+      end
+
+      scored = scored.reject { |node, score| score <= 0 }
+      scored.max_by { |node, score| score }&.first
+    end
+
+    def body_node_candidates(node)
+      candidates = [node]
+      candidates.concat(node.css("article, main, section, div, figure, blockquote, .content, .article-content, .story-body, .post-content, .td-post-content, .entry-content"))
+      candidates.compact.uniq
+    end
+
+    def score_body_node(node)
+      text = normalize_text(node.text)
+      return 0 if text.blank?
+
+      paragraph_count = node.css("p, li, blockquote, figcaption").length
+      image_count = node.css("img").length
+      link_count = node.css("a").length
+      noise_count = node.css("footer, nav, aside, .related, .share, .tags, .comments, .social, .author, .meta, .subscribe, .newsletter").length
+
+      text.length + (paragraph_count * 160) + (image_count * 20) - (link_count * 4) - (noise_count * 250)
+    end
+
     def strip_article_noise(html)
       fragment = Nokogiri::HTML.fragment(html.to_s)
       Array(config_value("article_body_exclude_selectors", "")).flat_map { |value| value.to_s.split(",") }.map(&:strip).reject(&:blank?).each do |selector|
@@ -396,6 +537,11 @@ module News
           image = image_node_url(node)
           return image if image.present? && !image_placeholder?(image)
         end
+      end
+
+      document.css("img").each do |node|
+        image = image_node_url(node)
+        return image if image.present? && !image_placeholder?(image)
       end
 
       nil
@@ -456,7 +602,56 @@ module News
         img.remove_attribute("data-srcset")
       end
 
+      dedupe_article_images(fragment)
+
       rewrite_fragment_urls(fragment.to_html, base_url)
+    end
+
+    def dedupe_article_images(fragment)
+      images_by_key = {}
+
+      fragment.css("img").each do |img|
+        key = image_family_key(img)
+        next if key.blank?
+
+        score = image_variant_score(img)
+        existing = images_by_key[key]
+
+        if existing.present?
+          if score > existing[:score]
+            existing[:node].remove
+            images_by_key[key] = { node: img, score: }
+          else
+            img.remove
+          end
+        else
+          images_by_key[key] = { node: img, score: }
+        end
+      end
+    end
+
+    def image_family_key(node)
+      url = node["src"].presence || node["data-src"].presence || node["data-lazy-src"].presence || node["data-original"].presence
+      return if url.blank?
+
+      normalized = url.to_s.split("?").first
+      normalized = normalized.sub(%r{-\d+x\d+(?=\.[a-zA-Z0-9]+$)}, "")
+      normalized
+    end
+
+    def image_variant_score(node)
+      width = node["width"].to_i
+      height = node["height"].to_i
+      area = width.positive? && height.positive? ? width * height : 0
+
+      if area.zero?
+        url = node["src"].presence || node["data-src"].presence || node["data-lazy-src"].presence || node["data-original"].presence || ""
+        if (match = url.match(/-(\d+)x(\d+)(?=\.[a-zA-Z0-9]+(?:\?|$))/))
+          area = match[1].to_i * match[2].to_i
+        end
+      end
+
+      area.zero? ? 1 : area
     end
 
     def filter_body_paragraphs(paragraphs)
@@ -493,6 +688,11 @@ module News
 
     def config_value(key, fallback)
       section.config[key] || source.config[key] || fallback
+    end
+
+    def timeout_config_value(key, fallback)
+      value = section.config[key].presence || source.config[key].presence
+      value.present? ? value.to_i : fallback
     end
 
     def pagination_mode_configured?
@@ -540,6 +740,10 @@ module News
 
     def feed_item_preview(node)
       extract_text(node, "description, summary")
+    end
+
+    def feed_item_preview_html(node)
+      node.at_css("description, summary, content")&.inner_html.to_s.presence
     end
 
     def feed_item_published_at(node)
@@ -647,7 +851,18 @@ module News
       text = body_text.to_s.strip.presence || fallback.to_s.strip
       return if text.blank?
 
-      text.truncate(360, omission: "…")
+      normalized = text.gsub(/\s+/, " ").strip
+      normalized.truncate(380, omission: "…")
+    end
+
+    def extract_preview_html(node, selector, base_url)
+      return unless selector.present?
+
+      preview_node = node.at_css(selector)
+      return if preview_node.blank?
+
+      html = normalize_lazy_images(strip_article_noise(preview_node.inner_html), base_url)
+      sanitize_news_html(html).presence
     end
   end
 end

@@ -112,11 +112,16 @@ module Api
         canonical_url: article.canonical_url,
         title: article.title,
         preview_text: article.preview_text,
+        preview_html: sanitized_news_html(article.preview_html),
         body_text: article.body_text,
         body_html: sanitized_news_html(article.body_html),
         image_url: news_article_image_url(article),
         published_at: article.published_at,
         fetched_at: article.fetched_at,
+        translated_at: article.translated_at,
+        translation_model: article.translation_model,
+        translation_target_locale: article.translation_target_locale,
+        translation_source_locale: article.translation_source_locale,
         content_hash: article.content_hash,
         raw_payload: article.raw_payload
       }

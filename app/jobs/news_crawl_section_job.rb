@@ -17,7 +17,10 @@ class NewsCrawlSectionJob
       }
     )
 
-    result = News::SectionCrawler.new(section:, max_articles: ARTICLES_PER_SECTION).call
+    result = News::SectionCrawler.new(
+      section:,
+      max_articles: ARTICLES_PER_SECTION
+    ).call
     run.update!(
       status: :succeeded,
       finished_at: Time.current,
@@ -35,4 +38,6 @@ class NewsCrawlSectionJob
     )
     raise
   end
+
+  private
 end
