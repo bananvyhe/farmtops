@@ -19,7 +19,8 @@ class NewsCrawlSectionJob
 
     result = News::SectionCrawler.new(
       section:,
-      max_articles: ARTICLES_PER_SECTION
+      max_articles: ARTICLES_PER_SECTION,
+      translator: news_translator
     ).call
     run.update!(
       status: :succeeded,
@@ -40,4 +41,8 @@ class NewsCrawlSectionJob
   end
 
   private
+
+  def news_translator
+    News::Translation::Client.new
+  end
 end

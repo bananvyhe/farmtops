@@ -8,11 +8,13 @@ module News
     Error = Class.new(StandardError)
 
     class Client
-      DEFAULT_PATH = "/translate"
+      DEFAULT_PATH = "/translate/news"
+      DEFAULT_BASE_URL = "http://127.0.0.1:19090"
 
-      def initialize(base_url: ENV.fetch("NEWS_TRANSLATOR_URL"), token: ENV["NEWS_TRANSLATOR_TOKEN"],
-        open_timeout: ENV.fetch("NEWS_TRANSLATOR_OPEN_TIMEOUT_SECONDS", "10").to_i,
-        read_timeout: ENV.fetch("NEWS_TRANSLATOR_READ_TIMEOUT_SECONDS", "180").to_i)
+      def initialize(base_url: translation_base_url,
+        token: translation_token,
+        open_timeout: translation_open_timeout,
+        read_timeout: translation_read_timeout)
         @base_url = base_url
         @token = token
         @open_timeout = open_timeout
@@ -54,6 +56,27 @@ module News
 
       attr_reader :base_url, :token, :open_timeout, :read_timeout
 
+      def translation_base_url
+        RuntimeConfig.env_or_credential("NEWS_TRANSLATOR_BASE_URL", :translation, :base_url, default: DEFAULT_BASE_URL)
+      end
+
+      def translation_token
+        token = RuntimeConfig.env_or_credential("NEWS_TRANSLATOR_TOKEN", :translation, :token)
+        return token if token.present?
+
+        raise "Translation token is not configured" if Rails.env.production?
+
+        nil
+      end
+
+      def translation_open_timeout
+        RuntimeConfig.env_or_credential("NEWS_TRANSLATOR_OPEN_TIMEOUT_SECONDS", :translation, :open_timeout, default: 10).to_i
+      end
+
+      def translation_read_timeout
+        RuntimeConfig.env_or_credential("NEWS_TRANSLATOR_READ_TIMEOUT_SECONDS", :translation, :read_timeout, default: 180).to_i
+      end
+
       def post_json(path, payload)
         uri = URI.join(base_url.end_with?("/") ? base_url : "#{base_url}/", path.delete_prefix("/"))
 
@@ -61,7 +84,7 @@ module News
           request = Net::HTTP::Post.new(uri)
           request["Content-Type"] = "application/json"
           request["Accept"] = "application/json"
-          request["Authorization"] = "Bearer #{token}" if token.present?
+          request["X-Translation-Token"] = token if token.present?
           request.body = JSON.generate(payload)
           http.request(request)
         end

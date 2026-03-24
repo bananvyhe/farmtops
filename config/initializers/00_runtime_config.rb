@@ -4,7 +4,7 @@ module RuntimeConfig
   module_function
 
   def env_or_credential(env_key, *credential_path, default: nil)
-    ENV[env_key].presence || Rails.application.credentials.dig(*credential_path) || default
+    ENV[env_key].presence || credential_value(env_key, *credential_path) || default
   end
 
   def redis_url
@@ -19,5 +19,28 @@ module RuntimeConfig
     auth = password.present? ? ":#{CGI.escape(password)}@" : ""
 
     "redis://#{auth}#{host}:#{port}/#{db}"
+  end
+
+  def credential_value(env_key, *credential_path)
+    credentials = Rails.application.credentials
+
+    if credential_path.any?
+      nested_value = credentials.dig(*credential_path)
+      return nested_value if nested_value.present?
+    end
+
+    top_level_key = env_key.to_sym
+    alias_keys = [
+      top_level_key,
+      env_key,
+      env_key.gsub(/\ANEWS_TRANSLATOR_TOKEN\z/, "X_Translation_Token")
+    ].uniq
+
+    alias_keys.each do |key|
+      value = credentials[key]
+      return value if value.present?
+    end
+
+    nil
   end
 end
