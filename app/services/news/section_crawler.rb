@@ -206,6 +206,9 @@ module News
       article.save!
       unique_keys.each { |key| seen_keys << key }
       { saved: true, article: }
+    rescue News::Translation::Error => e
+      logger.error("[News::SectionCrawler] translation failed for #{candidate.url}: #{e.class} #{e.message}")
+      raise
     rescue StandardError => e
       logger.warn("[News::SectionCrawler] skipped #{candidate.url}: #{e.class} #{e.message}")
       { saved: false, error: "#{candidate.url}: #{e.class} #{e.message}" }
@@ -331,9 +334,6 @@ module News
           "translation_status" => translated.status
         ).compact
       )
-    rescue StandardError => e
-      logger.warn("[News::SectionCrawler] translation skipped for #{candidate.url}: #{e.class} #{e.message}")
-      article_data
     end
 
     def translate_article(article_data, candidate)

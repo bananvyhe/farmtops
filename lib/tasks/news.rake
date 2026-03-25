@@ -40,6 +40,16 @@ namespace :news do
     puts "Imported #{urls.size} URLs."
   end
 
+  desc "Import source and section URLs when the news catalog is empty"
+  task bootstrap_sites: :environment do
+    if NewsSource.exists?
+      puts "News sources already exist; skipping bootstrap."
+      next
+    end
+
+    Rake::Task["news:import_sites"].invoke
+  end
+
   def source_config_for(host)
     case host
     when "massivelyop.com"

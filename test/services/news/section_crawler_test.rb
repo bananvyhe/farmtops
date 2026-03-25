@@ -173,7 +173,7 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     assert_includes article.body_html, "<p>Второй абзац</p>"
   end
 
-  test "falls back to the source article when translation fails" do
+  test "fails the crawl when translation fails" do
     pages = {
       "https://example.com/news" => listing_page(
         [
@@ -190,27 +190,24 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
 
     failing_translator = Class.new do
       def translate_article(**)
-        raise StandardError, "offline"
+        raise News::Translation::Error, "offline"
       end
     end.new
 
-    result = News::SectionCrawler.new(
-      section: @section,
-      client: FakeClient.new(pages),
-      sleeper: NullSleeper.new,
-      translator: failing_translator,
-      max_articles: 12,
-      max_pages: 5,
-      max_retries: 1
-    ).call
+    error = assert_raises(News::Translation::Error) do
+      News::SectionCrawler.new(
+        section: @section,
+        client: FakeClient.new(pages),
+        sleeper: NullSleeper.new,
+        translator: failing_translator,
+        max_articles: 12,
+        max_pages: 5,
+        max_retries: 1
+      ).call
+    end
 
-    assert_equal 1, result.articles_saved
-    assert_equal 0, result.articles_skipped
-    article = @section.news_articles.find_by!(canonical_url: "https://example.com/news/first-a")
-    assert_equal "First", article.title
-    assert_equal "Body one", article.preview_text
-    assert_equal "Body one", article.body_text
-    assert_nil article.translated_at
+    assert_match "offline", error.message
+    assert_equal 0, @section.news_articles.count
   end
 
   test "stops after twelve saved articles" do

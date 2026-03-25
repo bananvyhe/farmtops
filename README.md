@@ -67,6 +67,27 @@ docker compose -f docker-compose.prod.yml up -d --build
 Frontend-контейнер слушает `127.0.0.1:8080` по умолчанию и предназначен для внешнего reverse proxy на VPS.
 Для отдельного контура `farmspot.ru` можно использовать `127.0.0.1:8082`, чтобы не конфликтовать с другими сайтами на том же сервере.
 Если у вас уже есть общий Nginx/Caddy/Traefik на сервере, его нужно направить на нужный локальный порт frontend-контейнера для домена `farmspot.ru`.
+При первом старте `web` контейнер автоматически подхватит источники новостей из `sites.txt`, если база ещё пустая.
+
+Для краула и перевода на Linux в Docker Compose контейнер должен видеть хостовый tunnel через `host.docker.internal`:
+
+- добавьте `extra_hosts: ["host.docker.internal:host-gateway"]` для `web` и `sidekiq`
+- задайте `NEWS_TRANSLATOR_BASE_URL=http://host.docker.internal:19191`
+- если reverse tunnel слушает только `127.0.0.1` на VPS, контейнер его не увидит; туннель должен быть доступен с хоста или через отдельный прокси
+- на VPS в `sshd` нужно включить `GatewayPorts clientspecified`
+- клиент туннеля должен стартовать с `-RemoteBindAddress 0.0.0.0`
+- если tunnel уже поднят на хосте, проверка из контейнера выглядит так:
+
+```bash
+curl http://host.docker.internal:19191/health
+```
+
+Если меняете порт туннеля, синхронно обновляйте:
+
+- `.env.production` на VPS
+- `docker-compose.prod.yml`
+- локальный/удаленный запуск reverse tunnel
+- затем пересобирайте и перезапускайте `web` и `sidekiq`
 
 Быстрый деплой ваших изменений с локальной машины:
 

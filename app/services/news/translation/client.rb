@@ -64,7 +64,7 @@ module News
         token = RuntimeConfig.env_or_credential("NEWS_TRANSLATOR_TOKEN", :translation, :token)
         return token if token.present?
 
-        raise "Translation token is not configured" if Rails.env.production?
+        raise Error, "Translation token is not configured. Set NEWS_TRANSLATOR_TOKEN or credentials.translation.token." if Rails.env.production?
 
         nil
       end
@@ -94,6 +94,8 @@ module News
         raise Error, parsed_body["error"].to_s.presence || "Translator returned HTTP #{response.code}" unless response.is_a?(Net::HTTPSuccess)
 
         JSON.parse(body_text)
+      rescue URI::InvalidURIError => e
+        raise Error, "Translator base URL is invalid: #{e.message}"
       rescue JSON::ParserError => e
         raise Error, "Translator returned invalid JSON: #{e.message}"
       rescue SocketError, SystemCallError, Timeout::Error, Errno::ECONNREFUSED => e
