@@ -4,6 +4,7 @@ class NewsArticle < ApplicationRecord
 
   enum :translation_status, {
     pending: "pending",
+    translating: "translating",
     translated: "translated",
     failed: "failed"
   }

@@ -1,24 +1,16 @@
 require "test_helper"
 
 class News::Translation::RecoveryTest < ActiveSupport::TestCase
-  class FakeRedis
+  class FakeLockManager
+    attr_reader :cleared
+
     def initialize
-      @store = {}
+      @cleared = false
     end
 
-    def set(key, value, nx: false, ex: nil)
-      return false if nx && @store.key?(key)
-
-      @store[key] = value
+    def clear
+      @cleared = true
       true
-    end
-
-    def get(key)
-      @store[key]
-    end
-
-    def del(key)
-      @store.delete(key).present? ? 1 : 0
     end
   end
 
@@ -51,6 +43,16 @@ class News::Translation::RecoveryTest < ActiveSupport::TestCase
       translation_status: :failed,
       translation_error: "offline"
     )
+    @stalled_translating = build_article(
+      source:,
+      source_article_id: "article-stalled",
+      canonical_url: "https://example.com/news/stalled",
+      content_hash: "hash-stalled",
+      created_at: 3.days.ago,
+      translation_status: :translating,
+      translation_started_at: 2.days.ago,
+      translation_error: "still working"
+    )
     @pending = build_article(
       source:,
       source_article_id: "article-pending",
@@ -62,35 +64,32 @@ class News::Translation::RecoveryTest < ActiveSupport::TestCase
     )
   end
 
-  test "clears the lock and requeues fresh failed articles" do
-    redis = FakeRedis.new
-    redis.set(
-      NewsTranslatePendingArticlesJob::LOCK_KEY,
-      "stale-token",
-      nx: true,
-      ex: NewsTranslatePendingArticlesJob::LOCK_TTL_SECONDS
-    )
-
+  test "clears the lock and requeues fresh failed and stalled translating articles" do
+    lock_manager = FakeLockManager.new
     enqueued = []
-    result = nil
 
     NewsTranslatePendingArticlesJob.stub(:perform_async, -> { enqueued << true; "jid-1" }) do
-      result = News::Translation::Recovery.new(redis:, failure_window: 24.hours).call
+      result = News::Translation::Recovery.new(lock_manager:, failure_window: 24.hours).call
+
+      assert_equal true, result[:cleared_lock]
+      assert_equal 2, result[:reset_recent_failed]
+      assert_equal 1, enqueued.size
     end
 
-    assert_equal true, result[:cleared_lock]
-    assert_equal 1, result[:reset_recent_failed]
-    assert_equal 1, enqueued.size
+    assert lock_manager.cleared
     assert_equal "pending", @recent_failed.reload.translation_status
     assert_nil @recent_failed.reload.translation_error
     assert_equal "failed", @old_failed.reload.translation_status
+    assert_equal "pending", @stalled_translating.reload.translation_status
+    assert_nil @stalled_translating.reload.translation_started_at
     assert_equal "pending", @pending.reload.translation_status
   end
 
   private
 
   def build_article(source:, source_article_id: "article-1", canonical_url: "https://example.com/news/1",
-    content_hash: "hash-1", created_at: Time.current, translation_status:, translation_error:)
+    content_hash: "hash-1", created_at: Time.current, translation_status:, translation_error: nil,
+    translation_started_at: nil)
     @section.news_articles.create!(
       news_source: source,
       news_section: @section,
@@ -112,6 +111,7 @@ class News::Translation::RecoveryTest < ActiveSupport::TestCase
       source_body_text: "Body one\n\nBody two",
       translation_status: translation_status,
       translation_error: translation_error,
+      translation_started_at: translation_started_at,
       translation_target_locale: "ru",
       translation_source_locale: "en"
     )

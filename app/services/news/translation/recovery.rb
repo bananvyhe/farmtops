@@ -1,20 +1,20 @@
-require "redis"
+require Rails.root.join("app/services/news/translation/lock_manager")
 
 module News
   module Translation
     class Recovery
       DEFAULT_FAILURE_WINDOW = 24.hours
 
-      def initialize(redis: Redis.new(url: RuntimeConfig.redis_url), logger: Rails.logger,
+      def initialize(lock_manager: LockManager.new, logger: Rails.logger,
         failure_window: DEFAULT_FAILURE_WINDOW)
-        @redis = redis
+        @lock_manager = lock_manager
         @logger = logger
         @failure_window = failure_window
       end
 
       def call
         cleared_lock = clear_stale_lock
-        reset_count = reset_recent_failed_articles
+        reset_count = reset_stalled_articles
         enqueued = enqueue_translation_job if pending_articles_exist?
 
         logger.info(
@@ -30,24 +30,37 @@ module News
 
       private
 
-      attr_reader :redis, :logger, :failure_window
+      attr_reader :lock_manager, :logger, :failure_window
 
       def clear_stale_lock
-        redis.del(NewsTranslatePendingArticlesJob::LOCK_KEY).positive?
+        lock_manager.clear
       rescue StandardError => e
         logger.warn("[News::Translation::Recovery] failed to clear lock: #{e.class} #{e.message}")
         false
       end
 
-      def reset_recent_failed_articles
-        scope = NewsArticle.failed.where(created_at: failure_window.ago..)
-        scope.update_all(
+      def reset_stalled_articles
+        failed_count = NewsArticle.failed.where(created_at: failure_window.ago..).update_all(
           translation_status: "pending",
           translation_error: nil,
           translation_completed_at: nil,
           translated_at: nil,
-          translation_model: nil
+          translation_model: nil,
+          translation_started_at: nil,
+          translation_request_id: nil
         )
+
+        translating_count = NewsArticle.translating.where("translation_started_at < ?", failure_window.ago).update_all(
+          translation_status: "pending",
+          translation_error: nil,
+          translation_completed_at: nil,
+          translated_at: nil,
+          translation_model: nil,
+          translation_started_at: nil,
+          translation_request_id: nil
+        )
+
+        failed_count + translating_count
       end
 
       def pending_articles_exist?

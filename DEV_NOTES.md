@@ -17,9 +17,10 @@
   - Production deploy is Docker-only.
   - Use `./scripts/deploy_prod.sh` for VPS deploys from the local machine.
   - News translation in production depends on host-to-container network access to `NEWS_TRANSLATOR_BASE_URL`; if host healthchecks pass but Sidekiq times out, check UFW on the VPS and allow Docker bridge traffic to `19191/tcp`.
-  - Translation requests can take up to 15 minutes; `NEWS_TRANSLATOR_READ_TIMEOUT_SECONDS=900` is the baseline default.
-  - News translation is serialized through `NewsTranslatePendingArticlesJob`; crawls save original articles first and translation updates them afterward.
-  - On `Sidekiq` boot the translation recovery runs: stale `news:translation:pending_articles_lock` is cleared, fresh failed articles are reset to `pending`, and the translation job is re-enqueued.
+  - Translation requests are still synchronous HTTP calls to the remote translator; the app now processes them as a lock-guarded one-article chain (`NewsTranslatePendingArticlesJob` -> `NewsTranslateArticleJob`) so only one translation is in flight at a time.
+  - `NEWS_TRANSLATOR_READ_TIMEOUT_SECONDS` is the per-article wait budget; raise it if the translator can legitimately need longer for one article.
+  - Crawls save original articles first and translation updates them afterward.
+  - On `Sidekiq` boot the translation recovery runs: stale `news:translation:pending_articles_lock` is cleared, fresh failed articles and stalled `translating` articles are reset to `pending`, and the translation chain is re-enqueued.
   - The same recovery is available manually via `bundle exec rake news:translation:recover`.
   - In this template `config/credentials.yml.enc` is baked into the Docker image.
   - After any credentials change, rebuild affected app containers; `restart` is not enough.

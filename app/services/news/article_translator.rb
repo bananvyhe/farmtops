@@ -9,12 +9,12 @@ module News
       @logger = logger
     end
 
-    def call
+    def call(request_id: SecureRandom.uuid)
       return article if article.translated?
       return mark_failed!("Article is missing source text") if source_body_text.blank? && source_title.blank?
 
       translated = translator.translate_article(
-        request_id: SecureRandom.uuid,
+        request_id: request_id,
         source_lang: source_lang,
         target_lang: target_lang,
         title: source_title,
@@ -54,6 +54,7 @@ module News
     end
 
     def apply_translation!(translated)
+      translation_request_id = translated.request_id.presence || article.translation_request_id.presence
       translated_title = translated.translated_title.to_s.strip.presence || source_title
       translated_preview_text = translated.translated_preview_text.to_s.strip.presence || source_preview_text
       translated_body_text = translated.translated_body_text.to_s.strip.presence || source_body_text
@@ -71,6 +72,7 @@ module News
         translation_status: :translated,
         translation_completed_at: Time.current,
         translation_error: nil,
+        translation_request_id: translation_request_id,
         translation_target_locale: target_lang,
         translation_source_locale: source_lang,
         raw_payload: article.raw_payload.merge(
@@ -79,7 +81,7 @@ module News
           "source_preview_html" => article.preview_html,
           "source_body_text" => source_body_text,
           "source_body_html" => article.body_html,
-          "translation_request_id" => translated.request_id,
+          "translation_request_id" => translation_request_id,
           "translation_model" => translated.model,
           "translation_status" => translated.status
         ).compact
@@ -95,6 +97,7 @@ module News
         translation_status: :failed,
         translation_completed_at: Time.current,
         translation_error: message,
+        translation_request_id: article.translation_request_id.presence,
         translation_target_locale: target_lang,
         translation_source_locale: source_lang,
         raw_payload: article.raw_payload.merge(
@@ -103,6 +106,7 @@ module News
           "source_preview_html" => article.preview_html,
           "source_body_text" => source_body_text,
           "source_body_html" => article.body_html,
+          "translation_request_id" => article.translation_request_id,
           "translation_status" => "failed",
           "translation_error" => message
         ).compact

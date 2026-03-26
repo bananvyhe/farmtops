@@ -1,21 +1,20 @@
-require "securerandom"
-
 class NewsTranslatePendingArticlesJob
   include Sidekiq::Job
 
-  LOCK_KEY = "news:translation:pending_articles_lock"
-  LOCK_TTL_SECONDS = 12.hours.to_i
-
   def perform
-    with_lock do
-      loop do
-        article = next_pending_article
-        break if article.blank?
+    token = lock_manager.acquire
+    return unless token
 
-        News::ArticleTranslator.new(article: article).call
-        redis.expire(LOCK_KEY, LOCK_TTL_SECONDS)
-      end
+    article = next_pending_article
+    if article.blank?
+      lock_manager.release(token)
+      return
     end
+
+    NewsTranslateArticleJob.perform_async(article.id, token)
+  rescue StandardError => e
+    lock_manager.release(token) if token.present?
+    raise e
   end
 
   private
@@ -24,24 +23,7 @@ class NewsTranslatePendingArticlesJob
     NewsArticle.pending_translation.order(:created_at, :id).first
   end
 
-  def with_lock
-    token = SecureRandom.uuid
-    acquired = redis.set(LOCK_KEY, token, nx: true, ex: LOCK_TTL_SECONDS)
-    return unless acquired
-
-    yield
-  ensure
-    release_lock(token) if acquired
-  end
-
-  def release_lock(token)
-    current_token = redis.get(LOCK_KEY)
-    return unless current_token == token
-
-    redis.del(LOCK_KEY)
-  end
-
-  def redis
-    @redis ||= Redis.new(url: RuntimeConfig.redis_url)
+  def lock_manager
+    @lock_manager ||= News::Translation::LockManager.new
   end
 end

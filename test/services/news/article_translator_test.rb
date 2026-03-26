@@ -79,6 +79,7 @@ class News::ArticleTranslatorTest < ActiveSupport::TestCase
     assert_equal "fake-translator", translated.translation_model
     assert_not_nil translated.translated_at
     assert_not_nil translated.translation_completed_at
+    assert_equal "req-1", translated.translation_request_id
     assert_equal "Hello", translated.source_title
     assert_equal "Body one\n\nBody two", translated.source_body_text
   end
