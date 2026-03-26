@@ -16,28 +16,6 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     end
   end
 
-  class FakeTranslator
-    def initialize(title:, preview_text:, body_text:, model: "fake-translator")
-      @title = title
-      @preview_text = preview_text
-      @body_text = body_text
-      @model = model
-    end
-
-    def translate_article(**_kwargs)
-      News::Translation::Result.new(
-        request_id: "req-1",
-        translated_title: @title,
-        translated_preview_text: @preview_text,
-        translated_body_text: @body_text,
-        model: @model,
-        latency_ms: 12,
-        status: "ok",
-        error: nil
-      )
-    end
-  end
-
   setup do
     @source = NewsSource.create!(
       name: "Example",
@@ -125,7 +103,7 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     assert_equal "https://cdn.example.com/first.jpg", @section.news_articles.find_by!(canonical_url: "https://example.com/news/first-a").image_url
   end
 
-  test "translates and preserves the source article text before saving" do
+  test "saves original article content and marks translation as pending" do
     pages = {
       "https://example.com/news" => listing_page(
         [
@@ -144,11 +122,6 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
       section: @section,
       client: FakeClient.new(pages),
       sleeper: NullSleeper.new,
-      translator: FakeTranslator.new(
-        title: "Первый",
-        preview_text: "Превью первое",
-        body_text: "Тело одно\n\nВторой абзац"
-      ),
       max_articles: 12,
       max_pages: 5,
       max_retries: 1
@@ -156,24 +129,21 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
 
     assert_equal 1, result.articles_saved
     article = @section.news_articles.find_by!(canonical_url: "https://example.com/news/first-a")
-    assert_equal "Первый", article.title
-    assert_equal "Превью первое", article.preview_text
-    assert_includes article.body_text, "Тело одно"
-    assert_includes article.body_text, "Второй абзац"
+    assert_equal "First", article.title
+    assert_equal "Preview first", article.preview_text
+    assert_equal "Body one\n\nSecond paragraph", article.body_text
     assert_includes article.body_text, "\n\n"
     assert_equal "First", article.source_title
-    assert_includes article.source_preview_text, "Body one"
-    assert_includes article.source_preview_text, "Second paragraph"
-    assert_includes article.source_body_text, "Body one"
-    assert_includes article.source_body_text, "Second paragraph"
-    assert_equal "fake-translator", article.translation_model
+    assert_equal "Preview first", article.source_preview_text
+    assert_equal "Body one\n\nSecond paragraph", article.source_body_text
+    assert_equal "pending", article.translation_status
+    assert_nil article.translated_at
+    assert_nil article.translation_model
     assert_equal "ru", article.translation_target_locale
     assert_equal "en", article.translation_source_locale
-    assert_includes article.body_html, "<p>Тело одно</p>"
-    assert_includes article.body_html, "<p>Второй абзац</p>"
   end
 
-  test "fails the crawl when translation fails" do
+  test "saves the original article when translation fails" do
     pages = {
       "https://example.com/news" => listing_page(
         [
@@ -188,26 +158,26 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
       )
     }
 
-    failing_translator = Class.new do
-      def translate_article(**)
-        raise News::Translation::Error, "offline"
-      end
-    end.new
+    result = News::SectionCrawler.new(
+      section: @section,
+      client: FakeClient.new(pages),
+      sleeper: NullSleeper.new,
+      max_articles: 12,
+      max_pages: 5,
+      max_retries: 1
+    ).call
 
-    error = assert_raises(News::Translation::Error) do
-      News::SectionCrawler.new(
-        section: @section,
-        client: FakeClient.new(pages),
-        sleeper: NullSleeper.new,
-        translator: failing_translator,
-        max_articles: 12,
-        max_pages: 5,
-        max_retries: 1
-      ).call
-    end
+    assert_equal 1, result.articles_saved
+    assert_equal 0, result.articles_skipped
 
-    assert_match "offline", error.message
-    assert_equal 0, @section.news_articles.count
+    article = @section.news_articles.find_by!(canonical_url: "https://example.com/news/first-a")
+    assert_equal "First", article.title
+    assert_equal "First", article.source_title
+    assert_equal "Body one", article.body_text
+    assert_equal "Body one", article.source_body_text
+    assert_equal "pending", article.translation_status
+    assert_nil article.translated_at
+    assert_nil article.translation_model
   end
 
   test "stops after twelve saved articles" do

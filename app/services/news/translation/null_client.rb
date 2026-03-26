@@ -3,8 +3,7 @@ require "securerandom"
 module News
   module Translation
     class NullClient
-      def translate_article(request_id: SecureRandom.uuid, source_lang:, target_lang:, title:, preview_text:, body_text:,
-        canonical_url: nil, source_article_id: nil, content_hash: nil)
+      def translate_article(request_id: SecureRandom.uuid, source_lang:, target_lang:, title:, preview_text:, body_text:)
         Result.new(
           request_id: request_id,
           translated_title: title.to_s,

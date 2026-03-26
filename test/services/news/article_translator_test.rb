@@ -1,0 +1,102 @@
+require "test_helper"
+
+class News::ArticleTranslatorTest < ActiveSupport::TestCase
+  class FakeTranslator
+    def initialize(result: nil, error: nil)
+      @result = result
+      @error = error
+    end
+
+    def translate_article(**)
+      raise @error if @error
+
+      @result
+    end
+  end
+
+  setup do
+    @source = NewsSource.create!(
+      name: "Example",
+      base_url: "https://example.com",
+      active: true,
+      crawl_delay_min_seconds: 0,
+      crawl_delay_max_seconds: 0
+    )
+    @section = @source.news_sections.create!(
+      name: "Main",
+      url: "https://example.com/news",
+      active: true
+    )
+  end
+
+  def build_article
+    @section.news_articles.create!(
+      news_source: @source,
+      news_section: @section,
+      source_article_id: "article-1",
+      canonical_url: "https://example.com/news/1",
+      title: "Hello",
+      preview_text: "Preview",
+      preview_html: "<p>Preview</p>",
+      body_text: "Body one\n\nBody two",
+      body_html: "<p>Body one</p><p>Body two</p>",
+      image_url: "https://example.com/image.jpg",
+      fetched_at: Time.current,
+      content_hash: "hash-1",
+      raw_payload: {},
+      source_title: "Hello",
+      source_preview_text: "Preview",
+      source_body_text: "Body one\n\nBody two",
+      translation_status: :pending,
+      translation_target_locale: "ru",
+      translation_source_locale: "en"
+    )
+  end
+
+  test "translates and updates the saved article" do
+    article = build_article
+    result = News::Translation::Result.new(
+      request_id: "req-1",
+      translated_title: "Привет",
+      translated_preview_text: "Превью",
+      translated_body_text: "Тело один\n\nТело два",
+      model: "fake-translator",
+      latency_ms: 10,
+      status: "ok",
+      error: nil
+    )
+
+    translated = News::ArticleTranslator.new(
+      article:,
+      translator: FakeTranslator.new(result:)
+    ).call
+
+    assert_equal article.id, translated.id
+    assert_equal "Привет", translated.title
+    assert_equal "Превью", translated.preview_text
+    assert_equal "Тело один\n\nТело два", translated.body_text
+    assert_equal "translated", translated.translation_status
+    assert_equal "fake-translator", translated.translation_model
+    assert_not_nil translated.translated_at
+    assert_not_nil translated.translation_completed_at
+    assert_equal "Hello", translated.source_title
+    assert_equal "Body one\n\nBody two", translated.source_body_text
+  end
+
+  test "marks the article as failed when translation errors" do
+    article = build_article
+
+    translated = News::ArticleTranslator.new(
+      article:,
+      translator: FakeTranslator.new(error: News::Translation::Error.new("offline"))
+    ).call
+
+    assert_equal article.id, translated.id
+    assert_equal "Hello", translated.title
+    assert_equal "failed", translated.translation_status
+    assert_nil translated.translated_at
+    assert_match "offline", translated.translation_error
+    assert_equal "Hello", translated.source_title
+    assert_equal "Body one\n\nBody two", translated.source_body_text
+  end
+end

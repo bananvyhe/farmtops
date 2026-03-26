@@ -24,6 +24,48 @@ class News::TranslationClientTest < ActiveSupport::TestCase
     assert_equal "ok", result.status
   end
 
+  test "client sends title preview and body aliases to the translator" do
+    captured_payload = nil
+    response = Net::HTTPOK.new("1.1", "200", "OK")
+    response.define_singleton_method(:body) do
+      JSON.generate(
+        request_id: "req-1",
+        translated_title: "Привет",
+        translated_preview_text: "Превью",
+        translated_body_text: "Тело",
+        model: "test-translator",
+        status: "ok"
+      )
+    end
+
+    fake_http = Object.new
+    fake_http.define_singleton_method(:request) do |request|
+      captured_payload = JSON.parse(request.body)
+      response
+    end
+
+    client = News::Translation::Client.new(
+      base_url: "http://translator.example",
+      token: "secret",
+      open_timeout: 1,
+      read_timeout: 1
+    )
+
+    Net::HTTP.stub(:start, lambda { |*_, &block| block.call(fake_http) }) do
+      client.translate_article(
+        source_lang: "en",
+        target_lang: "ru",
+        title: "Hello",
+        preview_text: "Preview",
+        body_text: "Body"
+      )
+    end
+
+    assert_equal "Hello", captured_payload["title"]
+    assert_equal "Preview", captured_payload["preview_text"]
+    assert_equal "Body", captured_payload["body_text"]
+  end
+
   test "client raises a clear error when production token is missing" do
     credentials = Class.new do
       def dig(*_path)

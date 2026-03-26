@@ -1,6 +1,9 @@
 require Rails.root.join("app/services/news/scheduler")
+require Rails.root.join("app/services/news/translation/recovery")
 
 if defined?(Sidekiq) && Sidekiq.server?
+  News::Translation::Recovery.new.call
+
   interval_minutes =
     ENV.fetch("BILLING_INTERVAL_MINUTES", Rails.env.development? ? "20" : "60").to_i
   interval_minutes = 60 if interval_minutes <= 0
@@ -18,6 +21,13 @@ if defined?(Sidekiq) && Sidekiq.server?
     "news_crawl_sources" => {
       "class" => "NewsCrawlSourcesJob",
       "cron" => News::Scheduler.cron_expression
+    }
+  )
+
+  Sidekiq::Cron::Job.load_from_hash(
+    "news_translate_pending_articles" => {
+      "class" => "NewsTranslatePendingArticlesJob",
+      "cron" => "*/5 * * * *"
     }
   )
 end

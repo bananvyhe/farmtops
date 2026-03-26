@@ -19,8 +19,7 @@ class NewsCrawlSectionJob
 
     result = News::SectionCrawler.new(
       section:,
-      max_articles: ARTICLES_PER_SECTION,
-      translator: news_translator
+      max_articles: ARTICLES_PER_SECTION
     ).call
     run.update!(
       status: :succeeded,
@@ -31,6 +30,11 @@ class NewsCrawlSectionJob
       articles_skipped: result.articles_skipped,
       crawl_errors: result.errors
     )
+    begin
+      NewsTranslatePendingArticlesJob.perform_async
+    rescue StandardError => enqueue_error
+      Rails.logger.warn("[NewsCrawlSectionJob] failed to enqueue translation queue: #{enqueue_error.class} #{enqueue_error.message}")
+    end
   rescue StandardError => e
     run&.update!(
       status: :failed,
@@ -38,11 +42,5 @@ class NewsCrawlSectionJob
       crawl_errors: Array(run&.crawl_errors) + [{ message: e.message, class: e.class.name }]
     )
     raise
-  end
-
-  private
-
-  def news_translator
-    News::Translation::Client.new
   end
 end

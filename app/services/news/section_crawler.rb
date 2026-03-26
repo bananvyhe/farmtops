@@ -201,19 +201,39 @@ module News
         return { saved: false, duplicate: true }
       end
 
-      article_data = translate_article_data(article_data, candidate) if translator.present?
+      article_data = original_article_data(article_data)
       article = section.news_articles.build(article_data)
       article.save!
       unique_keys.each { |key| seen_keys << key }
       { saved: true, article: }
-    rescue News::Translation::Error => e
-      logger.error("[News::SectionCrawler] translation failed for #{candidate.url}: #{e.class} #{e.message}")
-      raise
     rescue StandardError => e
       logger.warn("[News::SectionCrawler] skipped #{candidate.url}: #{e.class} #{e.message}")
       { saved: false, error: "#{candidate.url}: #{e.class} #{e.message}" }
     ensure
       sleep_between_requests
+    end
+
+    def original_article_data(article_data)
+      article_data.merge(
+        source_title: article_data[:title],
+        source_preview_text: article_data[:preview_text],
+        source_body_text: article_data[:body_text],
+        translated_at: nil,
+        translation_model: nil,
+        translation_status: :pending,
+        translation_completed_at: nil,
+        translation_error: nil,
+        translation_target_locale: target_lang,
+        translation_source_locale: source_lang,
+        raw_payload: article_data[:raw_payload].merge(
+          "source_title" => article_data[:title],
+          "source_preview_text" => article_data[:preview_text],
+          "source_preview_html" => article_data[:preview_html],
+          "source_body_text" => article_data[:body_text],
+          "source_body_html" => article_data[:body_html],
+          "translation_status" => "pending"
+        ).compact
+      )
     end
 
     def extract_feed_article(candidate, page_url)
@@ -310,6 +330,26 @@ module News
       translated_preview_text = translated.translated_preview_text.to_s.strip.presence || article_data[:preview_text]
       translated_body_text = translated.translated_body_text.to_s.strip.presence || article_data[:body_text]
 
+      translated_article_data(article_data, translated_title, translated_preview_text, translated_body_text, translated)
+    rescue News::Translation::Error => e
+      logger.warn("[News::SectionCrawler] translation unavailable for #{candidate.url}: #{e.class} #{e.message}")
+      untranslated_article_data(article_data, candidate, e)
+    end
+
+    def translate_article(article_data, candidate)
+      with_retry("translation for #{candidate.url}") do
+        translator.translate_article(
+          request_id: SecureRandom.uuid,
+          source_lang: source_lang,
+          target_lang: target_lang,
+          title: article_data[:title],
+          preview_text: article_data[:preview_text],
+          body_text: article_data[:body_text]
+        )
+      end
+    end
+
+    def translated_article_data(article_data, translated_title, translated_preview_text, translated_body_text, translated)
       article_data.merge(
         title: normalize_text(translated_title),
         preview_text: normalize_text(translated_preview_text),
@@ -317,7 +357,6 @@ module News
         body_html: build_translated_body_html(translated_body_text),
         source_title: article_data[:title],
         source_preview_text: article_data[:preview_text],
-        source_preview_html: article_data[:preview_html],
         source_body_text: article_data[:body_text],
         translated_at: Time.current,
         translation_model: translated.model.presence,
@@ -336,20 +375,27 @@ module News
       )
     end
 
-    def translate_article(article_data, candidate)
-      with_retry("translation for #{candidate.url}") do
-        translator.translate_article(
-          request_id: SecureRandom.uuid,
-          source_lang: source_lang,
-          target_lang: target_lang,
-          title: article_data[:title],
-          preview_text: article_data[:preview_text],
-          body_text: article_data[:body_text],
-          canonical_url: article_data[:canonical_url] || candidate.url,
-          source_article_id: article_data[:source_article_id],
-          content_hash: article_data[:content_hash]
-        )
-      end
+    def untranslated_article_data(article_data, candidate, error)
+      article_data.merge(
+        source_title: article_data[:title],
+        source_preview_text: article_data[:preview_text],
+        source_body_text: article_data[:body_text],
+        translated_at: nil,
+        translation_model: nil,
+        translation_target_locale: target_lang,
+        translation_source_locale: source_lang,
+        raw_payload: article_data[:raw_payload].merge(
+          "source_title" => article_data[:title],
+          "source_preview_text" => article_data[:preview_text],
+          "source_preview_html" => article_data[:preview_html],
+          "source_body_text" => article_data[:body_text],
+          "source_body_html" => article_data[:body_html],
+          "translation_status" => "fallback",
+          "translation_error" => error.message,
+          "translation_error_class" => error.class.name,
+          "translation_fallback_url" => candidate.url
+        ).compact
+      )
     end
 
     def build_translated_body_html(body_text)

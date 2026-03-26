@@ -21,8 +21,7 @@ module News
         @read_timeout = read_timeout
       end
 
-      def translate_article(request_id: SecureRandom.uuid, source_lang:, target_lang:, title:, preview_text:, body_text:,
-        canonical_url: nil, source_article_id: nil, content_hash: nil)
+      def translate_article(request_id: SecureRandom.uuid, source_lang:, target_lang:, title:, preview_text:, body_text:)
         response = post_json(
           DEFAULT_PATH,
           {
@@ -32,9 +31,6 @@ module News
             title: title.to_s,
             preview_text: preview_text.to_s,
             body_text: body_text.to_s,
-            canonical_url: canonical_url,
-            source_article_id: source_article_id,
-            content_hash: content_hash
           }.compact
         )
 
@@ -74,7 +70,7 @@ module News
       end
 
       def translation_read_timeout
-        RuntimeConfig.env_or_credential("NEWS_TRANSLATOR_READ_TIMEOUT_SECONDS", :translation, :read_timeout, default: 180).to_i
+        RuntimeConfig.env_or_credential("NEWS_TRANSLATOR_READ_TIMEOUT_SECONDS", :translation, :read_timeout, default: 900).to_i
       end
 
       def post_json(path, payload)
