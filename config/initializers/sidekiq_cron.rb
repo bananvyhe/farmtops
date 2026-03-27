@@ -1,7 +1,9 @@
 require Rails.root.join("app/services/news/scheduler")
 require Rails.root.join("app/services/news/translation/recovery")
 
-if defined?(Sidekiq) && Sidekiq.server?
+Rails.application.config.after_initialize do
+  next unless defined?(Sidekiq) && Sidekiq.server?
+
   News::Translation::Recovery.new.call
 
   interval_minutes =
