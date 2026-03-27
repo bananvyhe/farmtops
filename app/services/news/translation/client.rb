@@ -70,7 +70,7 @@ module News
       end
 
       def translation_read_timeout
-        RuntimeConfig.env_or_credential("NEWS_TRANSLATOR_READ_TIMEOUT_SECONDS", :translation, :read_timeout, default: 900).to_i
+        RuntimeConfig.env_or_credential("NEWS_TRANSLATOR_READ_TIMEOUT_SECONDS", :translation, :read_timeout, default: 2400).to_i
       end
 
       def post_json(path, payload)
