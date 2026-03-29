@@ -1,11 +1,9 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
-import { useIntersectionObserver, useSessionStorage, useWindowScroll, watchThrottled } from "@vueuse/core"
+import { useIntersectionObserver, useWindowScroll, watchThrottled } from "@vueuse/core"
 import { api } from "../api"
-
-const STORAGE_KEY = "news-wall-state"
-const RESTORE_FLAG_KEY = "news-wall-restore"
+import { useNewsUiStore } from "../stores/newsUi"
 
 const articles = ref([])
 const sources = ref([])
@@ -18,15 +16,20 @@ const selectedSectionId = ref(null)
 const nextCursor = ref(null)
 const hasMore = ref(true)
 const sentinel = ref(null)
-const restoredAt = ref(0)
 const hydrated = ref(false)
-const restoringState = ref(false)
 const activeQueryKey = ref("")
+const articleRefs = new Map()
+const readTimers = new Map()
+const pendingReadIds = new Set()
+const READ_VISIBILITY_RATIO = 0.75
+const READ_VISIBILITY_MS = 1000
+let readObserver = null
+let flushTimer = null
 let requestToken = 0
 const route = useRoute()
 const router = useRouter()
+const newsUi = useNewsUiStore()
 const { y: scrollY } = useWindowScroll()
-const pageState = useSessionStorage(STORAGE_KEY, null)
 
 function parseQueryId(value) {
   if (Array.isArray(value)) value = value[0]
@@ -86,6 +89,137 @@ const formatDate = (value) => {
   }).format(new Date(value))
 }
 
+function captureFeedSnapshot() {
+  return {
+    filterKey: `${selectedSourceId.value ?? ""}:${selectedSectionId.value ?? ""}`,
+    articles: articles.value,
+    sources: sources.value,
+    sections: sections.value,
+    selectedSourceId: selectedSourceId.value,
+    selectedSectionId: selectedSectionId.value,
+    nextCursor: nextCursor.value,
+    hasMore: hasMore.value,
+    scrollY: scrollY.value,
+    savedAt: Date.now()
+  }
+}
+
+function saveFeedSnapshot() {
+  newsUi.saveFeedSnapshot(captureFeedSnapshot())
+}
+
+function restoreFeedSnapshot() {
+  const state = newsUi.feedSnapshot
+  const routeKey = `${filtersFromRoute().sourceId ?? ""}:${filtersFromRoute().sectionId ?? ""}`
+
+  if (!state || state.filterKey !== routeKey || !Array.isArray(state.articles) || !state.articles.length) {
+    return false
+  }
+
+  articles.value = state.articles
+  sources.value = state.sources || []
+  sections.value = state.sections || []
+  selectedSourceId.value = state.selectedSourceId ?? null
+  selectedSectionId.value = state.selectedSectionId ?? null
+  nextCursor.value = state.nextCursor || null
+  hasMore.value = Boolean(state.hasMore)
+  loading.value = false
+  loadingMore.value = false
+
+  nextTick(() => {
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: state.scrollY || 0, behavior: "auto" })
+    })
+  })
+
+  return true
+}
+
+function setArticleRef(articleId, element) {
+  if (element) {
+    articleRefs.set(articleId, element)
+    if (readObserver) readObserver.observe(element)
+    return
+  }
+
+  articleRefs.delete(articleId)
+}
+
+function syncReadObserver() {
+  if (!readObserver) return
+
+  readObserver.disconnect()
+  articleRefs.forEach((element) => {
+    if (element) readObserver.observe(element)
+  })
+}
+
+function clearReadTimer(articleId) {
+  const timer = readTimers.get(articleId)
+  if (timer) window.clearTimeout(timer)
+  readTimers.delete(articleId)
+}
+
+function resetReadTracking() {
+  readTimers.forEach((timer) => window.clearTimeout(timer))
+  readTimers.clear()
+  pendingReadIds.clear()
+  if (flushTimer) window.clearTimeout(flushTimer)
+  flushTimer = null
+}
+
+function isArticleAlreadyRead(articleId) {
+  return articles.value.some((article) => article.id === articleId && article.read)
+}
+
+function queueRead(articleId) {
+  if (isArticleAlreadyRead(articleId)) return
+  if (pendingReadIds.has(articleId)) return
+
+  pendingReadIds.add(articleId)
+  if (flushTimer) return
+
+  flushTimer = window.setTimeout(flushReadQueue, 400)
+}
+
+async function flushReadQueue() {
+  flushTimer = null
+  const ids = Array.from(pendingReadIds)
+  if (!ids.length) return
+
+  pendingReadIds.clear()
+  try {
+    const data = await api.markNewsReads({ article_ids: ids })
+    const readIds = new Set(data.read_article_ids || ids)
+    articles.value = articles.value.map((article) =>
+      readIds.has(article.id) ? { ...article, read: true } : article
+    )
+    saveFeedSnapshot()
+  } catch (err) {
+    ids.forEach((id) => pendingReadIds.add(id))
+    if (!flushTimer) flushTimer = window.setTimeout(flushReadQueue, 1200)
+  }
+}
+
+function markVisibleArticle(articleId) {
+  if (isArticleAlreadyRead(articleId)) return
+
+  clearReadTimer(articleId)
+  const timer = window.setTimeout(() => {
+    readTimers.delete(articleId)
+    queueRead(articleId)
+  }, READ_VISIBILITY_MS)
+  readTimers.set(articleId, timer)
+}
+
+function markHiddenArticle(articleId) {
+  clearReadTimer(articleId)
+}
+
+function isUnread(article) {
+  return !article.read
+}
+
 async function loadFeed() {
   const queryKey = `${selectedSourceId.value ?? ""}:${selectedSectionId.value ?? ""}`
   const currentToken = ++requestToken
@@ -93,6 +227,7 @@ async function loadFeed() {
   loading.value = true
   loadingMore.value = false
   error.value = ""
+  resetReadTracking()
   articles.value = []
   nextCursor.value = null
   hasMore.value = true
@@ -113,7 +248,7 @@ async function loadFeed() {
     if (selectedSectionId.value && !sectionItems.value.some((item) => item.value === selectedSectionId.value)) {
       selectedSectionId.value = null
     }
-    persistState()
+    saveFeedSnapshot()
   } catch (err) {
     if (currentToken !== requestToken || activeQueryKey.value !== queryKey) return
     error.value = err.message
@@ -121,64 +256,6 @@ async function loadFeed() {
     if (currentToken !== requestToken || activeQueryKey.value !== queryKey) return
     loading.value = false
   }
-}
-
-function persistState(extra = {}) {
-  pageState.value = {
-    filterKey: `${selectedSourceId.value ?? ""}:${selectedSectionId.value ?? ""}`,
-    articles: articles.value,
-    sources: sources.value,
-    sections: sections.value,
-    selectedSourceId: selectedSourceId.value,
-    selectedSectionId: selectedSectionId.value,
-    nextCursor: nextCursor.value,
-    hasMore: hasMore.value,
-    scrollY: scrollY.value,
-    restoredAt: restoredAt.value,
-    savedAt: Date.now(),
-    ...extra
-  }
-}
-
-function restoreState() {
-  const state = pageState.value
-  const shouldRestore = sessionStorage.getItem(RESTORE_FLAG_KEY) === "1"
-  const isFreshEnough = state?.savedAt && Date.now() - state.savedAt < 30 * 60 * 1000
-  const routeKey = `${filtersFromRoute().sourceId ?? ""}:${filtersFromRoute().sectionId ?? ""}`
-
-  if (!shouldRestore || !state || !Array.isArray(state.articles) || !state.articles.length || !isFreshEnough) {
-    sessionStorage.removeItem(RESTORE_FLAG_KEY)
-    return false
-  }
-
-  if (routeKey !== ":" && state.filterKey !== routeKey) {
-    sessionStorage.removeItem(RESTORE_FLAG_KEY)
-    return false
-  }
-
-  restoringState.value = true
-  articles.value = state.articles
-  sources.value = state.sources || []
-  sections.value = state.sections || []
-  selectedSourceId.value = state.selectedSourceId ?? null
-  selectedSectionId.value = state.selectedSectionId ?? null
-  nextCursor.value = state.nextCursor || null
-  hasMore.value = Boolean(state.hasMore)
-  restoredAt.value = state.savedAt || 0
-  loading.value = false
-  loadingMore.value = false
-
-  nextTick(() => {
-    window.requestAnimationFrame(() => {
-      window.scrollTo({ top: state.scrollY || 0, behavior: "auto" })
-      restoringState.value = false
-      sessionStorage.removeItem(RESTORE_FLAG_KEY)
-    })
-  })
-
-  syncRouteQuery()
-
-  return true
 }
 
 async function loadMore() {
@@ -203,7 +280,6 @@ async function loadMore() {
     articles.value = [...articles.value, ...incoming]
     nextCursor.value = data.next_cursor || null
     hasMore.value = Boolean(data.has_more)
-    persistState()
   } catch (err) {
     if (currentToken !== requestToken || activeQueryKey.value !== queryKey) return
     error.value = err.message
@@ -215,8 +291,34 @@ async function loadMore() {
 
 const articlePath = (article) => `/news/${article.id}`
 
+watch(
+  () => articles.value.map((article) => article.id).join(","),
+  async () => {
+  if (!hydrated.value) return
+    await nextTick()
+    syncReadObserver()
+  }
+)
+
+watch(
+  () => articles.value,
+  () => {
+    if (!hydrated.value) return
+  },
+  { deep: true }
+)
+
+watchThrottled(
+  scrollY,
+  () => {
+    if (!hydrated.value) return
+    saveFeedSnapshot()
+  },
+  { throttle: 250, trailing: true }
+)
+
 watch([selectedSourceId, selectedSectionId], () => {
-  if (!hydrated.value || restoringState.value) return
+  if (!hydrated.value) return
 
   if (selectedSectionId.value && sectionItems.value.every((item) => item.value !== selectedSectionId.value)) {
     selectedSectionId.value = null
@@ -231,15 +333,6 @@ watch([selectedSourceId, selectedSectionId], () => {
   loadFeed()
 })
 
-watchThrottled(
-  scrollY,
-  () => {
-    if (!hydrated.value || restoringState.value) return
-    persistState()
-  },
-  { throttle: 250, trailing: true }
-)
-
 useIntersectionObserver(
   sentinel,
   ([entry]) => {
@@ -249,28 +342,44 @@ useIntersectionObserver(
 )
 
 onMounted(async () => {
-  if (typeof window !== "undefined") {
-    window.history.scrollRestoration = "manual"
+  if (typeof IntersectionObserver === "function") {
+    readObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const articleId = Number(entry.target?.dataset?.articleId)
+          if (!Number.isFinite(articleId)) return
+
+          if (entry.isIntersecting && entry.intersectionRatio >= READ_VISIBILITY_RATIO) {
+            markVisibleArticle(articleId)
+          } else {
+            markHiddenArticle(articleId)
+          }
+        })
+      },
+      {
+        threshold: [0, 0.25, READ_VISIBILITY_RATIO, 0.9]
+      }
+    )
   }
 
   const initialFilters = filtersFromRoute()
   selectedSourceId.value = initialFilters.sourceId
   selectedSectionId.value = initialFilters.sectionId
 
-  if (!restoreState()) {
-    hydrated.value = true
+  hydrated.value = true
+  if (!restoreFeedSnapshot()) {
+    window.scrollTo({ top: 0, behavior: "auto" })
     await loadFeed()
   } else {
-    hydrated.value = true
+    await nextTick()
+    syncReadObserver()
   }
 })
 
 onBeforeUnmount(() => {
-  persistState()
-  sessionStorage.setItem(RESTORE_FLAG_KEY, "1")
-  if (typeof window !== "undefined") {
-    window.history.scrollRestoration = "auto"
-  }
+  resetReadTracking()
+  readObserver?.disconnect()
+  saveFeedSnapshot()
 })
 </script>
 
@@ -315,7 +424,14 @@ onBeforeUnmount(() => {
       </section>
 
     <section v-else class="news-feed">
-      <article v-for="article in articles" :key="article.id" class="news-card card">
+      <article
+        v-for="article in articles"
+        :key="article.id"
+        :ref="(element) => setArticleRef(article.id, element)"
+        :data-article-id="article.id"
+        class="news-card card"
+        :class="{ 'news-card--unread': isUnread(article) }"
+      >
         <div class="news-card__media">
           <img
             v-if="article.image_url"
@@ -332,15 +448,16 @@ onBeforeUnmount(() => {
             <v-chip size="small" variant="flat" color="primary">{{ article.source_name }}</v-chip>
             <v-chip size="small" variant="outlined">{{ article.section_name }}</v-chip>
             <span class="news-card__time">{{ formatDate(article.published_at || article.fetched_at) }}</span>
+            <span v-if="isUnread(article)" class="news-card__badge">Новая</span>
           </div>
 
-          <RouterLink class="news-card__title" :to="{ path: articlePath(article), query: routeQueryForFilters() }" @click="persistState()">
+          <RouterLink class="news-card__title" :to="{ path: articlePath(article), query: routeQueryForFilters() }">
             <h2>{{ article.title }}</h2>
           </RouterLink>
           <p class="news-card__preview">{{ article.preview_text || article.body_text }}</p>
 
           <div class="news-card__actions">
-            <RouterLink class="news-card__link" :to="{ path: articlePath(article), query: routeQueryForFilters() }" @click="persistState()">Читать полностью</RouterLink>
+            <RouterLink class="news-card__link" :to="{ path: articlePath(article), query: routeQueryForFilters() }">Читать полностью</RouterLink>
             <a :href="article.canonical_url" target="_blank" rel="noreferrer">Открыть источник</a>
           </div>
         </div>
@@ -422,6 +539,23 @@ onBeforeUnmount(() => {
   padding: 0;
   background: #191a1a;
   color: #e7e5e5;
+  border-radius: 28px;
+  transition:
+    background-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.news-card--unread {
+  background: linear-gradient(180deg, rgba(43, 26, 17, 0.98), rgba(24, 17, 13, 0.98));
+  box-shadow:
+    0 0 0 1px rgba(199, 89, 35, 0.62),
+    0 0 0 6px rgba(199, 89, 35, 0.09),
+    0 20px 38px rgba(0, 0, 0, 0.34);
+}
+
+.news-card--unread:hover {
+  transform: translateY(-1px);
 }
 
 .news-card__media {
@@ -462,6 +596,20 @@ onBeforeUnmount(() => {
 .news-card__time {
   color: #9c9ea0;
   font-size: 0.82rem;
+}
+
+.news-card__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.28rem 0.72rem;
+  border-radius: 999px;
+  background: rgba(199, 89, 35, 0.18);
+  border: 1px solid rgba(199, 89, 35, 0.48);
+  color: #ffceb9;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .news-card__title {

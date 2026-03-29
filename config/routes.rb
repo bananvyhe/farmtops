@@ -25,6 +25,7 @@ Rails.application.routes.draw do
     resources :payment_transactions, path: "payments", only: %i[create show]
     resources :news, only: %i[index show] do
       get :image, on: :member
+      post :reads, on: :collection
     end
 
     namespace :admin do

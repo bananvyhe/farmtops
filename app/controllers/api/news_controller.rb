@@ -5,13 +5,16 @@ require "uri"
 
 module Api
   class NewsController < BaseController
+    skip_before_action :verify_frontend_csrf!, only: :reads
+
     def index
       articles = filtered_articles.limit(limit_param + 1)
       has_more = articles.size > limit_param
       articles = articles.first(limit_param)
+      read_ids = news_article_read_ids_for(articles.map(&:id))
       blocked_source_ids = NewsSource.blocked_source_ids
       render json: {
-        articles: articles.map { |article| news_article_payload(article) },
+        articles: articles.map { |article| news_article_payload(article, read: read_ids.include?(article.id)) },
         sources: NewsSource.active.where.not(id: blocked_source_ids).includes(:news_sections).map { |source| news_source_payload(source) },
         sections: NewsSection.active.where.not(news_source_id: blocked_source_ids).includes(:news_source).map { |section| news_section_payload(section) },
         next_cursor: has_more ? news_cursor_for(articles.last) : nil,
@@ -23,7 +26,13 @@ module Api
       article = NewsArticle.includes(:news_source, :news_section).find(params[:id])
       return render_error("Article not available", status: :not_found) if article.news_source.blocked_source?
 
-      render json: { article: news_article_payload(article) }
+      render json: { article: news_article_payload(article, read: news_article_read?(article)) }
+    end
+
+    def reads
+      article_ids = Array(params[:article_ids]).presence || Array(params[:id]).presence
+      upsert_news_article_reads(article_ids)
+      render json: { ok: true, read_article_ids: news_article_read_ids_for(article_ids) }
     end
 
     def image

@@ -14,9 +14,11 @@ module Api
 
     def create
       user = User.find_by(email: params[:email].to_s.downcase)
+      visitor_uuid = cookies.signed[:farmspot_visitor_id].presence
 
       if user&.authenticate(params[:password]) && user.active?
         sign_in!(user)
+        merge_news_reads_to_user!(user, visitor_uuid)
         render json: {
           authenticated: true,
           csrf_token: cookies[:farmspot_csrf],

@@ -90,6 +90,26 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
     assert_equal "Body", json_response.dig("article", "body_text")
     assert_equal "news-1", json_response.dig("article", "source_article_id")
     assert_equal "/api/news/#{@article.id}/image", json_response.dig("article", "image_url")
+    assert_equal false, json_response.dig("article", "read")
+  end
+
+  test "marks reads for an anonymous visitor and exposes the read flag" do
+    get "/api/news"
+
+    assert_response :success
+    assert_equal false, json_response.dig("articles", 0, "read")
+
+    post "/api/news/reads",
+      params: { article_ids: [@article.id] }.to_json,
+      headers: { "CONTENT_TYPE" => "application/json" }
+
+    assert_response :success
+    assert_equal [@article.id], json_response["read_article_ids"]
+
+    get "/api/news"
+
+    assert_response :success
+    assert_equal true, json_response.dig("articles", 0, "read")
   end
 
   test "paginates with cursor" do

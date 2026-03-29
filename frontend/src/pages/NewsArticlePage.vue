@@ -49,6 +49,10 @@ async function loadArticle() {
   try {
     const data = await api.newsArticle(route.params.id)
     article.value = data.article
+
+    if (data.article?.id) {
+      api.markNewsReads({ article_ids: [data.article.id] }).catch(() => {})
+    }
   } catch (err) {
     error.value = err.message
   } finally {

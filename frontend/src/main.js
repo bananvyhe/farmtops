@@ -6,6 +6,7 @@ import DashboardPage from "./pages/DashboardPage.vue"
 import AdminPage from "./pages/AdminPage.vue"
 import NewsPage from "./pages/NewsPage.vue"
 import NewsArticlePage from "./pages/NewsArticlePage.vue"
+import { createPinia } from "pinia"
 import vuetify from "./plugins/vuetify"
 import "./styles.css"
 
@@ -36,11 +37,14 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
-  scrollBehavior(to, from, savedPosition) {
-    if (savedPosition) return savedPosition
-    if (to.path === "/news" && from.path.startsWith("/news/")) return false
+  scrollBehavior() {
     return { top: 0 }
   }
 })
+const pinia = createPinia()
 
-createApp(App).use(router).use(vuetify).mount("#app")
+if (typeof window !== "undefined" && "scrollRestoration" in window.history) {
+  window.history.scrollRestoration = "manual"
+}
+
+createApp(App).use(pinia).use(router).use(vuetify).mount("#app")

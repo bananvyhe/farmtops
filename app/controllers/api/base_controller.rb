@@ -2,6 +2,7 @@ module Api
   class BaseController < ApplicationController
     skip_forgery_protection
     before_action :verify_frontend_csrf!
+    before_action :ensure_news_visitor_identity
 
     private
 
@@ -101,7 +102,7 @@ module Api
       }
     end
 
-    def news_article_payload(article)
+    def news_article_payload(article, read: nil)
       {
         id: article.id,
         news_source_id: article.news_source_id,
@@ -129,8 +130,83 @@ module Api
         translation_target_locale: article.translation_target_locale,
         translation_source_locale: article.translation_source_locale,
         content_hash: article.content_hash,
-        raw_payload: article.raw_payload
+        raw_payload: article.raw_payload,
+        read: read.nil? ? news_article_read?(article) : read
       }
+    end
+
+    def news_article_read?(article)
+      news_article_read_ids_for([article.id]).include?(article.id)
+    end
+
+    def news_article_read_ids_for(article_ids)
+      ids = Array(article_ids).map(&:to_i).reject(&:zero?).uniq
+      return [] if ids.blank?
+
+      scope = NewsArticleRead.where(news_article_id: ids)
+      scope = if current_user.present?
+        scope.where(user_id: current_user.id)
+      elsif news_identity_uuid.present?
+        scope.where(visitor_uuid: news_identity_uuid)
+      else
+        NewsArticleRead.none
+      end
+
+      scope.pluck(:news_article_id)
+    end
+
+    def ensure_news_visitor_identity
+      return if cookies.signed[:farmspot_visitor_id].present?
+
+      cookies.signed[:farmspot_visitor_id] = {
+        value: SecureRandom.uuid,
+        expires: 1.year.from_now,
+        same_site: :lax,
+        secure: Rails.env.production?
+      }
+    end
+
+    def news_identity_uuid
+      cookies.signed[:farmspot_visitor_id].presence
+    end
+
+    def news_read_identity_attrs
+      if current_user.present?
+        { user_id: current_user.id }
+      elsif news_identity_uuid.present?
+        { visitor_uuid: news_identity_uuid }
+      end
+    end
+
+    def upsert_news_article_reads(article_ids)
+      ids = Array(article_ids).map(&:to_i).reject(&:zero?).uniq
+      return if ids.blank?
+
+      attrs = news_read_identity_attrs
+      return if attrs.blank?
+
+      now = Time.current
+      ids.each do |article_id|
+        read = NewsArticleRead.find_or_initialize_by(news_article_id: article_id, **attrs)
+        read.read_at ||= now
+        read.save!
+      end
+    end
+
+    def merge_news_reads_to_user!(user, visitor_uuid)
+      return if user.blank? || visitor_uuid.blank?
+
+      NewsArticleRead.transaction do
+        NewsArticleRead.for_visitor(visitor_uuid).find_each do |read|
+          existing = NewsArticleRead.find_by(news_article_id: read.news_article_id, user_id: user.id)
+          if existing
+            existing.update!(read_at: [existing.read_at, read.read_at].compact.max)
+            read.destroy!
+          else
+            read.update!(user_id: user.id, visitor_uuid: nil)
+          end
+        end
+      end
     end
 
     def sanitized_news_html(html)

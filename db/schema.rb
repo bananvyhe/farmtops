@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_03_23_120000) do
+ActiveRecord::Schema[8.0].define(version: 2026_03_29_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -25,6 +25,21 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_23_120000) do
     t.datetime "updated_at", null: false
     t.index ["payment_transaction_id"], name: "index_balance_ledger_entries_on_payment_transaction_id"
     t.index ["user_id"], name: "index_balance_ledger_entries_on_user_id"
+  end
+
+  create_table "news_article_reads", force: :cascade do |t|
+    t.bigint "news_article_id", null: false
+    t.bigint "user_id"
+    t.uuid "visitor_uuid"
+    t.datetime "read_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["news_article_id", "user_id"], name: "index_news_article_reads_on_news_article_id_and_user_id", unique: true, where: "(user_id IS NOT NULL)"
+    t.index ["news_article_id", "visitor_uuid"], name: "index_news_article_reads_on_news_article_id_and_visitor_uuid", unique: true, where: "(visitor_uuid IS NOT NULL)"
+    t.index ["news_article_id"], name: "index_news_article_reads_on_news_article_id"
+    t.index ["user_id", "read_at"], name: "index_news_article_reads_on_user_id_and_read_at"
+    t.index ["user_id"], name: "index_news_article_reads_on_user_id"
+    t.index ["visitor_uuid", "read_at"], name: "index_news_article_reads_on_visitor_uuid_and_read_at"
   end
 
   create_table "news_articles", force: :cascade do |t|
@@ -51,12 +66,21 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_23_120000) do
     t.string "translation_target_locale", default: "ru", null: false
     t.string "translation_source_locale", default: "en", null: false
     t.text "preview_html", default: "", null: false
+    t.string "translation_status", default: "pending", null: false
+    t.text "translation_error"
+    t.datetime "translation_completed_at"
+    t.datetime "translation_started_at"
+    t.string "translation_request_id"
+    t.integer "translation_attempts", default: 0, null: false
     t.index ["canonical_url"], name: "index_news_articles_on_canonical_url"
     t.index ["news_section_id"], name: "index_news_articles_on_news_section_id"
     t.index ["news_source_id", "content_hash"], name: "index_news_articles_on_news_source_id_and_content_hash", unique: true
     t.index ["news_source_id", "source_article_id"], name: "index_news_articles_on_news_source_id_and_source_article_id", unique: true, where: "(source_article_id IS NOT NULL)"
     t.index ["news_source_id"], name: "index_news_articles_on_news_source_id"
     t.index ["published_at"], name: "index_news_articles_on_published_at"
+    t.index ["translation_request_id"], name: "index_news_articles_on_translation_request_id"
+    t.index ["translation_status", "created_at"], name: "index_news_articles_on_translation_status_and_created_at"
+    t.index ["translation_status", "translation_started_at"], name: "idx_on_translation_status_translation_started_at_76d70d1b51"
   end
 
   create_table "news_crawl_runs", force: :cascade do |t|
@@ -155,6 +179,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_23_120000) do
 
   add_foreign_key "balance_ledger_entries", "payment_transactions"
   add_foreign_key "balance_ledger_entries", "users"
+  add_foreign_key "news_article_reads", "news_articles"
+  add_foreign_key "news_article_reads", "users"
   add_foreign_key "news_articles", "news_sections"
   add_foreign_key "news_articles", "news_sources"
   add_foreign_key "news_crawl_runs", "news_sections"

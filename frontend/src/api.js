@@ -62,6 +62,7 @@ export const api = {
   deleteTariff: (id) => request(`/api/admin/tariffs/${id}`, { method: "DELETE" }),
   news: (params = {}) => request(withQuery("/api/news", params)),
   newsArticle: (id) => request(`/api/news/${id}`),
+  markNewsReads: (payload) => request("/api/news/reads", { method: "POST", body: JSON.stringify(payload) }),
   adminNewsSources: () => request("/api/admin/news_sources"),
   createNewsSource: (payload) => request("/api/admin/news_sources", { method: "POST", body: JSON.stringify(payload) }),
   updateNewsSource: (id, payload) => request(`/api/admin/news_sources/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
