@@ -44,6 +44,45 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
     assert_equal "Example", json_response["sections"].first["source_name"]
   end
 
+  test "hides blocked sources and their articles" do
+    blocked_source = NewsSource.create!(
+      name: "The Block",
+      base_url: "https://stage.theblock.co",
+      active: true,
+      config: {}
+    )
+    blocked_section = blocked_source.news_sections.create!(
+      name: "Latest",
+      url: "https://stage.theblock.co/latest-crypto-news",
+      active: true,
+      config: {}
+    )
+    blocked_section.news_articles.create!(
+      news_source: blocked_source,
+      news_section: blocked_section,
+      source_article_id: "blocked-1",
+      canonical_url: "https://stage.theblock.co/post/1",
+      title: "Blocked story",
+      preview_text: "Blocked preview",
+      body_text: "Blocked body",
+      image_url: "https://stage.theblock.co/image.jpg",
+      published_at: Time.zone.parse("2026-03-20 11:00:00"),
+      fetched_at: Time.zone.now,
+      content_hash: "blocked-hash",
+      raw_payload: {}
+    )
+
+    get "/api/news"
+
+    assert_response :success
+    assert_equal ["Example"], json_response["sources"].map { |source| source["name"] }
+    assert_equal ["Main"], json_response["sections"].map { |section| section["name"] }
+    refute_includes json_response["articles"].map { |article| article["title"] }, "Blocked story"
+
+    get "/api/news/#{blocked_section.news_articles.first.id}"
+    assert_response :not_found
+  end
+
   test "returns a single article payload" do
     get "/api/news/#{@article.id}"
 

@@ -76,20 +76,6 @@ namespace :news do
         "next_page_selector" => "a[rel='next']",
         "pagination_mode" => "query"
       }
-    when "theblock.co"
-      {
-        "list_item_selector" => "article",
-        "listing_url_selector" => "a[href*='/post/']",
-        "listing_title_selector" => "h2 a, h3 a, a[href*='/post/']",
-        "listing_preview_selector" => "p",
-        "listing_image_selector" => "img[data-src], img[data-lazy-src], img[data-original], img[srcset], img",
-        "article_title_selector" => "h1",
-        "article_body_selector" => "article",
-        "article_image_selector" => "meta[property='og:image'], meta[property='twitter:image'], article img[data-src], article img[data-lazy-src], article img[data-original], article img[srcset], article img, img[data-src], img[data-lazy-src], img[data-original], img[srcset], img",
-        "next_page_selector" => "a[rel='next']",
-        "pagination_mode" => "start",
-        "pagination_step" => 10
-      }
     else
       {}
     end
@@ -105,33 +91,16 @@ namespace :news do
       {
         "pagination_mode" => "feed"
       }
-    when "theblock.co"
-      {
-        "pagination_mode" => "start",
-        "pagination_step" => 10
-      }
     else
       {}
     end
   end
 
   def source_base_url_for(host)
-    case host
-    when "theblock.co"
-      "https://stage.theblock.co"
-    else
-      "https://#{host}"
-    end
+    "https://#{host}"
   end
 
   def normalized_section_url_for(host, url)
-    return url unless host == "theblock.co"
-
-    uri = URI.parse(url)
-    uri.host = "stage.theblock.co"
-    uri.scheme = "https"
-    uri.to_s
-  rescue URI::InvalidURIError, URI::Error
     url
   end
 end

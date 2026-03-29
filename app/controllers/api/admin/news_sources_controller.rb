@@ -7,7 +7,7 @@ module Api
 
       def index
         render json: {
-          news_sources: NewsSource.includes(:news_crawl_runs, news_sections: :news_articles).order(:name).map { |source| news_source_payload(source) }
+          news_sources: NewsSource.crawlable.order(:name).includes(:news_crawl_runs, news_sections: :news_articles).map { |source| news_source_payload(source) }
         }
       end
 
@@ -44,7 +44,7 @@ module Api
       private
 
       def set_news_source
-        @news_source = NewsSource.find(params[:id])
+        @news_source = NewsSource.crawlable.find(params[:id])
       end
 
       def news_source_params

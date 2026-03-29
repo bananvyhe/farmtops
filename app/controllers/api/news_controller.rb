@@ -11,20 +11,20 @@ module Api
       articles = articles.first(limit_param)
       render json: {
         articles: articles.map { |article| news_article_payload(article) },
-        sources: NewsSource.active.includes(:news_sections).map { |source| news_source_payload(source) },
-        sections: NewsSection.active.includes(:news_source).map { |section| news_section_payload(section) },
+        sources: NewsSource.crawlable.order(:name).includes(:news_sections).map { |source| news_source_payload(source) },
+        sections: NewsSection.active.joins(:news_source).merge(NewsSource.crawlable).includes(:news_source).map { |section| news_section_payload(section) },
         next_cursor: has_more ? news_cursor_for(articles.last) : nil,
         has_more:
       }
     end
 
     def show
-      article = NewsArticle.includes(:news_source, :news_section).find(params[:id])
+      article = NewsArticle.includes(:news_source, :news_section).joins(:news_source).merge(NewsSource.crawlable).find(params[:id])
       render json: { article: news_article_payload(article) }
     end
 
     def image
-      article = NewsArticle.find(params[:id])
+      article = NewsArticle.joins(:news_source).merge(NewsSource.crawlable).find(params[:id])
       url = article.image_url.to_s.strip
 
       return render_error("Image not available", status: :not_found) if url.blank?
@@ -44,7 +44,7 @@ module Api
     private
 
     def filtered_articles
-      scope = NewsArticle.includes(:news_source, :news_section).recent
+      scope = NewsArticle.includes(:news_source, :news_section).joins(:news_source).merge(NewsSource.crawlable).recent
       scope = scope.where(news_source_id: params[:source_id]) if params[:source_id].present?
       scope = scope.where(news_section_id: params[:section_id]) if params[:section_id].present?
       scope = apply_cursor(scope) if params[:cursor].present?

@@ -590,8 +590,8 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
 
   test "chooses the most text rich block from a broad article container" do
     source = NewsSource.create!(
-      name: "TheBlock",
-      base_url: "https://stage.theblock.co",
+      name: "Example News",
+      base_url: "https://example.com",
       active: true,
       crawl_delay_min_seconds: 0,
       crawl_delay_max_seconds: 0,
@@ -602,23 +602,23 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     )
     section = source.news_sections.create!(
       name: "Latest",
-      url: "https://stage.theblock.co/latest-crypto-news",
+      url: "https://example.com/latest-news",
       active: true,
       config: source.config
     )
 
     pages = {
-      "https://stage.theblock.co/latest-crypto-news" => listing_page(
+      "https://example.com/latest-news" => listing_page(
         [
-          { title: "The Block story", href: "/post/123", preview: "Preview block" }
+          { title: "Example story", href: "/post/123", preview: "Preview block" }
         ]
       ),
-      "https://stage.theblock.co/post/123" => <<~HTML
+      "https://example.com/post/123" => <<~HTML
         <html>
           <head>
             <meta property="og:image" content="https://www.tbstat.com/cdn-cgi/image/format=webp">
-            <link rel="canonical" href="https://www.theblock.co/post/123">
-            <title>The Block story</title>
+            <link rel="canonical" href="https://example.com/post/123">
+            <title>Example story</title>
           </head>
           <body>
             <article>
@@ -651,7 +651,7 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     ).call
 
     assert_equal 1, result.articles_saved
-    article = section.news_articles.find_by!(source_article_id: "https://stage.theblock.co/post/123")
+    article = section.news_articles.find_by!(source_article_id: "https://example.com/post/123")
     assert_includes article.body_html, "First long paragraph"
     assert_includes article.body_html, "Third important paragraph"
     refute_includes article.body_html, "Sidebar noise"

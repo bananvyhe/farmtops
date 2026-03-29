@@ -51,6 +51,27 @@ class ApiAdminNewsSourcesTest < ActionDispatch::IntegrationTest
     assert_equal "World", json_response.dig("news_section", "name")
   end
 
+  test "admin index hides blocked sources" do
+    NewsSource.create!(
+      name: "The Block",
+      base_url: "https://stage.theblock.co",
+      active: true,
+      crawl_delay_min_seconds: 0,
+      crawl_delay_max_seconds: 0
+    )
+
+    csrf = login_as(@admin)
+
+    get "/api/admin/news_sources",
+      headers: {
+        "CONTENT_TYPE" => "application/json",
+        "X-CSRF-Token" => csrf
+      }
+
+    assert_response :success
+    refute_includes json_response["news_sources"].map { |source| source["name"] }, "The Block"
+  end
+
   test "admin can queue crawl for all source sections" do
     source = NewsSource.create!(name: "Reuters", base_url: "https://www.reuters.com", active: true)
     source.news_sections.create!(name: "World", url: "https://www.reuters.com/world/", active: true)
@@ -76,5 +97,25 @@ class ApiAdminNewsSourcesTest < ActionDispatch::IntegrationTest
     end
 
     assert_equal source.news_sections.pluck(:id).sort, queued.sort
+  end
+
+  test "blocked source cannot be queued for crawl" do
+    source = NewsSource.create!(
+      name: "The Block",
+      base_url: "https://stage.theblock.co",
+      active: true,
+      crawl_delay_min_seconds: 0,
+      crawl_delay_max_seconds: 0
+    )
+    source.news_sections.create!(name: "Latest", url: "https://stage.theblock.co/latest-crypto-news", active: true)
+    csrf = login_as(@admin)
+
+    post "/api/admin/news_sources/#{source.id}/crawl",
+      headers: {
+        "CONTENT_TYPE" => "application/json",
+        "X-CSRF-Token" => csrf
+      }
+
+    assert_response :not_found
   end
 end
