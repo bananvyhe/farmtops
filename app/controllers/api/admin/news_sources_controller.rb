@@ -7,7 +7,7 @@ module Api
 
       def index
         render json: {
-          news_sources: NewsSource.crawlable.order(:name).includes(:news_crawl_runs, news_sections: :news_articles).map { |source| news_source_payload(source) }
+          news_sources: NewsSource.active.includes(:news_crawl_runs, news_sections: :news_articles).map { |source| news_source_payload(source) unless source.blocked_source? }.compact
         }
       end
 
@@ -44,7 +44,8 @@ module Api
       private
 
       def set_news_source
-        @news_source = NewsSource.crawlable.find(params[:id])
+        @news_source = NewsSource.active.find(params[:id])
+        raise ActiveRecord::RecordNotFound if @news_source.blocked_source?
       end
 
       def news_source_params

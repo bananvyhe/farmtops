@@ -2,16 +2,9 @@ require "uri"
 
 class NewsSource < ApplicationRecord
   BLOCKED_SOURCE_HOSTS = %w[theblock.co].freeze
-  BLOCKED_SOURCE_BASE_URL_PATTERNS = BLOCKED_SOURCE_HOSTS.flat_map do |host|
-    [
-      "http://#{host}%",
-      "https://#{host}%",
-      "http://www.#{host}%",
-      "https://www.#{host}%",
-      "http://stage.#{host}%",
-      "https://stage.#{host}%"
-    ]
-  end.freeze
+  BLOCKED_SOURCE_BASE_URL_SQL = BLOCKED_SOURCE_HOSTS.map do |host|
+    "(base_url LIKE 'http://#{host}%' OR base_url LIKE 'https://#{host}%' OR base_url LIKE 'http://www.#{host}%' OR base_url LIKE 'https://www.#{host}%' OR base_url LIKE 'http://stage.#{host}%' OR base_url LIKE 'https://stage.#{host}%')"
+  end.join(" OR ").freeze
 
   has_many :news_sections, dependent: :destroy
   has_many :news_articles, dependent: :destroy
@@ -26,12 +19,6 @@ class NewsSource < ApplicationRecord
   before_validation :normalize_delay_bounds
 
   scope :active, -> { where(active: true).order(:name) }
-  scope :crawlable, -> do
-    where(active: true).where(
-      BLOCKED_SOURCE_BASE_URL_PATTERNS.map { "base_url NOT LIKE ?" }.join(" AND "),
-      *BLOCKED_SOURCE_BASE_URL_PATTERNS
-    )
-  end
 
   def delay_range
     min = [crawl_delay_min_seconds.to_f, 0.0].max
@@ -48,6 +35,10 @@ class NewsSource < ApplicationRecord
     BLOCKED_SOURCE_HOSTS.include?(host)
   rescue URI::InvalidURIError, URI::Error
     false
+  end
+
+  def self.blocked_source_ids
+    where(active: true).where(BLOCKED_SOURCE_BASE_URL_SQL).pluck(:id)
   end
 
   private

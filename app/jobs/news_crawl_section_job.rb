@@ -5,7 +5,7 @@ class NewsCrawlSectionJob
 
   def perform(news_section_id)
     section = NewsSection.find_by(id: news_section_id)
-    return unless section&.active? && section.news_source.crawlable?
+    return unless section&.active? && section.news_source.active? && !section.news_source.blocked_source?
 
     run = section.news_crawl_runs.create!(
       news_source: section.news_source,
