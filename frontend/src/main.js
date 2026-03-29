@@ -10,7 +10,7 @@ import vuetify from "./plugins/vuetify"
 import "./styles.css"
 
 if (import.meta.env.PROD) {
-  const gaId = "G-PPKP0L3CY7"
+  const gaId = "G-QC89HYMM4R"
   const gtagScript = document.createElement("script")
   gtagScript.async = true
   gtagScript.src = `https://www.googletagmanager.com/gtag/js?id=${gaId}`
