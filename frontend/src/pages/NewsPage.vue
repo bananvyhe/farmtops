@@ -387,7 +387,7 @@ onBeforeUnmount(() => {
   <main class="news-page">
     <section class="news-hero">
       <div class="news-hero__eyebrow">отслеживание проектов:</div>
-      <span class="topbar">
+      <span class="d-flex">
       <h1 >Сбор группы</h1></span>
       <p>Далекие контуры в туманностях кажутся спящими башнями, но едва разум касается предела дозволенного — и древние пробуждаются, чтобы дать понять: в бесконечности нет места тем, кто считает себя исходной точкой.</p>
     </section>
@@ -481,12 +481,10 @@ onBeforeUnmount(() => {
 <style scoped>
 .news-page {
   min-height: calc(100vh - 120px);
-  margin-top: 8px;
-  padding-bottom: 40px;
 }
 
 .news-hero {
-  margin-bottom: 22px;
+  
   padding: 20px 22px;
   border-left: 4px solid var(--farmspot-primary);
   background: rgba(14, 14, 14, 0.94);
@@ -502,8 +500,8 @@ onBeforeUnmount(() => {
 }
 
 .news-hero h1 {
-  margin: 0 0 10px;
-  font-size: clamp(1.9rem, 5vw, 3.2rem);
+  
+  font-size: clamp(1.9rem, 2vw, 3.2rem);
   letter-spacing: -0.04em;
   text-transform: uppercase;
 }
@@ -517,7 +515,8 @@ onBeforeUnmount(() => {
 .news-filters {
   background: rgba(25, 26, 26, 0.94);
   color: #e7e5e5;
-  margin-bottom: 22px;
+  margin-bottom: 11px;
+  margin-top: 11px;
 }
 
 .news-filters__grid {

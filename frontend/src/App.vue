@@ -44,8 +44,8 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div class="app-shell">
-    <header class="topbar">
+  <div class="app-shell py-1">
+    <header class="d-flex justify-space-between">
       <div>
         <div class="eyebrow">farmspot.ru</div>
       </div>
