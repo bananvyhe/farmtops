@@ -354,7 +354,7 @@ module News
         title: normalize_text(translated_title),
         preview_text: normalize_text(translated_preview_text),
         body_text: translated_body_text.to_s.strip.presence,
-        body_html: build_translated_body_html(translated_body_text),
+        body_html: build_translated_body_html(translated_body_text, source_html: article_data[:body_html]),
         source_title: article_data[:title],
         source_preview_text: article_data[:preview_text],
         source_body_text: article_data[:body_text],
@@ -398,13 +398,8 @@ module News
       )
     end
 
-    def build_translated_body_html(body_text)
-      paragraphs = body_text.to_s.strip.split(/\n{2,}/).map(&:strip).reject(&:blank?)
-      return "" if paragraphs.empty?
-
-      paragraphs.map do |paragraph|
-        "<p>#{ERB::Util.html_escape(paragraph).gsub(/\n/, "<br>")}</p>"
-      end.join
+    def build_translated_body_html(body_text, source_html:)
+      News::Translation::HtmlBodyRenderer.new(source_html:).call(body_text)
     end
 
     def find_existing_article(article_data)

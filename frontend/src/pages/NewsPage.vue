@@ -386,9 +386,10 @@ onBeforeUnmount(() => {
 <template>
   <main class="news-page">
     <section class="news-hero">
-      <div class="news-hero__eyebrow">Daily dispatch</div>
-      <h1>News wall</h1>
-      <p>Публичная лента свежих материалов с картинкой, заголовком, превью и полным текстом по клику.</p>
+      <div class="news-hero__eyebrow">отслеживание проектов:</div>
+      <span class="topbar">
+      <h1 >Сбор группы</h1></span>
+      <p>Далекие контуры в туманностях кажутся спящими башнями, но едва разум касается предела дозволенного — и древние пробуждаются, чтобы дать понять: в бесконечности нет места тем, кто считает себя исходной точкой.</p>
     </section>
 
     <section class="news-filters card">

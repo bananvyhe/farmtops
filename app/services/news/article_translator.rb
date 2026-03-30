@@ -1,4 +1,3 @@
-require "erb"
 require "securerandom"
 
 module News
@@ -118,12 +117,7 @@ module News
     end
 
     def build_translated_body_html(body_text)
-      paragraphs = body_text.to_s.strip.split(/\n{2,}/).map(&:strip).reject(&:blank?)
-      return "" if paragraphs.empty?
-
-      paragraphs.map do |paragraph|
-        "<p>#{ERB::Util.html_escape(paragraph).gsub(/\n/, "<br>")}</p>"
-      end.join
+      News::Translation::HtmlBodyRenderer.new(source_html: article.body_html).call(body_text)
     end
   end
 end

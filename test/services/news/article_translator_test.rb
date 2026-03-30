@@ -29,7 +29,7 @@ class News::ArticleTranslatorTest < ActiveSupport::TestCase
     )
   end
 
-  def build_article
+  def build_article(body_html: "<p>Body one</p><p>Body two</p>")
     @section.news_articles.create!(
       news_source: @source,
       news_section: @section,
@@ -39,7 +39,7 @@ class News::ArticleTranslatorTest < ActiveSupport::TestCase
       preview_text: "Preview",
       preview_html: "<p>Preview</p>",
       body_text: "Body one\n\nBody two",
-      body_html: "<p>Body one</p><p>Body two</p>",
+      body_html: body_html,
       image_url: "https://example.com/image.jpg",
       fetched_at: Time.current,
       content_hash: "hash-1",
@@ -82,6 +82,38 @@ class News::ArticleTranslatorTest < ActiveSupport::TestCase
     assert_equal "req-1", translated.translation_request_id
     assert_equal "Hello", translated.source_title
     assert_equal "Body one\n\nBody two", translated.source_body_text
+  end
+
+  test "preserves embedded media blocks in translated body html" do
+    article = build_article(
+      body_html: <<~HTML
+        <p>Body one</p>
+        <div class="video">
+          <iframe src="https://example.com/embed/video" allowfullscreen></iframe>
+        </div>
+        <p>Body two</p>
+      HTML
+    )
+
+    result = News::Translation::Result.new(
+      request_id: "req-2",
+      translated_title: "Привет",
+      translated_preview_text: "Превью",
+      translated_body_text: "Тело один\n\nТело два",
+      model: "fake-translator",
+      latency_ms: 10,
+      status: "ok",
+      error: nil
+    )
+
+    translated = News::ArticleTranslator.new(
+      article:,
+      translator: FakeTranslator.new(result:)
+    ).call
+
+    assert_includes translated.body_html, "<iframe src=\"https://example.com/embed/video\" allowfullscreen=\"allowfullscreen\"></iframe>"
+    assert_includes translated.body_html, "Тело один"
+    assert_includes translated.body_html, "Тело два"
   end
 
   test "marks the article as failed when translation errors" do
