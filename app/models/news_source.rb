@@ -2,9 +2,6 @@ require "uri"
 
 class NewsSource < ApplicationRecord
   BLOCKED_SOURCE_HOSTS = %w[theblock.co].freeze
-  BLOCKED_SOURCE_BASE_URL_SQL = BLOCKED_SOURCE_HOSTS.map do |host|
-    "(base_url LIKE 'http://#{host}%' OR base_url LIKE 'https://#{host}%' OR base_url LIKE 'http://www.#{host}%' OR base_url LIKE 'https://www.#{host}%' OR base_url LIKE 'http://stage.#{host}%' OR base_url LIKE 'https://stage.#{host}%')"
-  end.join(" OR ").freeze
 
   has_many :news_sections, dependent: :destroy
   has_many :news_articles, dependent: :destroy
@@ -31,17 +28,21 @@ class NewsSource < ApplicationRecord
   end
 
   def blocked_source?
-    host = URI.parse(base_url.to_s).host.to_s.sub(/\Awww\./, "")
-    BLOCKED_SOURCE_HOSTS.include?(host)
+    host = normalized_host
+    BLOCKED_SOURCE_HOSTS.any? { |blocked_host| host == blocked_host || host.end_with?(".#{blocked_host}") }
   rescue URI::InvalidURIError, URI::Error
     false
   end
 
   def self.blocked_source_ids
-    where(active: true).where(BLOCKED_SOURCE_BASE_URL_SQL).pluck(:id)
+    where(active: true).to_a.select(&:blocked_source?).map(&:id)
   end
 
   private
+
+  def normalized_host
+    URI.parse(base_url.to_s).host.to_s.sub(/\Awww\./, "")
+  end
 
   def normalize_base_url
     self.base_url = base_url.to_s.strip

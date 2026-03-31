@@ -2,6 +2,8 @@ require "test_helper"
 
 class ApiNewsTest < ActionDispatch::IntegrationTest
   setup do
+    host! "farmspot.test"
+
     @source = NewsSource.create!(
       name: "Example",
       base_url: "https://example.com",
@@ -91,6 +93,28 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
     assert_equal "news-1", json_response.dig("article", "source_article_id")
     assert_equal "/api/news/#{@article.id}/image", json_response.dig("article", "image_url")
     assert_equal false, json_response.dig("article", "read")
+  end
+
+  test "rewrites twitch embed parents to the current host" do
+    @article.update!(
+      body_html: <<~HTML
+        <p>Intro</p>
+        <iframe
+          src="https://player.twitch.tv/?channel=massivelyoverpowered&parent=massivelyop.com"
+          width="640"
+          height="360"
+          allowfullscreen="true"
+        ></iframe>
+      HTML
+    )
+
+    get "/api/news/#{@article.id}"
+
+    assert_response :success
+    body_html = json_response.dig("article", "body_html")
+    assert_includes body_html, "player.twitch.tv"
+    assert_includes body_html, "parent=farmspot.test"
+    refute_includes body_html, "parent=massivelyop.com"
   end
 
   test "marks reads for an anonymous visitor and exposes the read flag" do

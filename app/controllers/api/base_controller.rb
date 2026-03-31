@@ -210,11 +210,40 @@ module Api
     end
 
     def sanitized_news_html(html)
+      html = rewrite_twitch_embed_parents(html.to_s)
+
       ActionController::Base.helpers.sanitize(
-        html.to_s,
+        html,
         tags: %w[p br div span strong em b i u s ul ol li blockquote figure figcaption a img h1 h2 h3 h4 h5 h6 iframe video source],
         attributes: %w[href src alt title width height class style allow allowfullscreen frameborder loading referrerpolicy rel target data-src data-lazy-src poster]
       )
+    end
+
+    def rewrite_twitch_embed_parents(html)
+      fragment = Nokogiri::HTML::DocumentFragment.parse(html)
+      fragment.css("iframe[src]").each do |iframe|
+        iframe["src"] = rewrite_twitch_embed_src(iframe["src"])
+      end
+      fragment.to_html
+    end
+
+    def rewrite_twitch_embed_src(src)
+      uri = URI.parse(src)
+      return src unless %w[player.twitch.tv www.twitch.tv twitch.tv].include?(uri.host)
+
+      params = URI.decode_www_form(uri.query.to_s)
+      parents = params.select { |key, _value| key == "parent" }.map(&:last)
+      parents << request.host if request.host.present?
+
+      params.reject! { |key, _value| key == "parent" }
+      parents.compact.uniq.each do |parent|
+        params << ["parent", parent]
+      end
+
+      uri.query = params.any? ? URI.encode_www_form(params) : nil
+      uri.to_s
+    rescue URI::InvalidURIError
+      src
     end
 
     def news_article_image_url(article)
