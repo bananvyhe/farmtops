@@ -15,10 +15,14 @@ module RuntimeConfig
     host = env_or_credential("REDIS_HOST", :redis, :host, default: "127.0.0.1")
     port = env_or_credential("REDIS_PORT", :redis, :port, default: 6379)
     db = env_or_credential("REDIS_DB", :redis, :db, default: 0)
-    password = env_or_credential("REDIS_PASSWORD", :redis, :password)
+    password = redis_password
     auth = password.present? ? ":#{CGI.escape(password)}@" : ""
 
     "redis://#{auth}#{host}:#{port}/#{db}"
+  end
+
+  def redis_password
+    env_or_credential("REDIS_PASSWORD", :redis, :password)
   end
 
   def credential_value(env_key, *credential_path)

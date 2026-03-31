@@ -102,7 +102,8 @@ module Api
       }
     end
 
-    def news_article_payload(article, read: nil)
+    def news_article_payload(article, read: nil, bookmarked_game_ids: nil)
+      game = article.news_article_game&.game
       {
         id: article.id,
         news_source_id: article.news_source_id,
@@ -132,7 +133,18 @@ module Api
         translation_source_locale: article.translation_source_locale,
         content_hash: article.content_hash,
         raw_payload: article.raw_payload,
+        game: game.present? ? news_game_payload(game, bookmarked: bookmarked_game_ids.nil? ? news_game_bookmarked?(game) : bookmarked_game_ids.include?(game.id)) : nil,
         read: read.nil? ? news_article_read?(article) : read
+      }
+    end
+
+    def news_game_payload(game, bookmarked:)
+      {
+        id: game.id,
+        name: game.name,
+        slug: game.slug,
+        external_game_id: game.external_game_id,
+        bookmarked:
       }
     end
 
@@ -179,6 +191,34 @@ module Api
       end
     end
 
+    def news_game_bookmark_identity_attrs
+      if current_user.present?
+        { user_id: current_user.id }
+      elsif news_identity_uuid.present?
+        { visitor_uuid: news_identity_uuid }
+      end
+    end
+
+    def news_game_bookmarked?(game)
+      news_game_bookmark_ids_for([game.id]).include?(game.id)
+    end
+
+    def news_game_bookmark_ids_for(game_ids)
+      ids = Array(game_ids).map(&:to_i).reject(&:zero?).uniq
+      return [] if ids.blank?
+
+      scope = NewsGameBookmark.where(game_id: ids)
+      scope = if current_user.present?
+        scope.where(user_id: current_user.id)
+      elsif news_identity_uuid.present?
+        scope.where(visitor_uuid: news_identity_uuid)
+      else
+        NewsGameBookmark.none
+      end
+
+      scope.pluck(:game_id)
+    end
+
     def upsert_news_article_reads(article_ids)
       ids = Array(article_ids).map(&:to_i).reject(&:zero?).uniq
       return if ids.blank?
@@ -205,6 +245,41 @@ module Api
             read.destroy!
           else
             read.update!(user_id: user.id, visitor_uuid: nil)
+          end
+        end
+      end
+    end
+
+    def upsert_news_game_bookmark(game_id)
+      attrs = news_game_bookmark_identity_attrs
+      return if attrs.blank?
+
+      bookmark = NewsGameBookmark.find_or_initialize_by(game_id: game_id, **attrs)
+      bookmark.bookmarked_at ||= Time.current
+      bookmark.save!
+      bookmark
+    end
+
+    def delete_news_game_bookmark(game_id)
+      attrs = news_game_bookmark_identity_attrs
+      return if attrs.blank?
+
+      bookmark = NewsGameBookmark.find_by(game_id: game_id, **attrs)
+      bookmark&.destroy!
+      bookmark
+    end
+
+    def merge_news_game_bookmarks_to_user!(user, visitor_uuid)
+      return if user.blank? || visitor_uuid.blank?
+
+      NewsGameBookmark.transaction do
+        NewsGameBookmark.for_visitor(visitor_uuid).find_each do |bookmark|
+          existing = NewsGameBookmark.find_by(game_id: bookmark.game_id, user_id: user.id)
+          if existing
+            existing.update!(bookmarked_at: [existing.bookmarked_at, bookmark.bookmarked_at].compact.max)
+            bookmark.destroy!
+          else
+            bookmark.update!(user_id: user.id, visitor_uuid: nil)
           end
         end
       end
@@ -292,6 +367,21 @@ module Api
       fragment.to_html
     rescue StandardError
       html
+    end
+
+    def normalize_url(url, base_url)
+      return if url.blank?
+
+      uri = URI.parse(url)
+      uri = URI.join(base_url.to_s, url) if uri.relative?
+      uri.fragment = nil
+      if uri.query.present?
+        params = URI.decode_www_form(uri.query).reject { |key, _| key.to_s.start_with?("utm_") || key == "fbclid" }
+        uri.query = params.any? ? URI.encode_www_form(params) : nil
+      end
+      uri.to_s
+    rescue URI::InvalidURIError, URI::Error
+      url.to_s
     end
 
     def news_crawl_run_payload(run)

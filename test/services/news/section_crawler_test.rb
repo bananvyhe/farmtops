@@ -103,6 +103,51 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     assert_equal "https://cdn.example.com/first.jpg", @section.news_articles.find_by!(canonical_url: "https://example.com/news/first-a").image_url
   end
 
+  test "stops after the first listing item even when it already exists in the database" do
+    @section.news_articles.create!(
+      news_source: @source,
+      canonical_url: "https://example.com/news/duplicate-a",
+      source_article_id: "https://example.com/news/duplicate-a",
+      fetched_at: Time.current,
+      content_hash: "existing-hash",
+      translation_status: :pending
+    )
+
+    pages = {
+      "https://example.com/news" => listing_page(
+        [
+          { title: "Duplicate", href: "/news/duplicate-a", preview: "Preview duplicate" }
+        ],
+        next_page: "/news/page-2"
+      ),
+      "https://example.com/news/page-2" => listing_page(
+        [
+          { title: "Should not crawl", href: "/news/should-not-crawl", preview: "Preview should not crawl" }
+        ]
+      ),
+      "https://example.com/news/should-not-crawl" => article_page(
+        title: "Should not crawl",
+        body: "Body should not be fetched",
+        image_url: "https://cdn.example.com/should-not-crawl.jpg",
+        canonical_url: "https://example.com/news/should-not-crawl"
+      )
+    }
+
+    result = News::SectionCrawler.new(
+      section: @section,
+      client: FakeClient.new(pages),
+      sleeper: NullSleeper.new,
+      max_articles: 1,
+      max_pages: 5,
+      max_retries: 1
+    ).call
+
+    assert_equal 1, result.articles_found
+    assert_equal 0, result.articles_saved
+    assert_equal 1, result.pages_visited
+    assert_nil @section.news_articles.find_by(canonical_url: "https://example.com/news/should-not-crawl")
+  end
+
   test "saves original article content and marks translation as pending" do
     pages = {
       "https://example.com/news" => listing_page(

@@ -19,7 +19,8 @@ class NewsCrawlSectionJob
 
     result = News::SectionCrawler.new(
       section:,
-      max_articles: ARTICLES_PER_SECTION
+      max_articles: articles_per_section,
+      max_pages: pages_per_section
     ).call
     run.update!(
       status: :succeeded,
@@ -42,5 +43,21 @@ class NewsCrawlSectionJob
       crawl_errors: Array(run&.crawl_errors) + [{ message: e.message, class: e.class.name }]
     )
     raise
+  end
+
+  private
+
+  def articles_per_section
+    override = ENV["NEWS_CRAWL_ARTICLES_PER_SECTION"].to_s.strip
+    return override.to_i if override.present? && override.to_i > 0
+
+    Rails.env.development? ? 1 : ARTICLES_PER_SECTION
+  end
+
+  def pages_per_section
+    override = ENV["NEWS_CRAWL_PAGES_PER_SECTION"].to_s.strip
+    return override.to_i if override.present? && override.to_i > 0
+
+    1
   end
 end

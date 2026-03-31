@@ -2,12 +2,14 @@
 import { computed, onMounted, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { api } from "../api"
+import { useNewsUiStore } from "../stores/newsUi"
 
 const route = useRoute()
 const router = useRouter()
 const article = ref(null)
 const loading = ref(false)
 const error = ref("")
+const newsUi = useNewsUiStore()
 
 const formatDate = (value) => {
   if (!value) return "—"
@@ -41,6 +43,37 @@ const bodyHtml = computed(() => {
   }
   return richHtml
 })
+
+function syncGameBookmarkInArticle(bookmarked) {
+  if (!article.value?.game) return
+
+  article.value = {
+    ...article.value,
+    game: {
+      ...article.value.game,
+      bookmarked
+    }
+  }
+
+  newsUi.updateGameBookmark(article.value.game.id, bookmarked)
+}
+
+async function toggleGameBookmark() {
+  if (!article.value?.game) return
+
+  const nextBookmarked = !article.value.game.bookmarked
+
+  try {
+    const data = nextBookmarked
+      ? await api.bookmarkNewsGame(article.value.id)
+      : await api.unbookmarkNewsGame(article.value.id)
+
+    const bookmarked = Boolean(data.game?.bookmarked ?? nextBookmarked)
+    syncGameBookmarkInArticle(bookmarked)
+  } catch (err) {
+    error.value = err.message
+  }
+}
 
 async function loadArticle() {
   loading.value = true
@@ -88,6 +121,16 @@ onMounted(() => {
         <button type="button" class="news-article-back" @click="closeArticle">← Назад к ленте</button>
 
         <div class="news-article-meta">
+          <v-chip
+            v-if="article.game"
+            size="small"
+            :variant="article.game.bookmarked ? 'flat' : 'outlined'"
+            :color="article.game.bookmarked ? 'primary' : undefined"
+            class="news-article-game"
+            @click.stop="toggleGameBookmark"
+          >
+            {{ article.game.name }}
+          </v-chip>
           <span>{{ article.source_name }}</span>
           <span>{{ article.section_name }}</span>
           <span>{{ formatDate(article.published_at || article.fetched_at) }}</span>
@@ -151,6 +194,10 @@ onMounted(() => {
   gap: 12px;
   color: #9c9ea0;
   margin-bottom: 14px;
+}
+
+.news-article-game {
+  cursor: pointer;
 }
 
 .news-article-title {

@@ -1,6 +1,7 @@
 class NewsArticle < ApplicationRecord
   belongs_to :news_source
   belongs_to :news_section
+  has_one :news_article_game, dependent: :destroy
 
   enum :translation_status, {
     pending: "pending",
@@ -17,4 +18,5 @@ class NewsArticle < ApplicationRecord
 
   scope :recent, -> { order(Arel.sql("COALESCE(published_at, fetched_at, created_at) DESC"), id: :desc) }
   scope :pending_translation, -> { pending }
+  scope :pending_game_identification, -> { translated.left_outer_joins(:news_article_game).where(news_article_games: { id: nil }) }
 end

@@ -5,16 +5,17 @@ require "uri"
 
 module Api
   class NewsController < BaseController
-    skip_before_action :verify_frontend_csrf!, only: :reads
+    skip_before_action :verify_frontend_csrf!, only: %i[reads bookmark_game unbookmark_game]
 
     def index
       articles = filtered_articles.limit(limit_param + 1)
       has_more = articles.size > limit_param
       articles = articles.first(limit_param)
       read_ids = news_article_read_ids_for(articles.map(&:id))
+      bookmarked_game_ids = news_game_bookmark_ids_for(articles.filter_map { |article| article.news_article_game&.game_id })
       blocked_source_ids = NewsSource.blocked_source_ids
       render json: {
-        articles: articles.map { |article| news_article_payload(article, read: read_ids.include?(article.id)) },
+        articles: articles.map { |article| news_article_payload(article, read: read_ids.include?(article.id), bookmarked_game_ids:) },
         sources: NewsSource.active.where.not(id: blocked_source_ids).includes(:news_sections).map { |source| news_source_payload(source) },
         sections: NewsSection.active.where.not(news_source_id: blocked_source_ids).includes(:news_source).map { |section| news_section_payload(section) },
         next_cursor: has_more ? news_cursor_for(articles.last) : nil,
@@ -23,16 +24,39 @@ module Api
     end
 
     def show
-      article = NewsArticle.includes(:news_source, :news_section).find(params[:id])
+      article = NewsArticle.includes(:news_source, :news_section, news_article_game: :game).find(params[:id])
       return render_error("Article not available", status: :not_found) if article.news_source.blocked_source?
 
-      render json: { article: news_article_payload(article, read: news_article_read?(article)) }
+      bookmarked_game_ids = news_game_bookmark_ids_for([article.news_article_game&.game_id].compact)
+      render json: { article: news_article_payload(article, read: news_article_read?(article), bookmarked_game_ids:) }
     end
 
     def reads
       article_ids = Array(params[:article_ids]).presence || Array(params[:id]).presence
       upsert_news_article_reads(article_ids)
       render json: { ok: true, read_article_ids: news_article_read_ids_for(article_ids) }
+    end
+
+    def bookmark_game
+      article = NewsArticle.includes(news_article_game: :game).find(params[:id])
+      return render_error("Game not available", status: :not_found) if article.news_source.blocked_source?
+
+      game = article.news_article_game&.game
+      return render_error("Game not available", status: :not_found) if game.blank?
+
+      bookmark = upsert_news_game_bookmark(game.id)
+      render json: { ok: true, game: news_game_payload(game, bookmarked: bookmark.present?) }
+    end
+
+    def unbookmark_game
+      article = NewsArticle.includes(news_article_game: :game).find(params[:id])
+      return render_error("Game not available", status: :not_found) if article.news_source.blocked_source?
+
+      game = article.news_article_game&.game
+      return render_error("Game not available", status: :not_found) if game.blank?
+
+      delete_news_game_bookmark(game.id)
+      render json: { ok: true, game: news_game_payload(game, bookmarked: false) }
     end
 
     def image
@@ -81,7 +105,7 @@ module Api
 
     def filtered_articles
       blocked_source_ids = NewsSource.blocked_source_ids
-      scope = NewsArticle.includes(:news_source, :news_section).where.not(news_source_id: blocked_source_ids).recent
+      scope = NewsArticle.includes(:news_source, :news_section, news_article_game: :game).where.not(news_source_id: blocked_source_ids).recent
       scope = scope.where(news_source_id: params[:source_id]) if params[:source_id].present?
       scope = scope.where(news_section_id: params[:section_id]) if params[:section_id].present?
       scope = apply_cursor(scope) if params[:cursor].present?

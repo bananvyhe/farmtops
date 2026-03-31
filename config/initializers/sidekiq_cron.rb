@@ -1,10 +1,13 @@
 require Rails.root.join("app/services/news/scheduler")
 require Rails.root.join("app/services/news/translation/recovery")
+require Rails.root.join("app/services/news/game_identification/recovery")
 
 Rails.application.config.after_initialize do
   next unless defined?(Sidekiq) && Sidekiq.server?
+  next if Rails.env.development? && ENV["ENABLE_SIDEKIQ_DEV_SCHEDULES"] != "1"
 
   News::Translation::Recovery.new.call
+  News::GameIdentification::Recovery.new.call
 
   interval_minutes =
     ENV.fetch("BILLING_INTERVAL_MINUTES", Rails.env.development? ? "20" : "60").to_i
@@ -29,6 +32,13 @@ Rails.application.config.after_initialize do
   Sidekiq::Cron::Job.load_from_hash(
     "news_translate_pending_articles" => {
       "class" => "NewsTranslatePendingArticlesJob",
+      "cron" => "*/5 * * * *"
+    }
+  )
+
+  Sidekiq::Cron::Job.load_from_hash(
+    "news_identify_pending_games" => {
+      "class" => "NewsIdentifyPendingGamesJob",
       "cron" => "*/5 * * * *"
     }
   )

@@ -4,6 +4,7 @@ class User < ApplicationRecord
   belongs_to :tariff, optional: true
   has_many :payment_transactions, dependent: :destroy
   has_many :balance_ledger_entries, dependent: :destroy
+  has_many :news_game_bookmarks, dependent: :destroy
 
   enum :role, { admin: 0, user: 1, client: 2 }, default: :client
 

@@ -44,6 +44,16 @@ class NewsTranslateArticleJobTest < ActiveSupport::TestCase
     end
   end
 
+  def with_stubbed_constant(object, method_name, implementation)
+    original = object.method(method_name)
+    object.define_singleton_method(method_name, &implementation)
+    yield
+  ensure
+    object.define_singleton_method(method_name) do |*args, **kwargs, &block|
+      original.call(*args, **kwargs, &block)
+    end
+  end
+
   setup do
     source = NewsSource.create!(
       name: "Example",
@@ -103,9 +113,9 @@ class NewsTranslateArticleJobTest < ActiveSupport::TestCase
     lock_manager = FakeLockManager.new
     captured = nil
 
-    News::Translation::LockManager.stub(:new, lock_manager) do
-      News::ArticleTranslator.stub(:new, ->(article:) { FakeTranslator.new(article) }) do
-        NewsTranslateArticleJob.stub(:perform_async, ->(article_id, token) { captured = [article_id, token]; "jid-1" }) do
+    with_stubbed_constant(News::Translation::LockManager, :new, -> { lock_manager }) do
+      with_stubbed_constant(News::ArticleTranslator, :new, ->(article:) { FakeTranslator.new(article) }) do
+        with_stubbed_constant(NewsTranslateArticleJob, :perform_async, ->(article_id, token) { captured = [article_id, token]; "jid-1" }) do
           NewsTranslateArticleJob.new.perform(@first_article.id, "lock-token")
         end
       end
@@ -116,5 +126,29 @@ class NewsTranslateArticleJobTest < ActiveSupport::TestCase
     assert_equal "fake-translator", @first_article.reload.translation_model
     assert_predicate @first_article.reload.translation_request_id, :present?
     refute lock_manager.released
+  end
+
+  test "starts game identification recovery when the translation chain finishes" do
+    lock_manager = FakeLockManager.new
+    recovery = Object.new
+    recovery_called = false
+    recovery.define_singleton_method(:call) do
+      recovery_called = true
+      { cleared_lock: true, enqueued: true }
+    end
+
+    @section.news_articles.where(id: @first_article.id).delete_all
+
+    with_stubbed_constant(News::Translation::LockManager, :new, -> { lock_manager }) do
+      with_stubbed_constant(News::ArticleTranslator, :new, ->(article:) { FakeTranslator.new(article) }) do
+        with_stubbed_constant(News::GameIdentification::Recovery, :new, -> { recovery }) do
+          NewsTranslateArticleJob.new.perform(@second_article.id, "lock-token")
+        end
+      end
+    end
+
+    assert recovery_called
+    assert_equal "translated", @second_article.reload.translation_status
+    assert lock_manager.released
   end
 end

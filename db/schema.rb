@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_03_29_120000) do
+ActiveRecord::Schema[8.0].define(version: 2026_03_31_123000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -25,6 +25,35 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_29_120000) do
     t.datetime "updated_at", null: false
     t.index ["payment_transaction_id"], name: "index_balance_ledger_entries_on_payment_transaction_id"
     t.index ["user_id"], name: "index_balance_ledger_entries_on_user_id"
+  end
+
+  create_table "games", force: :cascade do |t|
+    t.string "name", null: false
+    t.string "slug", null: false
+    t.string "normalized_name"
+    t.string "external_game_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["external_game_id"], name: "index_games_on_external_game_id"
+    t.index ["slug"], name: "index_games_on_slug", unique: true
+  end
+
+  create_table "news_article_games", force: :cascade do |t|
+    t.bigint "news_article_id", null: false
+    t.bigint "game_id"
+    t.string "request_id", null: false
+    t.string "identified_game_name", null: false
+    t.string "slug"
+    t.decimal "confidence", precision: 5, scale: 4
+    t.string "model"
+    t.string "external_game_id"
+    t.jsonb "raw_response", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["game_id"], name: "index_news_article_games_on_game_id"
+    t.index ["news_article_id"], name: "index_news_article_games_on_news_article_id", unique: true
+    t.index ["request_id"], name: "index_news_article_games_on_request_id"
+    t.index ["slug"], name: "index_news_article_games_on_slug"
   end
 
   create_table "news_article_reads", force: :cascade do |t|
@@ -103,6 +132,20 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_29_120000) do
     t.index ["started_at"], name: "index_news_crawl_runs_on_started_at"
   end
 
+  create_table "news_game_bookmarks", force: :cascade do |t|
+    t.bigint "game_id", null: false
+    t.bigint "user_id"
+    t.uuid "visitor_uuid"
+    t.datetime "bookmarked_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["game_id", "user_id"], name: "index_news_game_bookmarks_on_game_id_and_user_id", unique: true, where: "(user_id IS NOT NULL)"
+    t.index ["game_id", "visitor_uuid"], name: "index_news_game_bookmarks_on_game_id_and_visitor_uuid", unique: true, where: "(visitor_uuid IS NOT NULL)"
+    t.index ["game_id"], name: "index_news_game_bookmarks_on_game_id"
+    t.index ["user_id", "bookmarked_at"], name: "index_news_game_bookmarks_on_user_id_and_bookmarked_at"
+    t.index ["visitor_uuid", "bookmarked_at"], name: "index_news_game_bookmarks_on_visitor_uuid_and_bookmarked_at"
+  end
+
   create_table "news_sections", force: :cascade do |t|
     t.bigint "news_source_id", null: false
     t.string "name", null: false
@@ -179,12 +222,16 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_29_120000) do
 
   add_foreign_key "balance_ledger_entries", "payment_transactions"
   add_foreign_key "balance_ledger_entries", "users"
+  add_foreign_key "news_article_games", "games"
+  add_foreign_key "news_article_games", "news_articles"
   add_foreign_key "news_article_reads", "news_articles"
   add_foreign_key "news_article_reads", "users"
   add_foreign_key "news_articles", "news_sections"
   add_foreign_key "news_articles", "news_sources"
   add_foreign_key "news_crawl_runs", "news_sections"
   add_foreign_key "news_crawl_runs", "news_sources"
+  add_foreign_key "news_game_bookmarks", "games"
+  add_foreign_key "news_game_bookmarks", "users"
   add_foreign_key "news_sections", "news_sources"
   add_foreign_key "payment_transactions", "users"
   add_foreign_key "users", "tariffs"

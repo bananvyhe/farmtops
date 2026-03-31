@@ -15,6 +15,7 @@ REDIS_DATA="$REDIS_DIR/data"
 REDIS_CONF="$REDIS_DIR/redis.conf"
 REDIS_LOG="$ROOT_DIR/log/redis.log"
 REDIS_PORT="${REDIS_PORT:-6379}"
+REDIS_PASSWORD="$(bundle exec rails runner 'print RuntimeConfig.redis_password.to_s' 2>/dev/null || true)"
 
 mkdir -p "$DEV_DIR" "$ROOT_DIR/log" "$REDIS_DATA"
 
@@ -37,7 +38,33 @@ logfile $REDIS_LOG
 daemonize yes
 EOF
 
-if ! "$REDIS_BIN/redis-cli" -h "$PG_HOST" -p "$REDIS_PORT" ping >/dev/null 2>&1; then
+if [ -n "$REDIS_PASSWORD" ]; then
+  printf 'requirepass %s\n' "$REDIS_PASSWORD" >> "$REDIS_CONF"
+fi
+
+redis_needs_restart=0
+if [ -n "$REDIS_PASSWORD" ]; then
+  if "$REDIS_BIN/redis-cli" -h "$PG_HOST" -p "$REDIS_PORT" --pass "$REDIS_PASSWORD" --no-auth-warning ping >/dev/null 2>&1; then
+    redis_needs_restart=0
+  elif "$REDIS_BIN/redis-cli" -h "$PG_HOST" -p "$REDIS_PORT" ping >/dev/null 2>&1; then
+    redis_needs_restart=1
+  else
+    redis_needs_restart=1
+  fi
+else
+  if "$REDIS_BIN/redis-cli" -h "$PG_HOST" -p "$REDIS_PORT" ping >/dev/null 2>&1; then
+    redis_needs_restart=0
+  else
+    redis_needs_restart=1
+  fi
+fi
+
+if [ "$redis_needs_restart" -eq 1 ]; then
+  if [ -n "$REDIS_PASSWORD" ] && "$REDIS_BIN/redis-cli" -h "$PG_HOST" -p "$REDIS_PORT" --pass "$REDIS_PASSWORD" --no-auth-warning ping >/dev/null 2>&1; then
+    "$REDIS_BIN/redis-cli" -h "$PG_HOST" -p "$REDIS_PORT" --pass "$REDIS_PASSWORD" --no-auth-warning shutdown >/dev/null 2>&1 || true
+  elif "$REDIS_BIN/redis-cli" -h "$PG_HOST" -p "$REDIS_PORT" ping >/dev/null 2>&1; then
+    "$REDIS_BIN/redis-cli" -h "$PG_HOST" -p "$REDIS_PORT" shutdown >/dev/null 2>&1 || true
+  fi
   "$REDIS_BIN/redis-server" "$REDIS_CONF"
 fi
 

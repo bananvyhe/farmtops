@@ -63,6 +63,8 @@ export const api = {
   news: (params = {}) => request(withQuery("/api/news", params)),
   newsArticle: (id) => request(`/api/news/${id}`),
   markNewsReads: (payload) => request("/api/news/reads", { method: "POST", body: JSON.stringify(payload) }),
+  bookmarkNewsGame: (articleId) => request(`/api/news/${articleId}/bookmark_game`, { method: "POST" }),
+  unbookmarkNewsGame: (articleId) => request(`/api/news/${articleId}/unbookmark_game`, { method: "DELETE" }),
   adminNewsSources: () => request("/api/admin/news_sources"),
   createNewsSource: (payload) => request("/api/admin/news_sources", { method: "POST", body: JSON.stringify(payload) }),
   updateNewsSource: (id, payload) => request(`/api/admin/news_sources/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),

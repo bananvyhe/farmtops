@@ -89,6 +89,28 @@ const formatDate = (value) => {
   }).format(new Date(value))
 }
 
+const articleTimestamp = (article) => {
+  const value = article.published_at || article.fetched_at
+  const parsed = value ? new Date(value).getTime() : 0
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+const displayArticles = computed(() =>
+  articles.value
+    .map((article, index) => ({ article, index }))
+    .sort((left, right) => {
+      const leftBoosted = Boolean(left.article.game?.bookmarked) && !left.article.read
+      const rightBoosted = Boolean(right.article.game?.bookmarked) && !right.article.read
+      if (leftBoosted !== rightBoosted) return leftBoosted ? -1 : 1
+
+      const timeDelta = articleTimestamp(right.article) - articleTimestamp(left.article)
+      if (timeDelta) return timeDelta
+
+      return left.index - right.index
+    })
+    .map(({ article }) => article)
+)
+
 function captureFeedSnapshot() {
   return {
     filterKey: `${selectedSourceId.value ?? ""}:${selectedSectionId.value ?? ""}`,
@@ -220,6 +242,41 @@ function isUnread(article) {
   return !article.read
 }
 
+function syncGameBookmarkInArticles(gameId, bookmarked) {
+  articles.value = articles.value.map((article) => {
+    if (article.game?.id !== gameId) return article
+
+    return {
+      ...article,
+      game: {
+        ...article.game,
+        bookmarked
+      }
+    }
+  })
+
+  newsUi.updateGameBookmark(gameId, bookmarked)
+  saveFeedSnapshot()
+}
+
+async function toggleGameBookmark(article) {
+  const game = article.game
+  if (!game) return
+
+  const nextBookmarked = !game.bookmarked
+
+  try {
+    const data = nextBookmarked
+      ? await api.bookmarkNewsGame(article.id)
+      : await api.unbookmarkNewsGame(article.id)
+
+    const bookmarked = Boolean(data.game?.bookmarked ?? nextBookmarked)
+    syncGameBookmarkInArticles(game.id, bookmarked)
+  } catch (err) {
+    error.value = err.message
+  }
+}
+
 async function loadFeed() {
   const queryKey = `${selectedSourceId.value ?? ""}:${selectedSectionId.value ?? ""}`
   const currentToken = ++requestToken
@@ -292,9 +349,9 @@ async function loadMore() {
 const articlePath = (article) => `/news/${article.id}`
 
 watch(
-  () => articles.value.map((article) => article.id).join(","),
+  () => displayArticles.value.map((article) => article.id).join(","),
   async () => {
-  if (!hydrated.value) return
+    if (!hydrated.value) return
     await nextTick()
     syncReadObserver()
   }
@@ -426,7 +483,7 @@ onBeforeUnmount(() => {
 
     <section v-else class="news-feed">
       <article
-        v-for="article in articles"
+        v-for="article in displayArticles"
         :key="article.id"
         :ref="(element) => setArticleRef(article.id, element)"
         :data-article-id="article.id"
@@ -446,6 +503,16 @@ onBeforeUnmount(() => {
 
         <div class="news-card__body">
           <div class="news-card__meta">
+            <v-chip
+              v-if="article.game"
+              size="small"
+              :variant="article.game.bookmarked ? 'flat' : 'outlined'"
+              :color="article.game.bookmarked ? 'primary' : undefined"
+              class="news-card__game-chip"
+              @click.stop="toggleGameBookmark(article)"
+            >
+              {{ article.game.name }}
+            </v-chip>
             <v-chip size="small" variant="flat" color="primary">{{ article.source_name }}</v-chip>
             <v-chip size="small" variant="outlined">{{ article.section_name }}</v-chip>
             <span class="news-card__time">{{ formatDate(article.published_at || article.fetched_at) }}</span>
@@ -591,6 +658,10 @@ onBeforeUnmount(() => {
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.news-card__game-chip {
+  cursor: pointer;
 }
 
 .news-card__time {

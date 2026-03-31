@@ -39,7 +39,7 @@ module News
       page_url = listing_page_url
       visited = 0
 
-      while page_url.present? && visited < max_pages && result.articles_saved < max_articles
+      while page_url.present? && visited < max_pages && result.articles_found < max_articles
         document = fetch_document(page_url, xml: feed_mode?)
         result.pages_visited += 1
         visited += 1
@@ -47,8 +47,9 @@ module News
         candidates = extract_listing_items(document, page_url)
 
         candidates.each do |candidate|
+          break if result.articles_found >= max_articles
+
           result.articles_found += 1
-          break if result.articles_saved >= max_articles
 
           save_result = crawl_article(candidate, page_url, seen_keys)
           if save_result[:saved]

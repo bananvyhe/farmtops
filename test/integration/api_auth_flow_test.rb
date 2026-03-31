@@ -28,11 +28,25 @@ class ApiAuthFlowTest < ActionDispatch::IntegrationTest
       content_hash: "hash-1",
       raw_payload: {}
     )
+    game = Game.create!(
+      name: "Elden Ring",
+      slug: "elden-ring"
+    )
+    article.create_news_article_game!(
+      game: game,
+      request_id: "req-1",
+      identified_game_name: "Elden Ring",
+      slug: "elden-ring",
+      confidence: 1.0,
+      model: "test-model",
+      raw_response: {}
+    )
 
     get "/api/news"
     post "/api/news/reads",
       params: { article_ids: [article.id] }.to_json,
       headers: { "CONTENT_TYPE" => "application/json" }
+    post "/api/news/#{article.id}/bookmark_game"
 
     post "/api/registration",
       params: {
@@ -49,6 +63,7 @@ class ApiAuthFlowTest < ActionDispatch::IntegrationTest
     get "/api/news"
     assert_response :success
     assert_equal(true, json_response.dig("articles", 0, "read"))
+    assert_equal(true, json_response.dig("articles", 0, "game", "bookmarked"))
   end
 
   test "logs in existing user" do

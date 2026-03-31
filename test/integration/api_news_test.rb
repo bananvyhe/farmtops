@@ -30,6 +30,19 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
       content_hash: "hash-1",
       raw_payload: {}
     )
+    @game = Game.create!(
+      name: "Elden Ring",
+      slug: "elden-ring"
+    )
+    @article.create_news_article_game!(
+      game: @game,
+      request_id: "req-1",
+      identified_game_name: "Elden Ring",
+      slug: "elden-ring",
+      confidence: 1.0,
+      model: "test-model",
+      raw_response: {}
+    )
   end
 
   test "returns the public news wall payload" do
@@ -93,6 +106,8 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
     assert_equal "news-1", json_response.dig("article", "source_article_id")
     assert_equal "/api/news/#{@article.id}/image", json_response.dig("article", "image_url")
     assert_equal false, json_response.dig("article", "read")
+    assert_equal "Elden Ring", json_response.dig("article", "game", "name")
+    assert_equal false, json_response.dig("article", "game", "bookmarked")
   end
 
   test "returns a separate preview image url when listing metadata is available" do
@@ -189,6 +204,47 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_equal true, json_response.dig("articles", 0, "read")
+  end
+
+  test "bookmarks a game for an anonymous visitor and merges it on login" do
+    post "/api/news/#{@article.id}/bookmark_game"
+
+    assert_response :success
+    assert_equal true, json_response.dig("game", "bookmarked")
+
+    get "/api/news/#{@article.id}"
+
+    assert_response :success
+    assert_equal true, json_response.dig("article", "game", "bookmarked")
+
+    post "/api/registration",
+      params: {
+        email: "bookmark@example.com",
+        password: "Password123!",
+        password_confirmation: "Password123!"
+      }.to_json,
+      headers: { "CONTENT_TYPE" => "application/json" }
+
+    assert_response :created
+
+    get "/api/news/#{@article.id}"
+
+    assert_response :success
+    assert_equal true, json_response.dig("article", "game", "bookmarked")
+  end
+
+  test "unbookmarks a game" do
+    post "/api/news/#{@article.id}/bookmark_game"
+    assert_response :success
+
+    delete "/api/news/#{@article.id}/unbookmark_game"
+
+    assert_response :success
+    assert_equal false, json_response.dig("game", "bookmarked")
+
+    get "/api/news/#{@article.id}"
+    assert_response :success
+    assert_equal false, json_response.dig("article", "game", "bookmarked")
   end
 
   test "paginates with cursor" do

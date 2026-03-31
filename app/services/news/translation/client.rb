@@ -9,7 +9,7 @@ module News
 
     class Client
       DEFAULT_PATH = "/translate/news"
-      DEFAULT_BASE_URL = "http://127.0.0.1:19090"
+      DEFAULT_BASE_URL = "http://127.0.0.1:19191"
 
       def initialize(base_url: translation_base_url,
         token: translation_token,
@@ -53,6 +53,8 @@ module News
       attr_reader :base_url, :token, :open_timeout, :read_timeout
 
       def translation_base_url
+        return ENV["NEWS_TRANSLATOR_BASE_URL"].presence || DEFAULT_BASE_URL if Rails.env.development?
+
         RuntimeConfig.env_or_credential("NEWS_TRANSLATOR_BASE_URL", :translation, :base_url, default: DEFAULT_BASE_URL)
       end
 

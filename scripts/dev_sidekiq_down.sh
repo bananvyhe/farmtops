@@ -7,6 +7,9 @@ PG_HOST="${PGHOST:-127.0.0.1}"
 REDIS_PORT="${REDIS_PORT:-6379}"
 REDIS_DB="${REDIS_DB:-0}"
 REDIS_PASSWORD="${REDIS_PASSWORD:-}"
+if [ -z "$REDIS_PASSWORD" ]; then
+  REDIS_PASSWORD="$(bundle exec rails runner 'print RuntimeConfig.redis_password.to_s' 2>/dev/null || true)"
+fi
 
 stop_sidekiq() {
   local pids=""
