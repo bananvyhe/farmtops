@@ -43,15 +43,37 @@ module Api
 
       return render_error("Image not available", status: :not_found) if url.blank?
 
-      response = fetch_image_response(url)
-      unless response.is_a?(Net::HTTPSuccess)
-        return render_error("Image not available", status: :bad_gateway)
-      end
-
-      content_type = response["content-type"].presence || "application/octet-stream"
-      send_data response.body.to_s, type: content_type, disposition: "inline"
+      proxy_article_image(url)
     rescue StandardError => e
       Rails.logger.warn("[Api::NewsController] image proxy failed for #{params[:id]}: #{e.class} #{e.message}")
+      render_error("Image not available", status: :bad_gateway)
+    end
+
+    def preview_image
+      article = NewsArticle.find(params[:id])
+      return render_error("Image not available", status: :not_found) if article.news_source.blocked_source?
+
+      urls = [
+        article.raw_payload.to_h["source_listing_image_url"].presence,
+        article.image_url.to_s.strip
+      ].compact.uniq
+      return render_error("Image not available", status: :not_found) if urls.blank?
+
+      urls.each do |url|
+        begin
+          response = fetch_image_response(url)
+          next unless response.is_a?(Net::HTTPSuccess)
+
+          content_type = response["content-type"].presence || "application/octet-stream"
+          return send_data response.body.to_s, type: content_type, disposition: "inline"
+        rescue StandardError
+          next
+        end
+      end
+
+      render_error("Image not available", status: :bad_gateway)
+    rescue StandardError => e
+      Rails.logger.warn("[Api::NewsController] preview image proxy failed for #{params[:id]}: #{e.class} #{e.message}")
       render_error("Image not available", status: :bad_gateway)
     end
 
@@ -140,6 +162,16 @@ module Api
         request["Pragma"] = "no-cache"
         http.request(request)
       end
+    end
+
+    def proxy_article_image(url)
+      response = fetch_image_response(url)
+      unless response.is_a?(Net::HTTPSuccess)
+        return render_error("Image not available", status: :bad_gateway)
+      end
+
+      content_type = response["content-type"].presence || "application/octet-stream"
+      send_data response.body.to_s, type: content_type, disposition: "inline"
     end
   end
 end

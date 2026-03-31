@@ -826,6 +826,10 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
                 <p>This is the unique body paragraph that should remain.</p>
                 <p>Another important paragraph with the article text.</p>
               </div>
+              <div class="swiper">
+                <img src="https://massivelyop.com/wp-content/uploads/2015/02/swipe_morningmo.png">
+                <p>Every morning, the Massively Overpowered writers team up with mascot Mo.</p>
+              </div>
               <footer>
                 <a href="/code-of-conduct">Code of Conduct</a>
               </footer>
@@ -848,8 +852,69 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     article = section.news_articles.find_by!(canonical_url: "https://massivelyop.com/2026/03/20/patch-article/")
     assert_includes article.body_text, "unique body paragraph"
     assert_includes article.body_text, "Another important paragraph"
+    refute_includes article.body_text, "Massively Overpowered writers team up with mascot Mo"
     refute_includes article.body_text, "Code of Conduct"
     assert_equal "https://massivelyop.com/wp-content/uploads/2026/03/patch.jpg", article.image_url
+    refute_includes article.body_html, "swipe_morningmo.png"
+  end
+
+  test "removes a duplicated leading featured image block when it matches the article hero" do
+    source = NewsSource.create!(
+      name: "MassivelyOP",
+      base_url: "https://massivelyop.com",
+      active: true,
+      crawl_delay_min_seconds: 0,
+      crawl_delay_max_seconds: 0,
+      config: {
+        "article_body_selector" => ".td-post-content",
+        "article_image_selector" => "meta[property='og:image'], .td-post-content img, img"
+      }
+    )
+    section = source.news_sections.create!(
+      name: "Patch",
+      url: "https://massivelyop.com/category/patch/",
+      active: true,
+      config: source.config
+    )
+
+    pages = {
+      "https://massivelyop.com/category/patch/" => listing_page(
+        [
+          { title: "Patch Article", href: "/2026/03/20/patch-article/", preview: "Feed preview" }
+        ]
+      ),
+      "https://massivelyop.com/2026/03/20/patch-article/" => <<~HTML
+        <html>
+          <head>
+            <meta property="og:image" content="https://massivelyop.com/wp-content/uploads/2024/03/runes-of-magic-horror-bunny-696x229.jpg">
+            <link rel="canonical" href="https://massivelyop.com/2026/03/20/patch-article/">
+            <title>Patch Article</title>
+          </head>
+          <body>
+            <article class="td-post-content">
+              <div class="td-post-featured-image">
+                <img src="https://massivelyop.com/wp-content/uploads/2024/03/runes-of-magic-horror-bunny-696x229.jpg">
+              </div>
+              <p>This is the unique body paragraph that should remain.</p>
+            </article>
+          </body>
+        </html>
+      HTML
+    }
+
+    result = News::SectionCrawler.new(
+      section:,
+      client: FakeClient.new(pages),
+      sleeper: NullSleeper.new,
+      max_articles: 12,
+      max_pages: 2,
+      max_retries: 1
+    ).call
+
+    assert_equal 1, result.articles_saved
+    article = section.news_articles.find_by!(canonical_url: "https://massivelyop.com/2026/03/20/patch-article/")
+    assert_includes article.body_html, "unique body paragraph"
+    refute_includes article.body_html, "td-post-featured-image"
   end
 
   test "preserves paragraph blocks when extracting body text" do

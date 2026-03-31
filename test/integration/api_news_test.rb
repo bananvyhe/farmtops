@@ -95,6 +95,40 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
     assert_equal false, json_response.dig("article", "read")
   end
 
+  test "returns a separate preview image url when listing metadata is available" do
+    @article.update!(
+      raw_payload: {
+        "source_listing_image_url" => "https://example.com/thumb.jpg"
+      }
+    )
+
+    get "/api/news/#{@article.id}"
+
+    assert_response :success
+    assert_equal "/api/news/#{@article.id}/preview_image", json_response.dig("article", "preview_image_url")
+    assert_equal "/api/news/#{@article.id}/image", json_response.dig("article", "image_url")
+  end
+
+  test "removes a duplicated leading featured image from the article body" do
+    @article.update!(
+      image_url: "https://example.com/images/hero.jpg",
+      body_html: <<~HTML
+        <div class="td-post-featured-image">
+          <img src="https://example.com/images/hero.jpg" width="1200" height="675">
+        </div>
+        <p>Main body paragraph.</p>
+      HTML
+    )
+
+    get "/api/news/#{@article.id}"
+
+    assert_response :success
+    body_html = json_response.dig("article", "body_html")
+    assert_includes body_html, "Main body paragraph."
+    refute_includes body_html, "td-post-featured-image"
+    refute_includes body_html, "hero.jpg"
+  end
+
   test "rewrites twitch embed parents to the current host" do
     @article.update!(
       body_html: <<~HTML
@@ -114,6 +148,27 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
     body_html = json_response.dig("article", "body_html")
     assert_includes body_html, "player.twitch.tv"
     assert_includes body_html, "parent=farmspot.test"
+    refute_includes body_html, "parent=massivelyop.com"
+  end
+
+  test "drops invalid twitch parent values and keeps only the request host" do
+    @article.update!(
+      body_html: <<~HTML
+        <iframe
+          src="https://player.twitch.tv/?channel=massivelyoverpowered&parent=https://massivelyop.com/news"
+          width="640"
+          height="360"
+          allowfullscreen="true"
+        ></iframe>
+      HTML
+    )
+
+    get "/api/news/#{@article.id}"
+
+    assert_response :success
+    body_html = json_response.dig("article", "body_html")
+    assert_includes body_html, "parent=farmspot.test"
+    refute_includes body_html, "parent=https://massivelyop.com/news"
     refute_includes body_html, "parent=massivelyop.com"
   end
 

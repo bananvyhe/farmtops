@@ -114,8 +114,9 @@ module Api
         title: article.title,
         preview_text: article.preview_text,
         preview_html: sanitized_news_html(article.preview_html),
+        preview_image_url: news_article_preview_image_url(article),
         body_text: article.body_text,
-        body_html: sanitized_news_html(article.body_html),
+        body_html: sanitized_news_html(news_article_body_html(article)),
         image_url: news_article_image_url(article),
         published_at: article.published_at,
         fetched_at: article.fetched_at,
@@ -232,13 +233,10 @@ module Api
       return src unless %w[player.twitch.tv www.twitch.tv twitch.tv].include?(uri.host)
 
       params = URI.decode_www_form(uri.query.to_s)
-      parents = params.select { |key, _value| key == "parent" }.map(&:last)
-      parents << request.host if request.host.present?
-
       params.reject! { |key, _value| key == "parent" }
-      parents.compact.uniq.each do |parent|
-        params << ["parent", parent]
-      end
+
+      parent = normalized_twitch_parent(request.host)
+      params << ["parent", parent] if parent.present?
 
       uri.query = params.any? ? URI.encode_www_form(params) : nil
       uri.to_s
@@ -246,10 +244,54 @@ module Api
       src
     end
 
+    def normalized_twitch_parent(host)
+      return if host.blank?
+
+      host = host.to_s.downcase.strip
+      return if host.blank?
+      return if host.include?("/") || host.include?(":") || host.include?("?") || host.include?("#")
+
+      host if host.match?(/\A[a-z0-9.-]+\z/)
+    end
+
     def news_article_image_url(article)
       return if article.image_url.blank?
 
       "/api/news/#{article.id}/image"
+    end
+
+    def news_article_preview_image_url(article)
+      return if article.image_url.blank? && article.raw_payload.to_h["source_listing_image_url"].blank?
+
+      "/api/news/#{article.id}/preview_image"
+    end
+
+    def news_article_body_html(article)
+      strip_duplicate_leading_featured_image(
+        article.body_html.to_s,
+        [article.image_url, article.raw_payload.to_h["source_listing_image_url"]]
+      )
+    end
+
+    def strip_duplicate_leading_featured_image(html, image_urls)
+      fragment = Nokogiri::HTML.fragment(html.to_s)
+      first_block = fragment.children.find { |node| node.element? }
+      return html if first_block.blank?
+
+      featured_class = first_block["class"].to_s
+      return html unless featured_class.match?(/\btd-post-featured-image\b|\b__NewsImage\b/)
+
+      first_image = first_block.at_css("img[src]") || first_block.at_css("img[data-src]")
+      return html if first_image.blank?
+
+      normalized_src = normalize_url(first_image["src"].presence || first_image["data-src"].presence, image_urls.compact.first || "")
+      comparison_urls = image_urls.compact.map { |url| normalize_url(url, normalized_src) }.compact
+      return html unless comparison_urls.include?(normalized_src)
+
+      first_block.remove
+      fragment.to_html
+    rescue StandardError
+      html
     end
 
     def news_crawl_run_payload(run)

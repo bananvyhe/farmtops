@@ -435,8 +435,8 @@ onBeforeUnmount(() => {
       >
         <div class="news-card__media">
           <img
-            v-if="article.image_url"
-            :src="article.image_url"
+            v-if="article.preview_image_url || article.image_url"
+            :src="article.preview_image_url || article.image_url"
             :alt="article.title || article.preview_text || 'news image'"
           >
           <div v-else class="news-card__placeholder">

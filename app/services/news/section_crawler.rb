@@ -261,7 +261,7 @@ module News
         preview_text: normalize_text(preview_text),
         preview_html: sanitize_news_html(rewrite_fragment_urls(candidate.preview_html.to_s.presence || fragment.to_html, candidate.url)),
         body_text: body_text.to_s.strip.presence,
-        body_html: body_html,
+        body_html: strip_duplicate_leading_featured_image(body_html, [image_url, candidate.image_url]),
         image_url: normalize_url(image_url, candidate.url),
         published_at:,
         fetched_at: Time.current,
@@ -271,6 +271,7 @@ module News
           article_url: candidate.url,
           canonical_url: candidate.url,
           source_article_id: source_article_id,
+          source_listing_image_url: candidate.image_url,
           title: title,
           preview_text: preview_text,
           preview_html: candidate.preview_html
@@ -307,7 +308,7 @@ module News
         preview_text: normalize_text(preview_text),
         preview_html: sanitize_news_html(rewrite_fragment_urls(preview_html.to_s, candidate.url)),
         body_text: body_text.to_s.strip.presence,
-        body_html: body_html,
+        body_html: strip_duplicate_leading_featured_image(body_html, [image_url, candidate.image_url]),
         image_url: better_image_url(image_url, candidate.image_url),
         published_at:,
         fetched_at: Time.current,
@@ -317,6 +318,7 @@ module News
           article_url: candidate.url,
           canonical_url: article_url,
           source_article_id: source_article_id,
+          source_listing_image_url: candidate.image_url,
           title: title,
           preview_text: preview_text,
           preview_html: preview_html
@@ -400,6 +402,27 @@ module News
 
     def build_translated_body_html(body_text, source_html:)
       News::Translation::HtmlBodyRenderer.new(source_html:).call(body_text)
+    end
+
+    def strip_duplicate_leading_featured_image(html, image_urls)
+      fragment = Nokogiri::HTML.fragment(html.to_s)
+      first_block = fragment.children.find { |node| node.element? }
+      return html if first_block.blank?
+
+      featured_class = first_block["class"].to_s
+      return html unless featured_class.match?(/\btd-post-featured-image\b|\b__NewsImage\b/)
+
+      first_image = first_block.at_css("img[src]") || first_block.at_css("img[data-src]")
+      return html if first_image.blank?
+
+      normalized_src = normalize_url(first_image["src"].presence || first_image["data-src"].presence, image_urls.compact.first || "")
+      comparison_urls = image_urls.compact.map { |url| normalize_url(url, normalized_src) }.compact
+      return html unless comparison_urls.include?(normalized_src)
+
+      first_block.remove
+      fragment.to_html
+    rescue StandardError
+      html
     end
 
     def find_existing_article(article_data)
@@ -558,10 +581,26 @@ module News
 
     def strip_article_noise(html)
       fragment = Nokogiri::HTML.fragment(html.to_s)
-      Array(config_value("article_body_exclude_selectors", "")).flat_map { |value| value.to_s.split(",") }.map(&:strip).reject(&:blank?).each do |selector|
+      article_body_exclude_selectors.each do |selector|
         fragment.css(selector).each(&:remove)
       end
       fragment.to_html
+    end
+
+    def article_body_exclude_selectors
+      selectors = Array(config_value("article_body_exclude_selectors", "")).flat_map { |value| value.to_s.split(",") }
+      selectors += massivelyop_article_body_exclude_selectors if massivelyop_source?
+      selectors.map(&:strip).reject(&:blank?).uniq
+    end
+
+    def massivelyop_article_body_exclude_selectors
+      [".td-post-content .swiper"]
+    end
+
+    def massivelyop_source?
+      URI.parse(source.base_url.to_s).host.to_s.sub(/\Awww\./, "") == "massivelyop.com"
+    rescue URI::InvalidURIError, URI::Error
+      false
     end
 
     def prioritized_image_url(document, selector_list)
