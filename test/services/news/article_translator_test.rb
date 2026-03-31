@@ -116,6 +116,36 @@ class News::ArticleTranslatorTest < ActiveSupport::TestCase
     assert_includes translated.body_html, "Тело два"
   end
 
+  test "preserves image-only blocks in translated body html" do
+    article = build_article(
+      body_html: <<~HTML
+        <p>Body one</p>
+        <p><img src="https://example.com/image.jpg" alt="Example image"></p>
+        <p>Body two</p>
+      HTML
+    )
+
+    result = News::Translation::Result.new(
+      request_id: "req-3",
+      translated_title: "Привет",
+      translated_preview_text: "Превью",
+      translated_body_text: "Тело один\n\nТело два",
+      model: "fake-translator",
+      latency_ms: 10,
+      status: "ok",
+      error: nil
+    )
+
+    translated = News::ArticleTranslator.new(
+      article:,
+      translator: FakeTranslator.new(result:)
+    ).call
+
+    assert_includes translated.body_html, "<img src=\"https://example.com/image.jpg\" alt=\"Example image\">"
+    assert_includes translated.body_html, "Тело один"
+    assert_includes translated.body_html, "Тело два"
+  end
+
   test "marks the article as failed when translation errors" do
     article = build_article
 

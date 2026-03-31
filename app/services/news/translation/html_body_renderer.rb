@@ -32,6 +32,7 @@ module News
 
       def render_node(node)
         return node.dup if node.text?
+        return node.dup if media_only_block?(node)
 
         if text_block_node?(node)
           translated_paragraph = next_translated_paragraph
@@ -60,6 +61,16 @@ module News
 
       def text_block_node?(node)
         node.matches?(TEXT_BLOCK_SELECTOR) || (node.name == "div" && node.element_children.empty? && !node.text.to_s.strip.empty?)
+      end
+
+      def media_only_block?(node)
+        return false unless node.element?
+        return true if node.matches?("figure, iframe, video, source")
+
+        return false unless node.matches?("p, li, blockquote, div")
+
+        media_children = node.css("img, figure, iframe, video, source")
+        media_children.any? && node.text.to_s.strip.blank?
       end
 
       def next_translated_paragraph
