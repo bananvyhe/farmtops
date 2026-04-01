@@ -178,7 +178,7 @@ class News::GameIdentification::RecoveryTest < ActiveSupport::TestCase
     end
   end
 
-  test "does not enqueue when another crawl run is still translating" do
+  test "still enqueues for the requested crawl run even if another crawl run is translating" do
     other_run = @section.news_crawl_runs.create!(
       news_source: @section.news_source,
       status: :running,
@@ -216,8 +216,8 @@ class News::GameIdentification::RecoveryTest < ActiveSupport::TestCase
     }) do
       result = described_class.new(lock_manager: lock_manager).call(@newer_run.id)
 
-      assert_nil captured
-      assert_equal({ cleared_lock: true, ready: false, enqueued: nil }, result)
+      assert_equal @newer_run.id, captured
+      assert_equal({ cleared_lock: true, ready: true, enqueued: true }, result)
     end
   end
 end

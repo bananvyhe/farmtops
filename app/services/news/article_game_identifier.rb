@@ -53,11 +53,17 @@ module News
     def game_for_result(identified_game_name, slug, external_game_id)
       return nil if identified_game_name.casecmp("unknown").zero?
 
-      game = Game.find_or_initialize_by(slug: slug)
-      game.name = identified_game_name if game.name.blank?
-      game.external_game_id = external_game_id if external_game_id.present?
-      game.normalized_name = normalized_name(identified_game_name) if game.respond_to?(:normalized_name)
-      game.save!
+      game = Game.find_or_match_by_identified_name!(
+        identified_game_name: identified_game_name,
+        slug: slug,
+        external_game_id: external_game_id
+      )
+
+      updates = {}
+      updates[:name] = identified_game_name if game.name.blank?
+      updates[:external_game_id] = external_game_id if external_game_id.present? && game.external_game_id.blank?
+      updates[:normalized_name] = normalized_name(identified_game_name) if game.respond_to?(:normalized_name) && game.normalized_name.blank?
+      game.update!(updates) if updates.present?
       game
     end
 

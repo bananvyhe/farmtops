@@ -50,6 +50,12 @@ class News::ArticleGameIdentifierTest < ActiveSupport::TestCase
 
   test "persists a detected game and links it to the article" do
     article = build_article
+    existing_game = Game.create!(
+      name: "Elden Ring",
+      slug: "elden-ring",
+      normalized_name: "elden ring"
+    )
+
     result = News::GameIdentification::Result.new(
       request_id: "req-1",
       article_id: article.id,
@@ -58,7 +64,7 @@ class News::ArticleGameIdentifierTest < ActiveSupport::TestCase
       confidence: 1.0,
       model: "model-path",
       external_game_id: "game-1",
-      slug: "elden-ring",
+      slug: "elden-ring-remastered",
       error: nil
     )
 
@@ -67,12 +73,14 @@ class News::ArticleGameIdentifierTest < ActiveSupport::TestCase
     article_game = article.reload.news_article_game
     assert_equal "Elden Ring", article_game.identified_game_name
     assert_equal "req-1", article_game.request_id
-    assert_equal "elden-ring", article_game.slug
+    assert_equal "elden-ring-remastered", article_game.slug
     assert_equal 1.0, article_game.confidence.to_f
     assert_equal "model-path", article_game.model
     assert_equal "game-1", article_game.external_game_id
+    assert_equal existing_game.id, article_game.game.id
     assert_equal "Elden Ring", article_game.game.name
     assert_equal "elden-ring", article_game.game.slug
+    assert_equal 1, Game.where(normalized_name: "elden ring").count
   end
 
   test "stores unknown results without creating a game relation" do

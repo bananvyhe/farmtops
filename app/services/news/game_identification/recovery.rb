@@ -10,8 +10,8 @@ module News
 
       def call(crawl_run_id = nil)
         cleared_lock = clear_stale_lock
-        crawl_run_id = ready_crawl_run_id(crawl_run_id)
-        ready = crawl_run_id.present?
+        crawl_run_id ||= pending_game_crawl_run_id
+        ready = crawl_run_id.present? && translation_pipeline_idle_for?(crawl_run_id)
         enqueued = enqueue_game_identification_job(crawl_run_id) if ready
 
         logger.info(
@@ -36,25 +36,18 @@ module News
         false
       end
 
-      def ready_crawl_run_id(crawl_run_id = nil)
-        return nil unless translation_pipeline_idle_globally?
-
-        if crawl_run_id.present? && NewsArticle.pending_game_identification_for_crawl_run(crawl_run_id).exists?
-          return crawl_run_id
-        end
-
-        pending_game_crawl_run_id
-      end
-
       def pending_game_crawl_run_id
         NewsArticle.pending_game_identification
           .where.not(news_crawl_run_id: nil)
           .order(news_crawl_run_id: :desc, translated_at: :desc, id: :desc)
-          .pick(:news_crawl_run_id)
+          .pluck(:news_crawl_run_id)
+          .uniq
+          .find { |run_id| translation_pipeline_idle_for?(run_id) }
       end
 
-      def translation_pipeline_idle_globally?
-        NewsArticle.pending_translation.blank? && NewsArticle.translating.blank?
+      def translation_pipeline_idle_for?(crawl_run_id)
+        NewsArticle.pending_translation_for_crawl_run(crawl_run_id).blank? &&
+          NewsArticle.translating_for_crawl_run(crawl_run_id).blank?
       end
 
       def enqueue_game_identification_job(crawl_run_id)

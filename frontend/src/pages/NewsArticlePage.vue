@@ -58,6 +58,11 @@ function syncGameBookmarkInArticle(bookmarked) {
   newsUi.updateGameBookmark(article.value.game.id, bookmarked)
 }
 
+function gameToggleLabel(game) {
+  if (!game) return ""
+  return `${game.name} · ${game.bookmarked ? "Выкл" : "Вкл"}`
+}
+
 async function toggleGameBookmark() {
   if (!article.value?.game) return
 
@@ -129,7 +134,7 @@ onMounted(() => {
             class="news-article-game"
             @click.stop="toggleGameBookmark"
           >
-            {{ article.game.name }}
+            {{ gameToggleLabel(article.game) }}
           </v-chip>
           <span>{{ article.source_name }}</span>
           <span>{{ article.section_name }}</span>

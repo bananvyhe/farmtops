@@ -259,6 +259,11 @@ function syncGameBookmarkInArticles(gameId, bookmarked) {
   saveFeedSnapshot()
 }
 
+function gameToggleLabel(game) {
+  if (!game) return ""
+  return `${game.name} · ${game.bookmarked ? "Выкл" : "Вкл"}`
+}
+
 async function toggleGameBookmark(article) {
   const game = article.game
   if (!game) return
@@ -511,7 +516,7 @@ onBeforeUnmount(() => {
               class="news-card__game-chip"
               @click.stop="toggleGameBookmark(article)"
             >
-              {{ article.game.name }}
+              {{ gameToggleLabel(article.game) }}
             </v-chip>
             <v-chip size="small" variant="flat" color="primary">{{ article.source_name }}</v-chip>
             <v-chip size="small" variant="outlined">{{ article.section_name }}</v-chip>

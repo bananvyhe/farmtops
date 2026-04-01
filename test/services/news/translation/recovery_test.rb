@@ -27,6 +27,12 @@ class News::Translation::RecoveryTest < ActiveSupport::TestCase
       url: "https://example.com/news",
       active: true
     )
+    @crawl_run = @section.news_crawl_runs.create!(
+      news_source: source,
+      status: :succeeded,
+      started_at: 4.hours.ago,
+      finished_at: 3.hours.ago
+    )
 
     @recent_failed = build_article(
       source:,
@@ -68,12 +74,12 @@ class News::Translation::RecoveryTest < ActiveSupport::TestCase
     lock_manager = FakeLockManager.new
     enqueued = []
 
-    NewsTranslatePendingArticlesJob.stub(:perform_async, -> { enqueued << true; "jid-1" }) do
-      result = News::Translation::Recovery.new(lock_manager:, failure_window: 24.hours).call
+    NewsTranslatePendingArticlesJob.stub(:perform_async, ->(crawl_run_id = nil) { enqueued << crawl_run_id; "jid-1" }) do
+      result = News::Translation::Recovery.new(lock_manager:, failure_window: 24.hours).call(@crawl_run.id)
 
       assert_equal true, result[:cleared_lock]
       assert_equal 2, result[:reset_recent_failed]
-      assert_equal 1, enqueued.size
+      assert_equal [@crawl_run.id], enqueued
     end
 
     assert lock_manager.cleared
@@ -101,6 +107,7 @@ class News::Translation::RecoveryTest < ActiveSupport::TestCase
       body_text: "Body one\n\nBody two",
       body_html: "<p>Body one</p><p>Body two</p>",
       image_url: "https://example.com/image.jpg",
+      news_crawl_run: @crawl_run,
       fetched_at: created_at,
       created_at: created_at,
       updated_at: created_at,

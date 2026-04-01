@@ -12,17 +12,19 @@ module News
         @failure_window = failure_window
       end
 
-      def call
+      def call(crawl_run_id = nil)
         cleared_lock = clear_stale_lock
         reset_count = reset_stalled_articles
-        enqueued = enqueue_translation_job if pending_articles_exist?
+        crawl_run_id ||= pending_translation_crawl_run_id
+        enqueued = enqueue_translation_job(crawl_run_id) if crawl_run_id.present? && pending_articles_exist_for?(crawl_run_id)
 
         logger.info(
-          "[News::Translation::Recovery] cleared_lock=#{cleared_lock} reset_recent_failed=#{reset_count} enqueued=#{enqueued}"
+          "[News::Translation::Recovery] cleared_lock=#{cleared_lock} crawl_run_id=#{crawl_run_id.inspect} reset_recent_failed=#{reset_count} enqueued=#{enqueued}"
         )
 
         {
           cleared_lock: cleared_lock,
+          crawl_run_id: crawl_run_id,
           reset_recent_failed: reset_count,
           enqueued: enqueued
         }
@@ -63,12 +65,19 @@ module News
         failed_count + translating_count
       end
 
-      def pending_articles_exist?
-        NewsArticle.pending_translation.exists?
+      def pending_translation_crawl_run_id
+        NewsArticle.pending_translation
+          .where.not(news_crawl_run_id: nil)
+          .order(news_crawl_run_id: :desc, created_at: :desc, id: :desc)
+          .pick(:news_crawl_run_id)
       end
 
-      def enqueue_translation_job
-        NewsTranslatePendingArticlesJob.perform_async
+      def pending_articles_exist_for?(crawl_run_id)
+        NewsArticle.pending_translation_for_crawl_run(crawl_run_id).exists?
+      end
+
+      def enqueue_translation_job(crawl_run_id)
+        NewsTranslatePendingArticlesJob.perform_async(crawl_run_id)
         true
       rescue StandardError => e
         logger.warn("[News::Translation::Recovery] failed to enqueue translation job: #{e.class} #{e.message}")

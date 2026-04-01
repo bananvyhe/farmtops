@@ -141,8 +141,8 @@ class NewsTranslateArticleJobTest < ActiveSupport::TestCase
     lock_manager = FakeLockManager.new
     recovery = Object.new
     recovery_called = false
-    recovery.define_singleton_method(:call) do |crawl_run_id|
-      assert_equal @crawl_run.id, crawl_run_id
+    recovery.define_singleton_method(:call) do |*args|
+      assert_empty args
       recovery_called = true
       { cleared_lock: true, enqueued: true }
     end

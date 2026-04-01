@@ -51,7 +51,7 @@ class NewsTranslateArticleJob
     else
       lock_manager.release(lock_token)
       begin
-        News::GameIdentification::Recovery.new.call(crawl_run_id)
+        News::GameIdentification::Recovery.new.call
       rescue StandardError => e
         Rails.logger.warn("[NewsTranslateArticleJob] failed to enqueue game identification recovery: #{e.class} #{e.message}")
       end
