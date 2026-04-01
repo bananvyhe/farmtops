@@ -34,9 +34,17 @@ class NewsTranslatePendingArticlesJobTest < ActiveSupport::TestCase
       active: true
     )
 
+    @crawl_run = @section.news_crawl_runs.create!(
+      news_source: source,
+      status: :succeeded,
+      started_at: 1.hour.ago,
+      finished_at: 30.minutes.ago
+    )
+
     @first_article = @section.news_articles.create!(
       news_source: source,
       news_section: @section,
+      news_crawl_run: @crawl_run,
       source_article_id: "article-1",
       canonical_url: "https://example.com/news/1",
       title: "Article 1",
@@ -60,12 +68,12 @@ class NewsTranslatePendingArticlesJobTest < ActiveSupport::TestCase
     captured = nil
 
     News::Translation::LockManager.stub(:new, lock_manager) do
-      NewsTranslateArticleJob.stub(:perform_async, ->(article_id, token) { captured = [article_id, token]; "jid-1" }) do
-        NewsTranslatePendingArticlesJob.new.perform
+      NewsTranslateArticleJob.stub(:perform_async, ->(article_id, token, crawl_run_id = nil) { captured = [article_id, token, crawl_run_id]; "jid-1" }) do
+        NewsTranslatePendingArticlesJob.new.perform(@crawl_run.id)
       end
     end
 
-    assert_equal [@first_article.id, "lock-token"], captured
+    assert_equal [@first_article.id, "lock-token", @crawl_run.id], captured
     refute lock_manager.released
   end
 
@@ -75,10 +83,52 @@ class NewsTranslatePendingArticlesJobTest < ActiveSupport::TestCase
 
     News::Translation::LockManager.stub(:new, lock_manager) do
       NewsTranslateArticleJob.stub(:perform_async, ->(*_) { flunk("should not enqueue") }) do
-        NewsTranslatePendingArticlesJob.new.perform
+        NewsTranslatePendingArticlesJob.new.perform(@crawl_run.id)
       end
     end
 
     assert lock_manager.released
+  end
+
+  test "chooses the latest crawl run when no crawl run is provided" do
+    newer_run = @section.news_crawl_runs.create!(
+      news_source: @section.news_source,
+      status: :succeeded,
+      started_at: 5.minutes.ago,
+      finished_at: 1.minute.ago
+    )
+
+    newer_article = @section.news_articles.create!(
+      news_source: @section.news_source,
+      news_section: @section,
+      news_crawl_run: newer_run,
+      source_article_id: "article-2",
+      canonical_url: "https://example.com/news/2",
+      title: "Article 2",
+      preview_text: "Preview 2",
+      body_text: "Body 2",
+      body_html: "<p>Body 2</p>",
+      fetched_at: Time.current,
+      content_hash: "hash-2",
+      raw_payload: {},
+      source_title: "Article 2",
+      source_preview_text: "Preview 2",
+      source_body_text: "Body 2",
+      translation_status: :pending,
+      translation_target_locale: "ru",
+      translation_source_locale: "en"
+    )
+
+    lock_manager = FakeLockManager.new
+    captured = nil
+
+    News::Translation::LockManager.stub(:new, lock_manager) do
+      NewsTranslateArticleJob.stub(:perform_async, ->(article_id, token, crawl_run_id = nil) { captured = [article_id, token, crawl_run_id]; "jid-1" }) do
+        NewsTranslatePendingArticlesJob.new.perform
+      end
+    end
+
+    assert_equal [newer_article.id, "lock-token", newer_run.id], captured
+    refute lock_manager.released
   end
 end

@@ -8,7 +8,6 @@ module News
     Error = Class.new(StandardError)
 
     class Client
-      DEFAULT_PATH = "/identify/game"
       DEFAULT_BASE_URL = "http://127.0.0.1:19192"
       DEFAULT_TASK = "Identify the game mentioned in the article body and return only the English title or unknown."
 
@@ -24,7 +23,7 @@ module News
 
       def identify_game(request_id: SecureRandom.uuid, article_id:, body_text:, task: DEFAULT_TASK)
         response = post_json(
-          DEFAULT_PATH,
+          game_identification_path,
           {
             request_id: request_id,
             article_id: article_id,
@@ -51,6 +50,10 @@ module News
       private
 
       attr_reader :base_url, :token, :open_timeout, :read_timeout
+
+      def game_identification_path
+        RuntimeConfig.env_or_credential("NEWS_GAME_ID_PATH", :game_identification, :path, default: "/identify/game")
+      end
 
       def game_identification_base_url
         if Rails.env.development?
@@ -91,6 +94,8 @@ module News
           request["Content-Type"] = "application/json"
           request["Accept"] = "application/json"
           request["X-Game-Id-Token"] = token if token.present?
+          request["X-Translation-Token"] = token if token.present?
+          request["Authorization"] = "Bearer #{token}" if token.present?
           request.body = JSON.generate(payload)
           http.request(request)
         end

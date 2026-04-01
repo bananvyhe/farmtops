@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_03_31_123000) do
+ActiveRecord::Schema[8.0].define(version: 2026_04_01_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -101,7 +101,9 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_31_123000) do
     t.datetime "translation_started_at"
     t.string "translation_request_id"
     t.integer "translation_attempts", default: 0, null: false
+    t.bigint "news_crawl_run_id"
     t.index ["canonical_url"], name: "index_news_articles_on_canonical_url"
+    t.index ["news_crawl_run_id"], name: "index_news_articles_on_news_crawl_run_id"
     t.index ["news_section_id"], name: "index_news_articles_on_news_section_id"
     t.index ["news_source_id", "content_hash"], name: "index_news_articles_on_news_source_id_and_content_hash", unique: true
     t.index ["news_source_id", "source_article_id"], name: "index_news_articles_on_news_source_id_and_source_article_id", unique: true, where: "(source_article_id IS NOT NULL)"
@@ -226,6 +228,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_31_123000) do
   add_foreign_key "news_article_games", "news_articles"
   add_foreign_key "news_article_reads", "news_articles"
   add_foreign_key "news_article_reads", "users"
+  add_foreign_key "news_articles", "news_crawl_runs"
   add_foreign_key "news_articles", "news_sections"
   add_foreign_key "news_articles", "news_sources"
   add_foreign_key "news_crawl_runs", "news_sections"

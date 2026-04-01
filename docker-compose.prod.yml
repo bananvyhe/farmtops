@@ -49,6 +49,7 @@ services:
       PGDATABASE: ${POSTGRES_DB:-farmspot_production}
       REDIS_URL: redis://redis:6379/0
       NEWS_TRANSLATOR_BASE_URL: ${NEWS_TRANSLATOR_BASE_URL:-http://host.docker.internal:19191}
+      NEWS_GAME_ID_BASE_URL: ${NEWS_GAME_ID_BASE_URL:-http://host.docker.internal:19192}
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,6 +79,7 @@ services:
       PGDATABASE: ${POSTGRES_DB:-farmspot_production}
       REDIS_URL: redis://redis:6379/0
       NEWS_TRANSLATOR_BASE_URL: ${NEWS_TRANSLATOR_BASE_URL:-http://host.docker.internal:19191}
+      NEWS_GAME_ID_BASE_URL: ${NEWS_GAME_ID_BASE_URL:-http://host.docker.internal:19192}
     depends_on:
       postgres:
         condition: service_healthy

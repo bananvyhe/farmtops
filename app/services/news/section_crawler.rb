@@ -16,7 +16,7 @@ module News
 
     def initialize(section:, client: nil, sleeper: PoliteSleeper.new, logger: Rails.logger,
       max_articles: DEFAULT_MAX_ARTICLES, max_pages: DEFAULT_MAX_PAGES, max_retries: DEFAULT_MAX_RETRIES,
-      translator: nil, source_lang: DEFAULT_SOURCE_LANG, target_lang: DEFAULT_TARGET_LANG)
+      translator: nil, source_lang: DEFAULT_SOURCE_LANG, target_lang: DEFAULT_TARGET_LANG, crawl_run: nil)
       @section = section
       @source = section.news_source
       @client = client || HttpClient.new(
@@ -31,6 +31,7 @@ module News
       @translator = translator
       @source_lang = source_lang
       @target_lang = target_lang
+      @crawl_run = crawl_run
     end
 
     def call
@@ -73,7 +74,7 @@ module News
     private
 
     attr_reader :section, :source, :client, :sleeper, :logger, :max_articles, :max_pages, :max_retries,
-      :translator, :source_lang, :target_lang
+      :translator, :source_lang, :target_lang, :crawl_run
 
     Candidate = Struct.new(:url, :title, :preview_text, :preview_html, :image_url, :source_article_id, :raw_payload, keyword_init: true)
 
@@ -219,6 +220,7 @@ module News
         source_title: article_data[:title],
         source_preview_text: article_data[:preview_text],
         source_body_text: article_data[:body_text],
+        news_crawl_run: crawl_run,
         translated_at: nil,
         translation_model: nil,
         translation_status: :pending,
@@ -256,6 +258,7 @@ module News
       {
         news_source: source,
         news_section: section,
+        news_crawl_run: crawl_run,
         source_article_id:,
         canonical_url: candidate.url,
         title: normalize_text(title),
@@ -303,6 +306,7 @@ module News
       {
         news_source: source,
         news_section: section,
+        news_crawl_run: crawl_run,
         source_article_id:,
         canonical_url: article_url,
         title: normalize_text(title),
@@ -361,6 +365,7 @@ module News
         source_title: article_data[:title],
         source_preview_text: article_data[:preview_text],
         source_body_text: article_data[:body_text],
+        news_crawl_run: crawl_run,
         translated_at: Time.current,
         translation_model: translated.model.presence,
         translation_target_locale: target_lang,
@@ -383,6 +388,7 @@ module News
         source_title: article_data[:title],
         source_preview_text: article_data[:preview_text],
         source_body_text: article_data[:body_text],
+        news_crawl_run: crawl_run,
         translated_at: nil,
         translation_model: nil,
         translation_target_locale: target_lang,

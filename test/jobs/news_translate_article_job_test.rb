@@ -68,9 +68,17 @@ class NewsTranslateArticleJobTest < ActiveSupport::TestCase
       active: true
     )
 
+    @crawl_run = @section.news_crawl_runs.create!(
+      news_source: source,
+      status: :succeeded,
+      started_at: 1.hour.ago,
+      finished_at: 30.minutes.ago
+    )
+
     @first_article = @section.news_articles.create!(
       news_source: source,
       news_section: @section,
+      news_crawl_run: @crawl_run,
       source_article_id: "article-1",
       canonical_url: "https://example.com/news/1",
       title: "Article 1",
@@ -91,6 +99,7 @@ class NewsTranslateArticleJobTest < ActiveSupport::TestCase
     @second_article = @section.news_articles.create!(
       news_source: source,
       news_section: @section,
+      news_crawl_run: @crawl_run,
       source_article_id: "article-2",
       canonical_url: "https://example.com/news/2",
       title: "Article 2",
@@ -115,13 +124,13 @@ class NewsTranslateArticleJobTest < ActiveSupport::TestCase
 
     with_stubbed_constant(News::Translation::LockManager, :new, -> { lock_manager }) do
       with_stubbed_constant(News::ArticleTranslator, :new, ->(article:) { FakeTranslator.new(article) }) do
-        with_stubbed_constant(NewsTranslateArticleJob, :perform_async, ->(article_id, token) { captured = [article_id, token]; "jid-1" }) do
+        with_stubbed_constant(NewsTranslateArticleJob, :perform_async, ->(article_id, token, crawl_run_id = nil) { captured = [article_id, token, crawl_run_id]; "jid-1" }) do
           NewsTranslateArticleJob.new.perform(@first_article.id, "lock-token")
         end
       end
     end
 
-    assert_equal [@second_article.id, "lock-token"], captured
+    assert_equal [@second_article.id, "lock-token", @crawl_run.id], captured
     assert_equal "translated", @first_article.reload.translation_status
     assert_equal "fake-translator", @first_article.reload.translation_model
     assert_predicate @first_article.reload.translation_request_id, :present?
@@ -132,7 +141,8 @@ class NewsTranslateArticleJobTest < ActiveSupport::TestCase
     lock_manager = FakeLockManager.new
     recovery = Object.new
     recovery_called = false
-    recovery.define_singleton_method(:call) do
+    recovery.define_singleton_method(:call) do |crawl_run_id|
+      assert_equal @crawl_run.id, crawl_run_id
       recovery_called = true
       { cleared_lock: true, enqueued: true }
     end
@@ -142,7 +152,7 @@ class NewsTranslateArticleJobTest < ActiveSupport::TestCase
     with_stubbed_constant(News::Translation::LockManager, :new, -> { lock_manager }) do
       with_stubbed_constant(News::ArticleTranslator, :new, ->(article:) { FakeTranslator.new(article) }) do
         with_stubbed_constant(News::GameIdentification::Recovery, :new, -> { recovery }) do
-          NewsTranslateArticleJob.new.perform(@second_article.id, "lock-token")
+          NewsTranslateArticleJob.new.perform(@second_article.id, "lock-token", @crawl_run.id)
         end
       end
     end

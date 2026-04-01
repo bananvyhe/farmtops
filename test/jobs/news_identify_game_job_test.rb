@@ -1,17 +1,20 @@
 require "test_helper"
 
-class NewsIdentifyPendingGamesJobTest < ActiveSupport::TestCase
+class NewsIdentifyGameJobTest < ActiveSupport::TestCase
   class FakeLockManager
     attr_reader :released
 
-    def initialize(token: "lock-token", acquired: true)
+    def initialize(token: "lock-token")
       @token = token
-      @acquired = acquired
       @released = false
     end
 
-    def acquire
-      @acquired ? @token : nil
+    def current_token
+      @token
+    end
+
+    def refresh(_token)
+      true
     end
 
     def release(_token)
@@ -51,7 +54,7 @@ class NewsIdentifyPendingGamesJobTest < ActiveSupport::TestCase
       finished_at: 30.minutes.ago
     )
 
-    @first_article = @section.news_articles.create!(
+    @article = @section.news_articles.create!(
       news_source: source,
       news_section: @section,
       news_crawl_run: @crawl_run,
@@ -71,37 +74,30 @@ class NewsIdentifyPendingGamesJobTest < ActiveSupport::TestCase
       translation_target_locale: "ru",
       translation_source_locale: "en"
     )
+
+    NewsArticleGame.create!(
+      news_article: @article,
+      request_id: "request-1",
+      identified_game_name: "Example Game",
+      slug: "example-game",
+      confidence: 1.0,
+      model: "fake",
+      raw_response: {}
+    )
   end
 
-  test "enqueues the first translated article missing a game and keeps the chain lock" do
-    lock_manager = FakeLockManager.new
-    captured = nil
-
-    with_stubbed_constant(News::GameIdentification::LockManager, :new, -> { lock_manager }) do
-      with_stubbed_constant(NewsIdentifyGameJob, :perform_async, ->(article_id, token, crawl_run_id = nil) {
-        captured = [article_id, token, crawl_run_id]
-        "jid-1"
-      }) do
-        NewsIdentifyPendingGamesJob.new.perform
-      end
-    end
-
-    assert_equal [@first_article.id, "lock-token", nil], captured
-    refute lock_manager.released
-  end
-
-  test "scopes to the requested crawl run and ignores older pending games" do
-    old_run = @section.news_crawl_runs.create!(
+  test "releases the lock instead of jumping to a game from another crawl run" do
+    other_run = @section.news_crawl_runs.create!(
       news_source: @section.news_source,
       status: :succeeded,
       started_at: 2.hours.ago,
       finished_at: 90.minutes.ago
     )
 
-    old_article = @section.news_articles.create!(
+    @section.news_articles.create!(
       news_source: @section.news_source,
       news_section: @section,
-      news_crawl_run: old_run,
+      news_crawl_run: other_run,
       source_article_id: "article-old",
       canonical_url: "https://example.com/news/old",
       title: "Old Article",
@@ -120,32 +116,33 @@ class NewsIdentifyPendingGamesJobTest < ActiveSupport::TestCase
     )
 
     lock_manager = FakeLockManager.new
-    captured = nil
 
     with_stubbed_constant(News::GameIdentification::LockManager, :new, -> { lock_manager }) do
-      with_stubbed_constant(NewsIdentifyGameJob, :perform_async, ->(article_id, token, crawl_run_id) {
-        captured = [article_id, token, crawl_run_id]
-        "jid-1"
-      }) do
-        NewsIdentifyPendingGamesJob.new.perform(@crawl_run.id)
+      with_stubbed_constant(NewsIdentifyGameJob, :perform_async, ->(*_) { flunk("should not enqueue another article") }) do
+        NewsIdentifyGameJob.new.perform(@article.id, "lock-token", @crawl_run.id)
       end
     end
 
-    assert_equal [@first_article.id, "lock-token", @crawl_run.id], captured
-    refute_equal old_article.id, captured.first
-    refute lock_manager.released
+    assert lock_manager.released
   end
 
-  test "releases the lock when there is nothing to process" do
-    @section.news_articles.delete_all
+  test "recovery is triggered when the crawl run is drained" do
     lock_manager = FakeLockManager.new
+    recovery = Object.new
+    recovery_called = false
+    recovery.define_singleton_method(:call) do |*args|
+      assert_empty args
+      recovery_called = true
+      { cleared_lock: true, enqueued: true }
+    end
 
     with_stubbed_constant(News::GameIdentification::LockManager, :new, -> { lock_manager }) do
-      with_stubbed_constant(NewsIdentifyGameJob, :perform_async, ->(*_) { flunk("should not enqueue") }) do
-        NewsIdentifyPendingGamesJob.new.perform
+      with_stubbed_constant(News::GameIdentification::Recovery, :new, -> { recovery }) do
+        NewsIdentifyGameJob.new.perform(@article.id, "lock-token", @crawl_run.id)
       end
     end
 
+    assert recovery_called
     assert lock_manager.released
   end
 end

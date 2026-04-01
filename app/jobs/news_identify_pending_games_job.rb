@@ -1,17 +1,17 @@
 class NewsIdentifyPendingGamesJob
   include Sidekiq::Job
 
-  def perform
+  def perform(crawl_run_id = nil)
     token = lock_manager.acquire
     return unless token
 
-    article = next_pending_article
+    article = next_pending_article(crawl_run_id)
     if article.blank?
       lock_manager.release(token)
       return
     end
 
-    NewsIdentifyGameJob.perform_async(article.id, token)
+    NewsIdentifyGameJob.perform_async(article.id, token, crawl_run_id)
   rescue StandardError => e
     lock_manager.release(token) if token.present?
     raise e
@@ -19,8 +19,14 @@ class NewsIdentifyPendingGamesJob
 
   private
 
-  def next_pending_article
-    NewsArticle.pending_game_identification.order(:translated_at, :id).first
+  def next_pending_article(crawl_run_id = nil)
+    scope = if crawl_run_id.present?
+      NewsArticle.pending_game_identification_for_crawl_run(crawl_run_id)
+    else
+      NewsArticle.pending_game_identification
+    end
+
+    scope.order(:translated_at, :id).first
   end
 
   def lock_manager

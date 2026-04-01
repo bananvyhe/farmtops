@@ -32,6 +32,9 @@ class News::GameIdentificationClientTest < ActiveSupport::TestCase
     fake_http = Object.new
     fake_http.define_singleton_method(:request) do |request|
       captured_payload = JSON.parse(request.body)
+      assert_equal "secret", request["X-Game-Id-Token"]
+      assert_equal "secret", request["X-Translation-Token"]
+      assert_equal "Bearer secret", request["Authorization"]
       response
     end
 

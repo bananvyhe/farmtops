@@ -3,10 +3,11 @@ require "securerandom"
 class NewsTranslateArticleJob
   include Sidekiq::Job
 
-  def perform(article_id, lock_token)
+  def perform(article_id, lock_token, crawl_run_id = nil)
     begin
       article = NewsArticle.find_by(id: article_id)
-      return advance_chain(lock_token, next_pending_article_id) if article.blank?
+      crawl_run_id ||= article&.news_crawl_run_id
+      return advance_chain(lock_token, next_pending_article_id(crawl_run_id), crawl_run_id) if article.blank?
 
       next_article_id = nil
       should_advance = false
@@ -26,12 +27,12 @@ class NewsTranslateArticleJob
           )
 
           News::ArticleTranslator.new(article: article).call(request_id: request_id)
-          next_article_id = next_pending_article_id
+          next_article_id = next_pending_article_id(crawl_run_id)
           should_advance = true
         end
       end
-      next_article_id ||= next_pending_article_id if should_advance
-      advance_chain(lock_token, next_article_id) if should_advance
+      next_article_id ||= next_pending_article_id(crawl_run_id) if should_advance
+      advance_chain(lock_token, next_article_id, crawl_run_id) if should_advance
     rescue StandardError => e
       Rails.logger.warn("[NewsTranslateArticleJob] failed for #{article_id}: #{e.class} #{e.message}")
       raise
@@ -42,23 +43,32 @@ class NewsTranslateArticleJob
 
   private
 
-  def advance_chain(lock_token, next_article_id = nil)
+  def advance_chain(lock_token, next_article_id = nil, crawl_run_id = nil)
     return unless lock_held_by_chain?(lock_token)
 
     if next_article_id.present?
-      NewsTranslateArticleJob.perform_async(next_article_id, lock_token)
+      NewsTranslateArticleJob.perform_async(next_article_id, lock_token, crawl_run_id)
     else
       lock_manager.release(lock_token)
       begin
-        News::GameIdentification::Recovery.new.call
+        News::GameIdentification::Recovery.new.call(crawl_run_id)
       rescue StandardError => e
         Rails.logger.warn("[NewsTranslateArticleJob] failed to enqueue game identification recovery: #{e.class} #{e.message}")
       end
     end
   end
 
-  def next_pending_article_id
-    NewsArticle.pending_translation.order(:created_at, :id).pick(:id)
+  def next_pending_article_id(crawl_run_id = nil)
+    scope = if crawl_run_id.present?
+      NewsArticle.pending_translation_for_crawl_run(crawl_run_id)
+    else
+      latest_crawl_run_id = NewsArticle.latest_pending_translation_crawl_run_id
+      return nil if latest_crawl_run_id.blank?
+
+      NewsArticle.pending_translation_for_crawl_run(latest_crawl_run_id)
+    end
+
+    scope.order(:created_at, :id).pick(:id)
   end
 
   def lock_held_by_chain?(lock_token)
