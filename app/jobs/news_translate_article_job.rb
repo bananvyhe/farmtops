@@ -11,6 +11,7 @@ class NewsTranslateArticleJob
 
       next_article_id = nil
       should_advance = false
+      request_id = nil
       article.with_lock do
         if article.translated?
           should_advance = true
@@ -25,11 +26,13 @@ class NewsTranslateArticleJob
             translation_request_id: request_id,
             translation_attempts: article.translation_attempts.to_i + 1
           )
-
-          News::ArticleTranslator.new(article: article).call(request_id: request_id)
-          next_article_id = next_pending_article_id(crawl_run_id)
           should_advance = true
         end
+      end
+
+      if should_advance && request_id.present? && article.translating?
+        News::ArticleTranslator.new(article: article).call(request_id: request_id)
+        next_article_id = next_pending_article_id(crawl_run_id)
       end
       next_article_id ||= next_pending_article_id(crawl_run_id) if should_advance
       advance_chain(lock_token, next_article_id, crawl_run_id) if should_advance

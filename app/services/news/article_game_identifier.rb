@@ -15,6 +15,8 @@ module News
       result = client.identify_game(
         request_id: request_id,
         article_id: article.id,
+        title: source_title,
+        preview_text: source_preview_text,
         body_text: source_body_text
       )
       apply_result!(result)
@@ -30,6 +32,14 @@ module News
 
     def source_body_text
       article.source_body_text.presence || article.body_text.to_s
+    end
+
+    def source_title
+      article.source_title.presence || article.title.to_s
+    end
+
+    def source_preview_text
+      article.source_preview_text.presence || article.preview_text.to_s
     end
 
     def apply_result!(result)

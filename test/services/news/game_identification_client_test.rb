@@ -12,7 +12,7 @@ class News::GameIdentificationClientTest < ActiveSupport::TestCase
     end
   end
 
-  test "client sends article id body text and task to the identifier" do
+  test "client sends article id title preview text body text and task to the identifier" do
     captured_payload = nil
     response = Net::HTTPOK.new("1.1", "200", "OK")
     response.define_singleton_method(:body) do
@@ -49,6 +49,8 @@ class News::GameIdentificationClientTest < ActiveSupport::TestCase
       client.identify_game(
         request_id: "req-1",
         article_id: 987,
+        title: "Elden Ring launches expansion",
+        preview_text: "A new expansion arrives.",
         body_text: "The article discusses Elden Ring.",
         task: "Identify the game mentioned in the article body and return only the English title or unknown."
       )
@@ -56,6 +58,8 @@ class News::GameIdentificationClientTest < ActiveSupport::TestCase
 
     assert_equal 987, captured_payload["article_id"]
     assert_equal "req-1", captured_payload["request_id"]
+    assert_equal "Elden Ring launches expansion", captured_payload["title"]
+    assert_equal "A new expansion arrives.", captured_payload["preview_text"]
     assert_includes captured_payload["body_text"], "Elden Ring"
     assert_match "Identify the game", captured_payload["task"]
   end

@@ -4,9 +4,13 @@ class News::ArticleGameIdentifierTest < ActiveSupport::TestCase
   class FakeClient
     def initialize(result)
       @result = result
+      @captured = []
     end
 
-    def identify_game(**)
+    attr_reader :captured
+
+    def identify_game(**kwargs)
+      @captured << kwargs
       @result
     end
   end
@@ -68,7 +72,8 @@ class News::ArticleGameIdentifierTest < ActiveSupport::TestCase
       error: nil
     )
 
-    News::ArticleGameIdentifier.new(article: article, client: FakeClient.new(result)).call(request_id: "req-1")
+    client = FakeClient.new(result)
+    News::ArticleGameIdentifier.new(article: article, client: client).call(request_id: "req-1")
 
     article_game = article.reload.news_article_game
     assert_equal "Elden Ring", article_game.identified_game_name
@@ -81,6 +86,9 @@ class News::ArticleGameIdentifierTest < ActiveSupport::TestCase
     assert_equal "Elden Ring", article_game.game.name
     assert_equal "elden-ring", article_game.game.slug
     assert_equal 1, Game.where(normalized_name: "elden ring").count
+    assert_equal "Hello", client.captured.first[:title]
+    assert_equal "Preview", client.captured.first[:preview_text]
+    assert_equal article.body_text, client.captured.first[:body_text]
   end
 
   test "stores unknown results without creating a game relation" do
@@ -97,10 +105,13 @@ class News::ArticleGameIdentifierTest < ActiveSupport::TestCase
       error: nil
     )
 
-    News::ArticleGameIdentifier.new(article: article, client: FakeClient.new(result)).call(request_id: "req-2")
+    client = FakeClient.new(result)
+    News::ArticleGameIdentifier.new(article: article, client: client).call(request_id: "req-2")
 
     article_game = article.reload.news_article_game
     assert_equal "unknown", article_game.identified_game_name
     assert_nil article_game.game
+    assert_equal "Hello", client.captured.first[:title]
+    assert_equal "Preview", client.captured.first[:preview_text]
   end
 end

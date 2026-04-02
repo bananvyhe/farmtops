@@ -10,6 +10,7 @@ class NewsIdentifyGameJob
 
       next_article_id = nil
       should_advance = false
+      request_id = nil
       article.with_lock do
         if article.news_article_game.present?
           should_advance = true
@@ -17,10 +18,13 @@ class NewsIdentifyGameJob
           should_advance = false
         else
           request_id = SecureRandom.uuid
-          News::ArticleGameIdentifier.new(article: article).call(request_id: request_id)
-          next_article_id = next_pending_article_id(crawl_run_id)
           should_advance = true
         end
+      end
+
+      if should_advance && request_id.present? && article.news_article_game.blank?
+        News::ArticleGameIdentifier.new(article: article).call(request_id: request_id)
+        next_article_id = next_pending_article_id(crawl_run_id)
       end
       next_article_id ||= next_pending_article_id(crawl_run_id) if should_advance
       advance_chain(lock_token, next_article_id, crawl_run_id) if should_advance

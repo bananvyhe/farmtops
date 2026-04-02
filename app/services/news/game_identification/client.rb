@@ -21,12 +21,14 @@ module News
         @read_timeout = read_timeout
       end
 
-      def identify_game(request_id: SecureRandom.uuid, article_id:, body_text:, task: DEFAULT_TASK)
+      def identify_game(request_id: SecureRandom.uuid, article_id:, title: nil, preview_text: nil, body_text:, task: DEFAULT_TASK)
         response = post_json(
           game_identification_path,
           {
             request_id: request_id,
             article_id: article_id,
+            title: title.to_s,
+            preview_text: preview_text.to_s,
             body_text: body_text.to_s,
             task: task.to_s
           }.compact

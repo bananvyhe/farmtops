@@ -8,6 +8,8 @@ Rails.application.config.after_initialize do
 
   News::Translation::Recovery.new.call
   News::GameIdentification::Recovery.new.call
+  remove_cron_job("news_translate_pending_articles")
+  remove_cron_job("news_identify_pending_games")
 
   interval_minutes =
     ENV.fetch("BILLING_INTERVAL_MINUTES", Rails.env.development? ? "20" : "60").to_i
@@ -28,18 +30,9 @@ Rails.application.config.after_initialize do
       "cron" => News::Scheduler.cron_expression
     }
   )
+end
 
-  Sidekiq::Cron::Job.load_from_hash(
-    "news_translate_pending_articles" => {
-      "class" => "NewsTranslatePendingArticlesJob",
-      "cron" => "*/5 * * * *"
-    }
-  )
-
-  Sidekiq::Cron::Job.load_from_hash(
-    "news_identify_pending_games" => {
-      "class" => "NewsIdentifyPendingGamesJob",
-      "cron" => "*/5 * * * *"
-    }
-  )
+def remove_cron_job(name)
+  job = Sidekiq::Cron::Job.find(name)
+  job&.destroy
 end
