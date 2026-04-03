@@ -121,16 +121,20 @@ class NewsTranslateArticleJobTest < ActiveSupport::TestCase
   test "translates a single article and enqueues the next one" do
     lock_manager = FakeLockManager.new
     captured = nil
+    watchdog = nil
 
     with_stubbed_constant(News::Translation::LockManager, :new, -> { lock_manager }) do
       with_stubbed_constant(News::ArticleTranslator, :new, ->(article:) { FakeTranslator.new(article) }) do
         with_stubbed_constant(NewsTranslateArticleJob, :perform_async, ->(article_id, token, crawl_run_id = nil) { captured = [article_id, token, crawl_run_id]; "jid-1" }) do
-          NewsTranslateArticleJob.new.perform(@first_article.id, "lock-token")
+          with_stubbed_constant(NewsTranslatePendingArticlesJob, :perform_in, ->(delay, crawl_run_id = nil) { watchdog = [delay, crawl_run_id]; "jid-2" }) do
+            NewsTranslateArticleJob.new.perform(@first_article.id, "lock-token")
+          end
         end
       end
     end
 
     assert_equal [@second_article.id, "lock-token", @crawl_run.id], captured
+    assert_equal [1.minute, nil], watchdog
     assert_equal "translated", @first_article.reload.translation_status
     assert_equal "fake-translator", @first_article.reload.translation_model
     assert_predicate @first_article.reload.translation_request_id, :present?
@@ -151,8 +155,10 @@ class NewsTranslateArticleJobTest < ActiveSupport::TestCase
 
     with_stubbed_constant(News::Translation::LockManager, :new, -> { lock_manager }) do
       with_stubbed_constant(News::ArticleTranslator, :new, ->(article:) { FakeTranslator.new(article) }) do
-        with_stubbed_constant(News::GameIdentification::Recovery, :new, -> { recovery }) do
-          NewsTranslateArticleJob.new.perform(@second_article.id, "lock-token", @crawl_run.id)
+        with_stubbed_constant(NewsTranslatePendingArticlesJob, :perform_in, ->(*_) { "jid-2" }) do
+          with_stubbed_constant(News::GameIdentification::Recovery, :new, -> { recovery }) do
+            NewsTranslateArticleJob.new.perform(@second_article.id, "lock-token", @crawl_run.id)
+          end
         end
       end
     end

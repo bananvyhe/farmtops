@@ -12,6 +12,27 @@ else
   SERVICES=(web sidekiq frontend)
 fi
 
+needs_frontend_restart=0
+for service in "${SERVICES[@]}"; do
+  if [ "$service" = "web" ] || [ "$service" = "sidekiq" ]; then
+    needs_frontend_restart=1
+  fi
+done
+
+if [ "$needs_frontend_restart" -eq 1 ]; then
+  has_frontend=0
+  for service in "${SERVICES[@]}"; do
+    if [ "$service" = "frontend" ]; then
+      has_frontend=1
+      break
+    fi
+  done
+
+  if [ "$has_frontend" -eq 0 ]; then
+    SERVICES+=(frontend)
+  fi
+fi
+
 echo "Deploy host: $REMOTE_HOST"
 echo "Deploy path: $REMOTE_PATH"
 echo "Services: ${SERVICES[*]}"

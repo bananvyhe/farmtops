@@ -126,6 +126,39 @@ class NewsIdentifyGameJobTest < ActiveSupport::TestCase
     assert lock_manager.released
   end
 
+  test "enqueues a watchdog after game identification" do
+    lock_manager = FakeLockManager.new
+    watchdog = nil
+
+    with_stubbed_constant(News::GameIdentification::LockManager, :new, -> { lock_manager }) do
+      with_stubbed_constant(News::ArticleGameIdentifier, :new, ->(article:) do
+        Object.new.tap do |service|
+          service.define_singleton_method(:call) do |request_id:|
+            NewsArticleGame.create!(
+              news_article: article,
+              request_id: request_id,
+              identified_game_name: "Example Game",
+              slug: "example-game",
+              confidence: 1.0,
+              model: "fake",
+              raw_response: {}
+            )
+          end
+        end
+      end) do
+        with_stubbed_constant(NewsIdentifyPendingGamesJob, :perform_in, ->(delay, crawl_run_id = nil) {
+          watchdog = [delay, crawl_run_id]
+          "jid-1"
+        }) do
+          NewsIdentifyGameJob.new.perform(@article.id, "lock-token", @crawl_run.id)
+        end
+      end
+    end
+
+    assert_equal [1.minute, nil], watchdog
+    assert lock_manager.released
+  end
+
   test "recovery is triggered when the crawl run is drained" do
     lock_manager = FakeLockManager.new
     recovery = Object.new

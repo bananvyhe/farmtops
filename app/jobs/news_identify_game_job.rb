@@ -24,6 +24,7 @@ class NewsIdentifyGameJob
 
       if should_advance && request_id.present? && article.news_article_game.blank?
         News::ArticleGameIdentifier.new(article: article).call(request_id: request_id)
+        enqueue_game_identification_watchdog
         next_article_id = next_pending_article_id(crawl_run_id)
       end
       next_article_id ||= next_pending_article_id(crawl_run_id) if should_advance
@@ -51,6 +52,12 @@ class NewsIdentifyGameJob
         Rails.logger.warn("[NewsIdentifyGameJob] failed to enqueue game identification recovery: #{e.class} #{e.message}")
       end
     end
+  end
+
+  def enqueue_game_identification_watchdog
+    NewsIdentifyPendingGamesJob.perform_in(1.minute)
+  rescue StandardError => e
+    Rails.logger.warn("[NewsIdentifyGameJob] failed to enqueue game identification watchdog: #{e.class} #{e.message}")
   end
 
   def next_pending_article_id(crawl_run_id = nil)
