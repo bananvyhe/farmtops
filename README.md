@@ -1,5 +1,8 @@
 # Farmspot
 
+Карта документации с узким входом по подсистемам:
+`/Users/rufus/workspace/projects/farmspot/docs/index.md`
+
 Rails 8 приложение с:
 
 - Rails API как backend

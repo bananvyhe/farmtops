@@ -218,17 +218,9 @@ onMounted(() => {
   font-size: clamp(2rem, 4vw, 3.15rem);
   line-height: 1.02;
   letter-spacing: -0.045em;
-  color: transparent;
-  background-image: linear-gradient(
-    180deg,
-    #f2f0ed 0 50%,
-    #c9d7e6 50% 100%
-  );
-  background-size: 100% 1.02em;
-  background-repeat: repeat-y;
-  -webkit-background-clip: text;
-  background-clip: text;
+ 
 }
+
 
 .news-article-image {
   display: block;
@@ -253,8 +245,25 @@ onMounted(() => {
 
 .news-article-content :deep(p) {
   margin: 0 0 1.05rem;
+  line-height: 1.22;
 }
-
+.news-article-content :deep(h1) {
+  margin: 0 0 18px;
+  max-width: none;
+  font-size: clamp(2rem, 4vw, 2.15rem);
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+  color: transparent;
+  background-image: linear-gradient(
+    180deg,
+    #f2f0ed 0 50%,
+    #c9d7e6 50% 100%
+  );
+  background-size: 100% 1.02em;
+  background-repeat: repeat-y;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
 .news-article-content :deep(h2),
 .news-article-content :deep(h3),
 .news-article-content :deep(h4) {
