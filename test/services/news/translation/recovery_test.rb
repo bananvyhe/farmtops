@@ -14,6 +14,16 @@ class News::Translation::RecoveryTest < ActiveSupport::TestCase
     end
   end
 
+  def with_stubbed_constant(object, method_name, implementation)
+    original = object.method(method_name)
+    object.define_singleton_method(method_name, &implementation)
+    yield
+  ensure
+    object.define_singleton_method(method_name) do |*args, **kwargs, &block|
+      original.call(*args, **kwargs, &block)
+    end
+  end
+
   setup do
     source = NewsSource.create!(
       name: "Example",
@@ -49,6 +59,15 @@ class News::Translation::RecoveryTest < ActiveSupport::TestCase
       translation_status: :failed,
       translation_error: "offline"
     )
+    @transient_old_failed = build_article(
+      source:,
+      source_article_id: "article-transient-old",
+      canonical_url: "https://example.com/news/transient-old",
+      content_hash: "hash-transient-old",
+      created_at: 3.days.ago,
+      translation_status: :failed,
+      translation_error: "Translator unavailable: Failed to open TCP connection to 127.0.0.1:19191 (Connection refused - connect(2) for \"127.0.0.1\" port 19191)"
+    )
     @stalled_translating = build_article(
       source:,
       source_article_id: "article-stalled",
@@ -57,6 +76,16 @@ class News::Translation::RecoveryTest < ActiveSupport::TestCase
       created_at: 3.days.ago,
       translation_status: :translating,
       translation_started_at: 2.days.ago,
+      translation_error: "still working"
+    )
+    @recent_translating = build_article(
+      source:,
+      source_article_id: "article-recent-translating",
+      canonical_url: "https://example.com/news/recent-translating",
+      content_hash: "hash-recent-translating",
+      created_at: 45.minutes.ago,
+      translation_status: :translating,
+      translation_started_at: 30.minutes.ago,
       translation_error: "still working"
     )
     @pending = build_article(
@@ -74,11 +103,11 @@ class News::Translation::RecoveryTest < ActiveSupport::TestCase
     lock_manager = FakeLockManager.new
     enqueued = []
 
-    NewsTranslatePendingArticlesJob.stub(:perform_async, ->(crawl_run_id = nil) { enqueued << crawl_run_id; "jid-1" }) do
+    with_stubbed_constant(NewsTranslatePendingArticlesJob, :perform_async, ->(crawl_run_id = nil) { enqueued << crawl_run_id; "jid-1" }) do
       result = News::Translation::Recovery.new(lock_manager:, failure_window: 24.hours).call(@crawl_run.id)
 
       assert_equal true, result[:cleared_lock]
-      assert_equal 2, result[:reset_recent_failed]
+      assert_equal 3, result[:reset_recent_failed]
       assert_equal [@crawl_run.id], enqueued
     end
 
@@ -86,8 +115,12 @@ class News::Translation::RecoveryTest < ActiveSupport::TestCase
     assert_equal "pending", @recent_failed.reload.translation_status
     assert_nil @recent_failed.reload.translation_error
     assert_equal "failed", @old_failed.reload.translation_status
+    assert_equal "pending", @transient_old_failed.reload.translation_status
+    assert_nil @transient_old_failed.reload.translation_error
     assert_equal "pending", @stalled_translating.reload.translation_status
     assert_nil @stalled_translating.reload.translation_started_at
+    assert_equal "translating", @recent_translating.reload.translation_status
+    assert_not_nil @recent_translating.reload.translation_started_at
     assert_equal "pending", @pending.reload.translation_status
   end
 

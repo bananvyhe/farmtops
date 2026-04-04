@@ -4,7 +4,7 @@ require "nokogiri"
 module News
   module Translation
     class HtmlBodyRenderer
-      TEXT_BLOCK_SELECTOR = "p, li, blockquote, figcaption, pre, h1, h2, h3, h4, h5, h6"
+      TEXT_BLOCK_SELECTOR = "p, li, blockquote, figcaption, pre, h2, h3, h4, h5, h6"
       EMBED_SELECTOR = "iframe, video, source, object, embed, blockquote.twitter-tweet, blockquote.instagram-media"
 
       def initialize(source_html:)

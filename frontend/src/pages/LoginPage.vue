@@ -56,25 +56,23 @@ async function submit() {
 <template>
   <main class="hero">
     <section class="card intro">
-      <div class="eyebrow" > сохраните ваш прогресс</div>
- 
+      <div class="eyebrow">сохраните ваш прогресс</div>
+
       <p>
-        регистрация необходима для сохраниня аккаунта и доступа к дополнительным функциям
+        регистрация необходима для сохранения аккаунта и доступа к дополнительным функциям
       </p>
     </section>
 
     <section class="card form-card">
-        <h3>{{ mode === "login" ? "Войти" : "Создать аккаунт" }}</h3>
-      <v-tabs v-model="mode"  color="primary" grow class="mb-2">
+      <h2>{{ mode === "login" ? "Войти" : "Создать аккаунт" }}</h2>
+      <v-tabs v-model="mode" color="primary" grow class="auth-tabs">
         <v-tab value="login">Вход</v-tab>
         <v-tab value="register">Регистрация</v-tab>
       </v-tabs>
 
-    
       <p v-if="error" class="error">{{ error }}</p>
 
       <form novalidate @submit.prevent="submit">
-        <div >
         <label>
           E-mail
           <input v-model="form.email" type="text" inputmode="email" autocomplete="email" />
@@ -82,8 +80,7 @@ async function submit() {
             {{ !form.email ? "Введите e-mail" : isEmailValid ? "E-mail выглядит корректно" : "Некорректный формат e-mail" }}
           </span>
         </label>
-        </div>
-        
+
         <label>
           Пароль
           <input v-model="form.password" type="password" autocomplete="current-password" />
@@ -91,7 +88,6 @@ async function submit() {
             {{ !form.password ? "Введите пароль" : isPasswordLongEnough ? "Минимальная длина соблюдена" : "Пароль должен быть не короче 8 символов" }}
           </span>
         </label>
-        <br>
         <label v-if="mode === 'register'">
           Повторите пароль
           <input v-model="form.passwordConfirmation" type="password" autocomplete="new-password" />
@@ -105,7 +101,6 @@ async function submit() {
             }}
           </span>
         </label>
-        <br>
         <v-btn
           :disabled="loading || (mode === 'login' ? !canLogin : !canRegister)"
           color="primary"

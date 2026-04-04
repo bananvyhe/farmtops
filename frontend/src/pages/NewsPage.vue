@@ -460,14 +460,13 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="news-page">
-    <section class="news-hero">
-      <div class="news-hero__eyebrow">отслеживание проектов:</div>
-      <span class="d-flex">
-      <h1 >Сбор группы</h1></span>
+    <section class="news-hero card card--dark">
+      <div class="news-hero__eyebrow">отслеживание проектов</div>
+      <h1>Сбор группы</h1>
       <p>Далекие контуры в туманностях кажутся спящими башнями, но едва разум касается предела дозволенного — и древние пробуждаются, чтобы дать понять: в бесконечности нет места тем, кто считает себя исходной точкой.</p>
     </section>
 
-    <section class="news-filters card">
+    <section class="news-filters card card--dark">
       <div class="news-filters__grid">
         <v-select
           v-model="selectedSourceId"
@@ -494,10 +493,10 @@ onBeforeUnmount(() => {
     </section>
 
     <section v-if="loading" class="news-feed">
-      <article v-for="index in 4" :key="index" class="news-card card">
-          <v-skeleton-loader type="image, article, button" />
-        </article>
-      </section>
+      <article v-for="index in 4" :key="index" class="news-card card card--dark">
+        <v-skeleton-loader type="image, article, button" />
+      </article>
+    </section>
 
     <section v-else class="news-feed">
       <article
@@ -505,7 +504,7 @@ onBeforeUnmount(() => {
         :key="article.id"
         :ref="(element) => setArticleRef(article.id, element)"
         :data-article-id="article.id"
-        class="news-card card"
+        class="news-card card card--dark"
         :class="{ 'news-card--unread': isUnread(article) }"
       >
         <div class="news-card__media">
@@ -563,7 +562,7 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <section v-if="!loading && !articles.length" class="news-empty card">
+    <section v-if="!loading && !articles.length" class="news-empty card card--dark">
       <h2>Ничего не найдено</h2>
       <p>Попробуйте другой источник или раздел.</p>
     </section>
@@ -574,55 +573,51 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .news-page {
-  min-height: calc(100vh - 120px);
+  min-height: calc(100vh - 7.5rem);
+  display: grid;
+  gap: var(--space-m);
 }
 
 .news-hero {
-  
-  padding: 20px 22px;
-  border-left: 4px solid var(--farmspot-primary);
-  background: rgba(14, 14, 14, 0.94);
-  color: #e7e5e5;
+  display: grid;
+  gap: var(--space-xs);
+  border-inline-start: 4px solid var(--farmspot-primary);
 }
 
 .news-hero__eyebrow {
-  margin-bottom: 8px;
   text-transform: uppercase;
   letter-spacing: 0.22em;
-  font-size: 0.72rem;
-  color: #9c9ea0;
+  font-size: var(--step--2);
+  line-height: var(--leading-tight);
+  color: var(--farmspot-text-on-dark-muted);
 }
 
 .news-hero h1 {
-  
   font-size: clamp(1.9rem, 2vw, 3.2rem);
+  line-height: var(--leading-display-lg);
   letter-spacing: -0.04em;
   text-transform: uppercase;
 }
 
 .news-hero p {
-  margin: 0;
   max-width: 62ch;
-  color: #acabaa;
+  color: var(--farmspot-text-on-dark-muted);
 }
 
 .news-filters {
-  background: rgba(25, 26, 26, 0.94);
-  color: #e7e5e5;
-  margin-bottom: 11px;
-  margin-top: 11px;
+  margin-block: 0;
 }
 
 .news-filters__grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  gap: 14px;
+  gap: var(--space-s);
   align-items: center;
 }
 
 .news-feed {
   display: grid;
-  gap: 14px;
+  gap: var(--space-s);
 }
 
 .news-card {
@@ -631,9 +626,7 @@ onBeforeUnmount(() => {
   gap: 0;
   overflow: hidden;
   padding: 0;
-  background: #191a1a;
-  color: #e7e5e5;
-  border-radius: 28px;
+  border-radius: 1.75rem;
   transition:
     background-color 180ms ease,
     box-shadow 180ms ease,
@@ -654,37 +647,37 @@ onBeforeUnmount(() => {
 
 .news-card__media {
   min-height: 180px;
-  background: #252626;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .news-card__media img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  display: block;
 }
 
 .news-card__placeholder {
-  height: 100%;
   display: grid;
   place-items: center;
-  color: #9c9ea0;
+  height: 100%;
+  color: var(--farmspot-text-on-dark-muted);
   letter-spacing: 0.2em;
   font-weight: 800;
 }
 
 .news-card__body {
-  padding: 18px 18px 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-s);
+  padding-block: var(--space-m);
+  padding-inline: var(--space-m);
 }
 
 .news-card__meta {
   display: flex;
-  gap: 8px;
-  align-items: center;
   flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2xs);
 }
 
 .news-card__game-chip {
@@ -692,24 +685,27 @@ onBeforeUnmount(() => {
 }
 
 .news-card__game-count {
-  color: #d9dde2;
+  color: var(--farmspot-text-on-dark-muted);
 }
 
 .news-card__time {
-  color: #9c9ea0;
-  font-size: 0.82rem;
+  color: var(--farmspot-text-on-dark-muted);
+  font-size: var(--step--1);
+  line-height: var(--leading-tight);
 }
 
 .news-card__badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.28rem 0.72rem;
+  padding-block: 0.28rem;
+  padding-inline: 0.72rem;
   border-radius: 999px;
   background: rgba(199, 89, 35, 0.18);
   border: 1px solid rgba(199, 89, 35, 0.48);
   color: #ffceb9;
-  font-size: 0.72rem;
+  font-size: var(--step--2);
+  line-height: var(--leading-tight);
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -720,54 +716,41 @@ onBeforeUnmount(() => {
 }
 
 .news-card__title h2 {
-  margin: 0;
   font-size: clamp(1.05rem, 2vw, 1.5rem);
+  line-height: var(--leading-snug);
   letter-spacing: -0.03em;
-  line-height: 1.1;
 }
 
 .news-card__preview {
-  margin: 0;
-  color: #acabaa;
-  line-height: 1.55;
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
   overflow: hidden;
+  color: var(--farmspot-text-on-dark-muted);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-height: var(--leading-body);
 }
 
 .news-card__actions {
   display: flex;
-  align-items: center;
-  gap: 14px;
   flex-wrap: wrap;
-  margin-top: auto;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-block-start: auto;
 }
 
-.news-card__link {
-  color: #93cdfc;
-  text-decoration: none;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 0.85rem;
-}
-
+.news-card__link,
 .news-card__actions a {
-  color: #93cdfc;
+  color: var(--farmspot-link);
   text-decoration: none;
-  font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
+  font-size: var(--step--1);
+  line-height: var(--leading-tight);
 }
 
 .news-empty,
 .news-error {
-  margin-top: 16px;
-}
-
-.news-empty {
-  background: rgba(25, 26, 26, 0.94);
-  color: #e7e5e5;
+  margin-block-start: var(--space-s);
 }
 
 .news-error {
@@ -775,7 +758,7 @@ onBeforeUnmount(() => {
 }
 
 .news-sentinel {
-  min-height: 48px;
+  min-height: 3rem;
   display: flex;
   align-items: center;
 }
@@ -787,7 +770,7 @@ onBeforeUnmount(() => {
   }
 
   .news-card__media {
-    min-height: 220px;
+    min-height: 13.75rem;
   }
 }
 </style>

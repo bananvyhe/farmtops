@@ -118,7 +118,7 @@ onMounted(() => {
 
 <template>
   <main class="news-article-page">
-    <section class="news-article-shell card">
+    <section class="news-article-shell card card--dark">
       <div v-if="loading">
         <v-skeleton-loader type="article, image, paragraph" />
       </div>
@@ -169,28 +169,26 @@ onMounted(() => {
 
 <style scoped>
 .news-article-page {
-  min-height: calc(100vh - 120px);
-  margin-top: 8px;
-  padding-bottom: 40px;
+  min-height: calc(100vh - 7.5rem);
+  margin-block-start: var(--space-xs);
+  padding-block-end: var(--space-xl);
 }
 
 .news-article-shell {
-  padding: clamp(20px, 3vw, 36px);
-  background: rgba(14, 14, 14, 0.96);
-  color: #e7e5e5;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-m);
 }
 
 .news-article-back {
   display: inline-flex;
-  margin-bottom: 16px;
-  color: #93cdfc;
+  margin-block-end: var(--space-s);
+  color: var(--farmspot-link);
   text-decoration: none;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  font-size: 0.82rem;
+  font-size: var(--step--1);
+  line-height: var(--leading-tight);
   background: transparent;
   border: 0;
   padding: 0;
@@ -200,12 +198,12 @@ onMounted(() => {
 .news-article-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 12px;
-  color: #9c9ea0;
-  margin-bottom: 16px;
+  gap: var(--space-2xs) var(--space-xs);
+  color: var(--farmspot-text-on-dark-muted);
+  margin-block-end: var(--space-s);
   align-items: center;
-  font-size: 0.92rem;
-  line-height: 1.35;
+  font-size: var(--step--1);
+  line-height: var(--leading-snug);
 }
 
 .news-article-game {
@@ -213,12 +211,11 @@ onMounted(() => {
 }
 
 .news-article-title {
-  margin: 0 0 18px;
+  margin-block: 0 var(--space-s);
   max-width: none;
   font-size: clamp(2rem, 4vw, 3.15rem);
-  line-height: 1.02;
+  line-height: var(--leading-display-lg);
   letter-spacing: -0.045em;
- 
 }
 
 
@@ -227,31 +224,31 @@ onMounted(() => {
   width: 100%;
   max-height: 520px;
   object-fit: cover;
-  margin: 4px 0 8px;
-  border-radius: 20px;
+  margin-block: var(--space-3xs) var(--space-2xs);
+  border-radius: 1.25rem;
 }
 
 .news-article-content {
   max-width: 72ch;
   margin-inline: auto;
-  padding-top: 2px;
-  color: #e7e5e5;
-  line-height: 1.88;
+  padding-block-start: var(--space-3xs);
+  color: var(--farmspot-text-on-dark);
   font-size: clamp(1.02rem, 0.22vw + 1rem, 1.1rem);
+  line-height: var(--leading-body);
   overflow-wrap: anywhere;
   text-wrap: pretty;
   hyphens: auto;
 }
 
 .news-article-content :deep(p) {
-  margin: 0 0 1.05rem;
-  line-height: 1.22;
+  margin-block: 0 var(--space-s);
+  line-height: var(--leading-body);
 }
 .news-article-content :deep(h1) {
-  margin: 0 0 18px;
+  margin-block: 0 var(--space-s);
   max-width: none;
   font-size: clamp(2rem, 4vw, 2.15rem);
-  line-height: 1.02;
+  line-height: var(--leading-display);
   letter-spacing: -0.045em;
   color: transparent;
   background-image: linear-gradient(
@@ -267,36 +264,36 @@ onMounted(() => {
 .news-article-content :deep(h2),
 .news-article-content :deep(h3),
 .news-article-content :deep(h4) {
-  margin: 1.7rem 0 0.75rem;
-  line-height: 1.18;
-  color: #fff;
+  margin-block: var(--space-l) var(--space-2xs);
+  line-height: var(--leading-snug);
+  color: var(--farmspot-text-on-dark);
   text-wrap: balance;
 }
 
 .news-article-content :deep(ul),
 .news-article-content :deep(ol) {
-  margin: 0 0 1.1rem;
-  padding-left: 1.45rem;
+  margin-block: 0 var(--space-s);
+  padding-inline-start: 1.45rem;
   display: block;
 }
 
 .news-article-content :deep(li) {
-  margin: 0 0 0.75rem;
-  padding-left: 0.15rem;
+  margin-block: 0 var(--space-2xs);
+  padding-inline-start: 0.15rem;
   overflow-wrap: anywhere;
-  line-height: 1.7;
+  line-height: var(--leading-body);
 }
 
 .news-article-content :deep(li::marker) {
-  color: #93cdfc;
+  color: var(--farmspot-link);
 }
 
 .news-article-content :deep(li > p) {
-  margin: 0 0 0.7rem;
+  margin-block-end: var(--space-2xs);
 }
 
 .news-article-content :deep(li > p:last-child) {
-  margin-bottom: 0;
+  margin-block-end: 0;
 }
 
 .news-article-content :deep(li img),
@@ -308,7 +305,7 @@ onMounted(() => {
 .news-article-content :deep(li video) {
   display: block;
   width: 100%;
-  margin: 0.8rem 0 0;
+  margin-block-start: var(--space-xs);
   float: none !important;
 }
 
@@ -323,23 +320,24 @@ onMounted(() => {
 }
 
 .news-article-content :deep(li figure img) {
-  margin-top: 0;
+  margin-block-start: 0;
 }
 
 .news-article-content :deep(li a img) {
   display: block;
   width: 100%;
-  margin: 0.8rem 0 0;
+  margin-block-start: var(--space-xs);
 }
 
 .news-article-content :deep(blockquote) {
-  margin: 1.35rem 0;
-  padding: 1.05rem 1.15rem;
-  border-left: 3px solid #93cdfc;
+  margin-block: var(--space-m);
+  padding-block: var(--space-s);
+  padding-inline: var(--space-m);
+  border-inline-start: 3px solid var(--farmspot-link);
   background: rgba(255, 255, 255, 0.04);
-  border-radius: 0 16px 16px 0;
+  border-radius: 0 1rem 1rem 0;
   color: #f0eeee;
-  line-height: 1.72;
+  line-height: var(--leading-body);
 }
 
 .news-article-content :deep(img),
@@ -347,7 +345,7 @@ onMounted(() => {
 .news-article-content :deep(iframe) {
   max-width: 100%;
   height: auto;
-  margin: 1.15rem 0;
+  margin-block: var(--space-s);
 }
 
 .news-article-content :deep(iframe) {
@@ -361,43 +359,46 @@ onMounted(() => {
   width: 100%;
   overflow-x: auto;
   border-collapse: collapse;
-  margin: 1.2rem 0;
-  border-radius: 14px;
+  margin-block: var(--space-s);
+  border-radius: 0.875rem;
   background: rgba(255, 255, 255, 0.02);
 }
 
 .news-article-content :deep(th),
 .news-article-content :deep(td) {
-  padding: 0.85rem 0.95rem;
+  padding-block: var(--space-xs);
+  padding-inline: var(--space-s);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  line-height: 1.45;
+  line-height: var(--leading-body);
 }
 
 .news-article-content :deep(pre) {
   overflow-x: auto;
-  padding: 1.05rem 1.1rem;
-  margin: 1.1rem 0;
-  border-radius: 16px;
+  padding-block: var(--space-s);
+  padding-inline: var(--space-m);
+  margin-block: var(--space-s);
+  border-radius: 1rem;
   background: rgba(255, 255, 255, 0.06);
-  line-height: 1.65;
+  line-height: var(--leading-body);
 }
 
 .news-article-content :deep(code) {
-  padding: 0.15rem 0.35rem;
+  padding-block: 0.15rem;
+  padding-inline: 0.35rem;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.08);
 }
 
 .news-article-content :deep(a) {
-  color: #93cdfc;
+  color: var(--farmspot-link);
 }
 
 .news-article-content :deep(.w4pl) {
   display: grid;
-  gap: 1rem;
-  margin: 1.25rem 0;
-  padding: 1rem;
-  border-radius: 18px;
+  gap: var(--space-s);
+  margin-block: var(--space-m);
+  padding: var(--space-s);
+  border-radius: 1.125rem;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -410,9 +411,9 @@ onMounted(() => {
   display: block;
   width: 75px;
   height: 75px;
-  margin: 0 0 0.65rem;
+  margin-block-end: var(--space-2xs);
   overflow: hidden;
-  border-radius: 14px;
+  border-radius: 0.875rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -427,8 +428,8 @@ onMounted(() => {
 .news-article-content :deep(.rounduplink) {
   display: block;
   min-width: 0;
-  line-height: 1.35;
-  margin: 0 0 0.35rem;
+  line-height: var(--leading-snug);
+  margin-block-end: var(--space-3xs);
 }
 
 .news-article-content :deep(.rounduplink a) {
@@ -449,24 +450,26 @@ onMounted(() => {
 
 .news-article-links {
   max-width: 72ch;
-  margin: 22px auto 0;
+  margin-inline: auto;
+  margin-block-start: var(--space-m);
   display: flex;
   align-items: center;
-  gap: 16px 18px;
+  gap: var(--space-xs) var(--space-s);
   flex-wrap: wrap;
-  padding-top: 8px;
+  padding-block-start: var(--space-xs);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .news-article-links a {
-  color: #93cdfc;
+  color: var(--farmspot-link);
   text-decoration: none;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  font-size: 0.82rem;
+  font-size: var(--step--1);
+  line-height: var(--leading-tight);
 }
 
 .news-article-empty {
-  color: #e7e5e5;
+  color: var(--farmspot-text-on-dark);
 }
 </style>

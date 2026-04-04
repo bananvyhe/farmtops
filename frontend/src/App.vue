@@ -44,9 +44,9 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div class="app-shell py-1">
-    <header class="d-flex justify-space-between">
-      <div>
+ 
+    <header class="app-topbar  ">
+      <div class="app-brand">
         <div class="eyebrow">farmspot.ru</div>
       </div>
       <nav class="nav">
@@ -58,5 +58,5 @@ async function handleLogout() {
       </nav>
     </header>
     <RouterView />
-  </div>
+ 
 </template>

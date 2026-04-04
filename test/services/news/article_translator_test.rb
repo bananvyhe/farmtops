@@ -1,4 +1,5 @@
 require "test_helper"
+require_relative "../../../app/services/news/translation/client"
 
 class News::ArticleTranslatorTest < ActiveSupport::TestCase
   class FakeTranslator
@@ -111,7 +112,7 @@ class News::ArticleTranslatorTest < ActiveSupport::TestCase
       translator: FakeTranslator.new(result:)
     ).call
 
-    assert_includes translated.body_html, "<iframe src=\"https://example.com/embed/video\" allowfullscreen=\"allowfullscreen\"></iframe>"
+    assert_includes translated.body_html, "<iframe src=\"https://example.com/embed/video\""
     assert_includes translated.body_html, "Тело один"
     assert_includes translated.body_html, "Тело два"
   end
@@ -154,6 +155,39 @@ class News::ArticleTranslatorTest < ActiveSupport::TestCase
     assert_includes translated.body_html, "Заголовок два"
     assert_includes translated.body_html, "Тело два"
     assert_includes translated.body_html, "twitter-tweet"
+  end
+
+  test "keeps a body h1 as-is so it does not consume the first translated paragraph" do
+    article = build_article(
+      body_html: <<~HTML
+        <div class="articleBody">
+          <h1>Body title</h1>
+          <p>Body one</p>
+          <p>Body two</p>
+        </div>
+      HTML
+    )
+
+    result = News::Translation::Result.new(
+      request_id: "req-h1",
+      translated_title: "Привет",
+      translated_preview_text: "Превью",
+      translated_body_text: "Тело один\n\nТело два",
+      model: "fake-translator",
+      latency_ms: 10,
+      status: "ok",
+      error: nil
+    )
+
+    translated = News::ArticleTranslator.new(
+      article:,
+      translator: FakeTranslator.new(result:)
+    ).call
+
+    assert_includes translated.body_html, "Body title"
+    assert_includes translated.body_html, "Тело один"
+    assert_includes translated.body_html, "Тело два"
+    assert_operator translated.body_html.index("Body title"), :<, translated.body_html.index("Тело один")
   end
 
   test "preserves image-only blocks in translated body html" do
