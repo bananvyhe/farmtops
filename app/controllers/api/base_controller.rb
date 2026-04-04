@@ -102,7 +102,7 @@ module Api
       }
     end
 
-    def news_article_payload(article, read: nil, bookmarked_game_ids: nil)
+    def news_article_payload(article, read: nil, bookmarked_game_ids: nil, game_bookmark_counts: nil)
       game = article.news_article_game&.game
       {
         id: article.id,
@@ -133,18 +133,23 @@ module Api
         translation_source_locale: article.translation_source_locale,
         content_hash: article.content_hash,
         raw_payload: article.raw_payload,
-        game: game.present? ? news_game_payload(game, bookmarked: bookmarked_game_ids.nil? ? news_game_bookmarked?(game) : bookmarked_game_ids.include?(game.id)) : nil,
+        game: game.present? ? news_game_payload(
+          game,
+          bookmarked: bookmarked_game_ids.nil? ? news_game_bookmarked?(game) : bookmarked_game_ids.include?(game.id),
+          bookmarks_count: game_bookmark_counts.nil? ? news_game_bookmark_count_for(game) : game_bookmark_counts.fetch(game.id, 0)
+        ) : nil,
         read: read.nil? ? news_article_read?(article) : read
       }
     end
 
-    def news_game_payload(game, bookmarked:)
+    def news_game_payload(game, bookmarked:, bookmarks_count:)
       {
         id: game.id,
         name: game.name,
         slug: game.slug,
         external_game_id: game.external_game_id,
-        bookmarked:
+        bookmarked:,
+        bookmarks_count:
       }
     end
 
@@ -203,6 +208,10 @@ module Api
       news_game_bookmark_ids_for([game.id]).include?(game.id)
     end
 
+    def news_game_bookmark_count_for(game)
+      news_game_bookmark_counts_for([game.id]).fetch(game.id, 0)
+    end
+
     def news_game_bookmark_ids_for(game_ids)
       ids = Array(game_ids).map(&:to_i).reject(&:zero?).uniq
       return [] if ids.blank?
@@ -217,6 +226,13 @@ module Api
       end
 
       scope.pluck(:game_id)
+    end
+
+    def news_game_bookmark_counts_for(game_ids)
+      ids = Array(game_ids).map(&:to_i).reject(&:zero?).uniq
+      return {} if ids.blank?
+
+      NewsGameBookmark.where(game_id: ids).group(:game_id).count
     end
 
     def upsert_news_article_reads(article_ids)

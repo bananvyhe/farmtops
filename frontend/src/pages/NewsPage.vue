@@ -242,7 +242,7 @@ function isUnread(article) {
   return !article.read
 }
 
-function syncGameBookmarkInArticles(gameId, bookmarked) {
+function syncGameBookmarkInArticles(gameId, bookmarked, bookmarksCount) {
   articles.value = articles.value.map((article) => {
     if (article.game?.id !== gameId) return article
 
@@ -250,18 +250,31 @@ function syncGameBookmarkInArticles(gameId, bookmarked) {
       ...article,
       game: {
         ...article.game,
-        bookmarked
+        bookmarked,
+        ...(typeof bookmarksCount === "number" ? { bookmarks_count: bookmarksCount } : {})
       }
     }
   })
 
-  newsUi.updateGameBookmark(gameId, bookmarked)
+  newsUi.updateGameBookmark(gameId, bookmarked, bookmarksCount)
   saveFeedSnapshot()
 }
 
 function gameToggleLabel(game) {
   if (!game) return ""
   return `${game.name} · ${game.bookmarked ? "Выкл" : "Вкл"}`
+}
+
+function gameFollowersLabel(count) {
+  const value = Number(count ?? 0)
+  const pr = new Intl.PluralRules("ru-RU")
+  const forms = {
+    one: "следит",
+    few: "следят",
+    many: "следят",
+    other: "следят"
+  }
+  return `${value} ${forms[pr.select(value)] || forms.other}`
 }
 
 async function toggleGameBookmark(article) {
@@ -276,7 +289,7 @@ async function toggleGameBookmark(article) {
       : await api.unbookmarkNewsGame(article.id)
 
     const bookmarked = Boolean(data.game?.bookmarked ?? nextBookmarked)
-    syncGameBookmarkInArticles(game.id, bookmarked)
+    syncGameBookmarkInArticles(game.id, bookmarked, data.game?.bookmarks_count)
   } catch (err) {
     error.value = err.message
   }
@@ -518,6 +531,15 @@ onBeforeUnmount(() => {
             >
               {{ gameToggleLabel(article.game) }}
             </v-chip>
+            <v-chip
+              v-if="article.game"
+              size="small"
+              variant="tonal"
+              color="secondary"
+              class="news-card__game-count"
+            >
+              {{ gameFollowersLabel(article.game.bookmarks_count) }}
+            </v-chip>
             <v-chip size="small" variant="flat" color="primary">{{ article.source_name }}</v-chip>
             <v-chip size="small" variant="outlined">{{ article.section_name }}</v-chip>
             <span class="news-card__time">{{ formatDate(article.published_at || article.fetched_at) }}</span>
@@ -667,6 +689,10 @@ onBeforeUnmount(() => {
 
 .news-card__game-chip {
   cursor: pointer;
+}
+
+.news-card__game-count {
+  color: #d9dde2;
 }
 
 .news-card__time {

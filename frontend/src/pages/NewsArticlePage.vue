@@ -44,18 +44,19 @@ const bodyHtml = computed(() => {
   return richHtml
 })
 
-function syncGameBookmarkInArticle(bookmarked) {
+function syncGameBookmarkInArticle(bookmarked, bookmarksCount) {
   if (!article.value?.game) return
 
   article.value = {
     ...article.value,
     game: {
       ...article.value.game,
-      bookmarked
+      bookmarked,
+      ...(typeof bookmarksCount === "number" ? { bookmarks_count: bookmarksCount } : {})
     }
   }
 
-  newsUi.updateGameBookmark(article.value.game.id, bookmarked)
+  newsUi.updateGameBookmark(article.value.game.id, bookmarked, bookmarksCount)
 }
 
 function gameToggleLabel(game) {
@@ -74,7 +75,7 @@ async function toggleGameBookmark() {
       : await api.unbookmarkNewsGame(article.value.id)
 
     const bookmarked = Boolean(data.game?.bookmarked ?? nextBookmarked)
-    syncGameBookmarkInArticle(bookmarked)
+    syncGameBookmarkInArticle(bookmarked, data.game?.bookmarks_count)
   } catch (err) {
     error.value = err.message
   }

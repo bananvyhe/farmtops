@@ -11,7 +11,7 @@ export const useNewsUiStore = defineStore("newsUi", {
     clearFeedSnapshot() {
       this.feedSnapshot = null
     },
-    updateGameBookmark(gameId, bookmarked) {
+    updateGameBookmark(gameId, bookmarked, bookmarksCount) {
       if (!this.feedSnapshot?.articles?.length) return
 
       const nextArticles = this.feedSnapshot.articles.map((article) => {
@@ -21,7 +21,8 @@ export const useNewsUiStore = defineStore("newsUi", {
           ...article,
           game: {
             ...article.game,
-            bookmarked
+            bookmarked,
+            ...(typeof bookmarksCount === "number" ? { bookmarks_count: bookmarksCount } : {})
           }
         }
       })

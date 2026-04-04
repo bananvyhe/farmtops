@@ -13,9 +13,10 @@ module Api
       articles = articles.first(limit_param)
       read_ids = news_article_read_ids_for(articles.map(&:id))
       bookmarked_game_ids = news_game_bookmark_ids_for(articles.filter_map { |article| article.news_article_game&.game_id })
+      game_bookmark_counts = news_game_bookmark_counts_for(articles.filter_map { |article| article.news_article_game&.game_id })
       blocked_source_ids = NewsSource.blocked_source_ids
       render json: {
-        articles: articles.map { |article| news_article_payload(article, read: read_ids.include?(article.id), bookmarked_game_ids:) },
+        articles: articles.map { |article| news_article_payload(article, read: read_ids.include?(article.id), bookmarked_game_ids:, game_bookmark_counts:) },
         sources: NewsSource.active.where.not(id: blocked_source_ids).includes(:news_sections).map { |source| news_source_payload(source) },
         sections: NewsSection.active.where.not(news_source_id: blocked_source_ids).includes(:news_source).map { |section| news_section_payload(section) },
         next_cursor: has_more ? news_cursor_for(articles.last) : nil,
@@ -28,7 +29,8 @@ module Api
       return render_error("Article not available", status: :not_found) if article.news_source.blocked_source?
 
       bookmarked_game_ids = news_game_bookmark_ids_for([article.news_article_game&.game_id].compact)
-      render json: { article: news_article_payload(article, read: news_article_read?(article), bookmarked_game_ids:) }
+      game_bookmark_counts = news_game_bookmark_counts_for([article.news_article_game&.game_id].compact)
+      render json: { article: news_article_payload(article, read: news_article_read?(article), bookmarked_game_ids:, game_bookmark_counts:) }
     end
 
     def reads
@@ -45,7 +47,7 @@ module Api
       return render_error("Game not available", status: :not_found) if game.blank?
 
       bookmark = upsert_news_game_bookmark(game.id)
-      render json: { ok: true, game: news_game_payload(game, bookmarked: bookmark.present?) }
+      render json: { ok: true, game: news_game_payload(game, bookmarked: bookmark.present?, bookmarks_count: news_game_bookmark_count_for(game)) }
     end
 
     def unbookmark_game
@@ -56,7 +58,7 @@ module Api
       return render_error("Game not available", status: :not_found) if game.blank?
 
       delete_news_game_bookmark(game.id)
-      render json: { ok: true, game: news_game_payload(game, bookmarked: false) }
+      render json: { ok: true, game: news_game_payload(game, bookmarked: false, bookmarks_count: news_game_bookmark_count_for(game)) }
     end
 
     def image

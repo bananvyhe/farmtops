@@ -1,3 +1,4 @@
+require "securerandom"
 require "test_helper"
 
 class ApiNewsTest < ActionDispatch::IntegrationTest
@@ -108,6 +109,20 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
     assert_equal false, json_response.dig("article", "read")
     assert_equal "Elden Ring", json_response.dig("article", "game", "name")
     assert_equal false, json_response.dig("article", "game", "bookmarked")
+    assert_equal 0, json_response.dig("article", "game", "bookmarks_count")
+  end
+
+  test "returns bookmark counts for games in the news payload" do
+    NewsGameBookmark.create!(
+      game: @game,
+      visitor_uuid: SecureRandom.uuid,
+      bookmarked_at: Time.current
+    )
+
+    get "/api/news"
+
+    assert_response :success
+    assert_equal 1, json_response.dig("articles", 0, "game", "bookmarks_count")
   end
 
   test "returns a separate preview image url when listing metadata is available" do
@@ -211,6 +226,7 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_equal true, json_response.dig("game", "bookmarked")
+    assert_equal 1, json_response.dig("game", "bookmarks_count")
 
     get "/api/news/#{@article.id}"
 
