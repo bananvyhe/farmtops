@@ -116,6 +116,46 @@ class News::ArticleTranslatorTest < ActiveSupport::TestCase
     assert_includes translated.body_html, "Тело два"
   end
 
+  test "keeps translating text blocks inside a container that also holds an embed" do
+    article = build_article(
+      body_html: <<~HTML
+        <div class="articleBody">
+          <h2>Heading one</h2>
+          <p>Body one</p>
+          <figure class="media">
+            <blockquote class="twitter-tweet">
+              <a href="https://twitter.com/example/status/1"></a>
+            </blockquote>
+          </figure>
+          <h2>Heading two</h2>
+          <p>Body two</p>
+        </div>
+      HTML
+    )
+
+    result = News::Translation::Result.new(
+      request_id: "req-embed-container",
+      translated_title: "Привет",
+      translated_preview_text: "Превью",
+      translated_body_text: "Заголовок один\n\nТело один\n\nЗаголовок два\n\nТело два",
+      model: "fake-translator",
+      latency_ms: 10,
+      status: "ok",
+      error: nil
+    )
+
+    translated = News::ArticleTranslator.new(
+      article:,
+      translator: FakeTranslator.new(result:)
+    ).call
+
+    assert_includes translated.body_html, "Заголовок один"
+    assert_includes translated.body_html, "Тело один"
+    assert_includes translated.body_html, "Заголовок два"
+    assert_includes translated.body_html, "Тело два"
+    assert_includes translated.body_html, "twitter-tweet"
+  end
+
   test "preserves image-only blocks in translated body html" do
     article = build_article(
       body_html: <<~HTML

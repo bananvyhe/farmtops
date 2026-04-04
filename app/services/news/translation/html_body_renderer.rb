@@ -37,7 +37,6 @@ module News
         if text_block_node?(node)
           translated_paragraph = next_translated_paragraph
           return node.dup if translated_paragraph.nil? || translated_paragraph.empty?
-          return node.dup if embed_node?(node)
 
           copy = node.dup
           copy.inner_html = paragraph_to_html(translated_paragraph)
@@ -56,7 +55,7 @@ module News
       end
 
       def embed_node?(node)
-        node.matches?(EMBED_SELECTOR) || node.at_css(EMBED_SELECTOR)
+        node.matches?(EMBED_SELECTOR)
       end
 
       def text_block_node?(node)
