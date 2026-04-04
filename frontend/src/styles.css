@@ -334,7 +334,7 @@ h3 {
 .card {
   background: var(--farmspot-surface);
   border: 1px solid var(--farmspot-border);
-  border-radius: 1.875rem;
+  border-radius: 0.875rem;
   padding: var(--space-l);
   box-shadow: var(--farmspot-shadow);
   backdrop-filter: blur(10px);

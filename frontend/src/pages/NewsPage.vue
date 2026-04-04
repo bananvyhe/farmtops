@@ -626,7 +626,7 @@ onBeforeUnmount(() => {
   gap: 0;
   overflow: hidden;
   padding: 0;
-  border-radius: 1.75rem;
+  border-radius: 0.75rem;
   transition:
     background-color 180ms ease,
     box-shadow 180ms ease,
@@ -669,7 +669,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-s);
-  padding-block: var(--space-m);
+  padding-block: var(--space-xs);
   padding-inline: var(--space-m);
 }
 

@@ -44,7 +44,7 @@ async function handleLogout() {
 </script>
 
 <template>
- 
+  <div class="app-shell">
     <header class="app-topbar  ">
       <div class="app-brand">
         <div class="eyebrow">farmspot.ru</div>
@@ -58,5 +58,5 @@ async function handleLogout() {
       </nav>
     </header>
     <RouterView />
- 
+  </div>
 </template>

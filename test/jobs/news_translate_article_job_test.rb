@@ -44,6 +44,12 @@ class NewsTranslateArticleJobTest < ActiveSupport::TestCase
     end
   end
 
+  class BoomTranslator
+    def call(request_id:)
+      raise RuntimeError, "boom"
+    end
+  end
+
   def with_stubbed_constant(object, method_name, implementation)
     original = object.method(method_name)
     object.define_singleton_method(method_name, &implementation)
@@ -166,5 +172,23 @@ class NewsTranslateArticleJobTest < ActiveSupport::TestCase
     assert recovery_called
     assert_equal "translated", @second_article.reload.translation_status
     assert lock_manager.released
+  end
+
+  test "marks the article failed and advances the chain when translation crashes" do
+    lock_manager = FakeLockManager.new
+    captured = nil
+
+    with_stubbed_constant(News::Translation::LockManager, :new, -> { lock_manager }) do
+      with_stubbed_constant(News::ArticleTranslator, :new, ->(article:) { BoomTranslator.new }) do
+        with_stubbed_constant(NewsTranslateArticleJob, :perform_async, ->(article_id, token, crawl_run_id = nil) { captured = [article_id, token, crawl_run_id]; "jid-3" }) do
+          NewsTranslateArticleJob.new.perform(@first_article.id, "lock-token", @crawl_run.id)
+        end
+      end
+    end
+
+    assert_equal [@second_article.id, "lock-token", @crawl_run.id], captured
+    assert_equal "failed", @first_article.reload.translation_status
+    assert_match "boom", @first_article.reload.translation_error
+    refute lock_manager.released
   end
 end

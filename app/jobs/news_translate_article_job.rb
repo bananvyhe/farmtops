@@ -4,6 +4,7 @@ class NewsTranslateArticleJob
   include Sidekiq::Job
 
   def perform(article_id, lock_token, crawl_run_id = nil)
+    article = nil
     begin
       article = NewsArticle.find_by(id: article_id)
       crawl_run_id ||= article&.news_crawl_run_id
@@ -39,7 +40,12 @@ class NewsTranslateArticleJob
       advance_chain(lock_token, next_article_id, crawl_run_id) if should_advance
     rescue StandardError => e
       Rails.logger.warn("[NewsTranslateArticleJob] failed for #{article_id}: #{e.class} #{e.message}")
-      raise
+      if article.present? && lock_held_by_chain?(lock_token)
+        mark_article_failed(article, e)
+        advance_chain(lock_token, next_pending_article_id(crawl_run_id), crawl_run_id)
+      else
+        raise
+      end
     ensure
       lock_manager.refresh(lock_token) if lock_held_by_chain?(lock_token)
     end
@@ -66,6 +72,26 @@ class NewsTranslateArticleJob
     NewsTranslatePendingArticlesJob.perform_in(1.minute)
   rescue StandardError => e
     Rails.logger.warn("[NewsTranslateArticleJob] failed to enqueue translation watchdog: #{e.class} #{e.message}")
+  end
+
+  def mark_article_failed(article, error)
+    article.with_lock do
+      return if article.translated?
+
+      article.update!(
+        translation_status: :failed,
+        translation_completed_at: Time.current,
+        translation_error: error.message,
+        translation_model: article.translation_model,
+        translation_request_id: article.translation_request_id.presence,
+        raw_payload: article.raw_payload.merge(
+          "translation_status" => "failed",
+          "translation_error" => error.message
+        ).compact
+      )
+    end
+  rescue StandardError => mark_error
+    Rails.logger.warn("[NewsTranslateArticleJob] failed to mark article #{article.id} failed: #{mark_error.class} #{mark_error.message}")
   end
 
   def next_pending_article_id(crawl_run_id = nil)
