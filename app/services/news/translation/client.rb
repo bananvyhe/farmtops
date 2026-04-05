@@ -10,6 +10,11 @@ module News
     class Client
       DEFAULT_PATH = "/translate/news"
       DEFAULT_BASE_URL = "http://127.0.0.1:19191"
+      FALLBACK_BASE_URLS = [
+        "http://host.docker.internal:19191",
+        "http://127.0.0.1:19191",
+        "http://127.0.0.1:8008",
+      ].freeze
 
       def initialize(base_url: translation_base_url,
         token: translation_token,
@@ -53,9 +58,35 @@ module News
       attr_reader :base_url, :token, :open_timeout, :read_timeout
 
       def translation_base_url
-        return ENV["NEWS_TRANSLATOR_BASE_URL"].presence || DEFAULT_BASE_URL if Rails.env.development?
+        configured_url = ENV["NEWS_TRANSLATOR_BASE_URL"].presence ||
+          RuntimeConfig.env_or_credential("NEWS_TRANSLATOR_BASE_URL", :translation, :base_url)
+        if configured_url.present?
+          return configured_url if translator_healthy?(configured_url)
 
-        RuntimeConfig.env_or_credential("NEWS_TRANSLATOR_BASE_URL", :translation, :base_url, default: DEFAULT_BASE_URL)
+          logger.warn("[News::Translation::Client] configured translator URL is unreachable: #{configured_url}")
+        end
+
+        resolved_fallback_base_url
+      end
+
+      def resolved_fallback_base_url
+        FALLBACK_BASE_URLS.find { |candidate| translator_healthy?(candidate) } || DEFAULT_BASE_URL
+      end
+
+      def translator_healthy?(candidate_base_url)
+        health_uri = URI.join(candidate_base_url.end_with?("/") ? candidate_base_url : "#{candidate_base_url}/", "health")
+        Net::HTTP.start(
+          health_uri.host,
+          health_uri.port,
+          use_ssl: health_uri.scheme == "https",
+          open_timeout: 0.5,
+          read_timeout: 1
+        ) do |http|
+          response = http.get(health_uri.request_uri)
+          response.is_a?(Net::HTTPSuccess)
+        end
+      rescue StandardError
+        false
       end
 
       def translation_token
@@ -104,6 +135,10 @@ module News
         raise Error, result.error if result.status != "ok" && result.error.present?
         raise Error, "Translator response missing translated_title" if result.translated_title.blank?
         raise Error, "Translator response missing translated_body_text" if result.translated_body_text.blank?
+      end
+
+      def logger
+        Rails.logger
       end
     end
   end

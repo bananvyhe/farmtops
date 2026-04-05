@@ -32,6 +32,8 @@
 
 - [netcode/overview.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/overview.md)
   Реализация shard lifecycle, presence, prime-time matching, sync loop, authoritative backend и клиентское состояние.
+- [runbooks/news_translation.md](/Users/rufus/workspace/projects/farmspot/docs/runbooks/news_translation.md)
+  Короткий runbook по очереди перевода новостей, повторным job'ам, lock/recovery и проверке окружения Sidekiq.
 
 ## Рекомендуемый узкий вход по задачам
 

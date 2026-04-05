@@ -22,6 +22,7 @@
   - Crawls save original articles first and translation updates them afterward.
   - On `Sidekiq` boot the translation recovery runs: stale `news:translation:pending_articles_lock` is cleared, fresh failed articles and stalled `translating` articles are reset to `pending`, and the translation chain is re-enqueued.
   - The same recovery is available manually via `bundle exec rake news:translation:recover`.
+  - Translation/Sidekiq incident notes live in `docs/runbooks/news_translation.md`.
   - In this template `config/credentials.yml.enc` is baked into the Docker image.
   - After any credentials change, rebuild affected app containers; `restart` is not enough.
   - For new projects, store app secrets in `Rails credentials` immediately; keep only infra secrets in `.env.production`.
