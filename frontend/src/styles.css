@@ -24,7 +24,7 @@
   --farmspot-shadow: 0 20px 40px rgba(86, 49, 22, 0.1);
   --farmspot-shadow-dark: 0 20px 38px rgba(0, 0, 0, 0.34);
 
-  --step--2: clamp(0.78rem, 0.75rem + 0.14vw, 0.88rem);
+  --step--2: clamp(0.58rem, 0.55rem + 0.14vw, 0.88rem);
   --step--1: clamp(0.88rem, 0.84rem + 0.16vw, 0.98rem);
   --step-0: clamp(1rem, 0.95rem + 0.18vw, 1.125rem);
   --step-1: clamp(1.125rem, 1.05rem + 0.28vw, 1.375rem);

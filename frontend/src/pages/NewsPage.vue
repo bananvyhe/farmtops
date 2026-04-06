@@ -545,12 +545,12 @@ onBeforeUnmount(() => {
             <span v-if="isUnread(article)" class="news-card__badge">Новая</span>
           </div>
 
-          <RouterLink class="news-card__title" :to="{ path: articlePath(article), query: routeQueryForFilters() }">
+          <RouterLink class="news-card__title pt-4" :to="{ path: articlePath(article), query: routeQueryForFilters() }">
             <h2>{{ article.title }}</h2>
           </RouterLink>
           <p class="news-card__preview">{{ article.preview_text || article.body_text }}</p>
 
-          <div class="news-card__actions">
+          <div class="news-card__actions mt-2">
             <RouterLink class="news-card__link" :to="{ path: articlePath(article), query: routeQueryForFilters() }">Читать полностью</RouterLink>
             <a :href="article.canonical_url" target="_blank" rel="noreferrer">Открыть источник</a>
           </div>
@@ -580,7 +580,7 @@ onBeforeUnmount(() => {
 
 .news-hero {
   display: grid;
-  gap: var(--space-xs);
+  gap: var(--space-0);
   border-inline-start: 4px solid var(--farmspot-primary);
 }
 
@@ -594,7 +594,7 @@ onBeforeUnmount(() => {
 
 .news-hero h1 {
   font-size: clamp(1.9rem, 2vw, 3.2rem);
-  line-height: var(--leading-display-lg);
+  line-height: var(--leading-display-m);
   letter-spacing: -0.04em;
   text-transform: uppercase;
 }
@@ -668,7 +668,7 @@ onBeforeUnmount(() => {
 .news-card__body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-s);
+  gap: var(--space-0);
   padding-block: var(--space-xs);
   padding-inline: var(--space-m);
 }
@@ -716,7 +716,7 @@ onBeforeUnmount(() => {
 }
 
 .news-card__title h2 {
-  font-size: clamp(1.05rem, 2vw, 1.5rem);
+  font-size: clamp(1.45rem, 2vw, 1.5rem);
   line-height: var(--leading-snug);
   letter-spacing: -0.03em;
 }
