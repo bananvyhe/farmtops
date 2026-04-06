@@ -216,6 +216,16 @@ onMounted(() => {
   font-size: clamp(2rem, 4vw, 3.15rem);
   line-height: var(--leading-display-lg);
   letter-spacing: -0.045em;
+    color: transparent;
+  background-image: linear-gradient(
+    180deg,
+    #f2f0ed 0 50%,
+    #c9d7e6 50% 100%
+  );
+  background-size: 100% 1.02em;
+  background-repeat: repeat-y;
+  -webkit-background-clip: text;
+  background-clip: text;
 }
 
 
@@ -250,16 +260,7 @@ onMounted(() => {
   font-size: clamp(2rem, 4vw, 2.15rem);
   line-height: var(--leading-display);
   letter-spacing: -0.045em;
-  color: transparent;
-  background-image: linear-gradient(
-    180deg,
-    #f2f0ed 0 50%,
-    #c9d7e6 50% 100%
-  );
-  background-size: 100% 1.02em;
-  background-repeat: repeat-y;
-  -webkit-background-clip: text;
-  background-clip: text;
+
 }
 .news-article-content :deep(h2),
 .news-article-content :deep(h3),

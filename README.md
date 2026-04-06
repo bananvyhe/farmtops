@@ -35,7 +35,6 @@ Rails 8 приложение с:
    `cd frontend && npm run dev -- --host 127.0.0.1`
 8. Запустить воркер (он же планировщик):
    `bundle exec sidekiq -C config/sidekiq.yml`
-   - В dev можно ускорить списания, задав `BILLING_INTERVAL_MINUTES=3`
 9. Однократно прогнать краул текущих источников:
    `./scripts/news_crawl_once.sh`
 

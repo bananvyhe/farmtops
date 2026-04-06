@@ -29,7 +29,7 @@ class HourlyBalanceSweepJob
 
   def current_billing_period_start
     interval_minutes =
-      ENV.fetch("BILLING_INTERVAL_MINUTES", Rails.env.development? ? "20" : "60").to_i
+      ENV.fetch("BILLING_INTERVAL_MINUTES", "60").to_i
     interval_minutes = 60 if interval_minutes <= 0
 
     now = Time.current

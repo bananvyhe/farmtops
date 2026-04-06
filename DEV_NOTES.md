@@ -29,7 +29,7 @@
   - For new projects, store app secrets in `Rails credentials` immediately; keep only infra secrets in `.env.production`.
   - Billing: balances may go negative. Do not block hourly charges on negative balances.
   - Billing schedule:
-    - Development: every 3 minutes (Sidekiq cron).
+    - Development: every 60 minutes (Sidekiq cron).
     - Production: every 60 minutes (Sidekiq cron).
     - Interval can be overridden with `BILLING_INTERVAL_MINUTES`.
   - Keep infrastructure secrets in server `.env.production` only when they are needed before Rails boot:
