@@ -139,6 +139,7 @@ curl http://host.docker.internal:19191/health
 - Канонический URL панели: `https://farmspot.ru/sidekiq/`
 - Перевод новостей работает как цепочка из одной статьи за раз: `NewsTranslatePendingArticlesJob` стартует lock-guarded chain, `NewsTranslateArticleJob` переводит одну статью, сохраняет результат и только потом ставит следующую.
 - При старте `Sidekiq` автоматически запускается recovery очереди перевода: очищается stale `news:translation:pending_articles_lock`, свежие `failed`/stalled `translating` новости переводятся обратно в `pending`, затем снова ставится `NewsTranslatePendingArticlesJob`.
+- Это recovery не крутится по cron; оно запускается один раз при старте воркера и дальше цепочка двигается только по завершению перевода.
 - Вручную это можно запустить через `bundle exec rake news:translation:recover`.
 - Это не callback-based async протокол: translator остаётся внешним sync HTTP сервисом, поэтому `NEWS_TRANSLATOR_READ_TIMEOUT_SECONDS` всё ещё важен для одного перевода.
 - После завершения перевода всех статей автоматически стартует следующий этап: `NewsIdentifyPendingGamesJob` отправляет `body_text` в game-id сервис и сохраняет результат в `games` / `news_article_games`.

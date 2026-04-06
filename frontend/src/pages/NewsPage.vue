@@ -545,7 +545,7 @@ onBeforeUnmount(() => {
             <span v-if="isUnread(article)" class="news-card__badge">Новая</span>
           </div>
 
-          <RouterLink class="news-card__title pt-4" :to="{ path: articlePath(article), query: routeQueryForFilters() }">
+          <RouterLink class="news-card__title pt-4 pb-1" :to="{ path: articlePath(article), query: routeQueryForFilters() }">
             <h2>{{ article.title }}</h2>
           </RouterLink>
           <p class="news-card__preview">{{ article.preview_text || article.body_text }}</p>

@@ -20,7 +20,8 @@
   - Translation requests are still synchronous HTTP calls to the remote translator; the app now processes them as a lock-guarded one-article chain (`NewsTranslatePendingArticlesJob` -> `NewsTranslateArticleJob`) so only one translation is in flight at a time.
   - `NEWS_TRANSLATOR_READ_TIMEOUT_SECONDS` is the per-article wait budget; raise it if the translator can legitimately need longer for one article.
   - Crawls save original articles first and translation updates them afterward.
-  - On `Sidekiq` boot the translation recovery runs: stale `news:translation:pending_articles_lock` is cleared, fresh failed articles and stalled `translating` articles are reset to `pending`, and the translation chain is re-enqueued.
+  - On `Sidekiq` boot the translation recovery runs once: stale `news:translation:pending_articles_lock` is cleared, fresh failed articles and stalled `translating` articles are reset to `pending`, and the translation chain is re-enqueued.
+  - There is no periodic cron for translation recovery anymore; translation should advance only on completed jobs or the one-shot boot recovery.
   - The same recovery is available manually via `bundle exec rake news:translation:recover`.
   - Translation/Sidekiq incident notes live in `docs/runbooks/news_translation.md`.
   - In this template `config/credentials.yml.enc` is baked into the Docker image.

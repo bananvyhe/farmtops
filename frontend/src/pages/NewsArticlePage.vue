@@ -229,7 +229,7 @@ onMounted(() => {
 }
 
 .news-article-content {
-  max-width: 72ch;
+  max-width: 84ch;
   margin-inline: auto;
   padding-block-start: var(--space-3xs);
   color: var(--farmspot-text-on-dark);

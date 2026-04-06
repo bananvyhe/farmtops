@@ -6,7 +6,7 @@
 
 - `NewsTranslatePendingArticlesJob` и `NewsTranslateArticleJob` работают как цепочка на одну статью за раз.
 - `NewsTranslateArticleJob` ставит watchdog через `perform_in(1.minute)`.
-- `NewsTranslationRecoveryJob` может периодически поднимать lock и перезапускать цепочку.
+- `NewsTranslationRecoveryJob` нужен как one-shot recovery на старте/вручную, а не как регулярный cron.
 - После завершения перевода pipeline переходит к идентификации игр.
 
 ## Что обычно ломается
