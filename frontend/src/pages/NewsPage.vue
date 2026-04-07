@@ -460,13 +460,13 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="news-page">
-    <section class="news-hero card card--dark">
+    <section class="news-hero card card--dark ">
       <div class="news-hero__eyebrow">отслеживание проектов</div>
       <h1>Сбор группы</h1>
       <p>Далекие контуры в туманностях кажутся спящими башнями, но едва разум касается предела дозволенного — и древние пробуждаются, чтобы дать понять: в бесконечности нет места тем, кто считает себя исходной точкой.</p>
     </section>
 
-    <section class="news-filters card card--dark">
+    <section class="news-filters card card--dark news-filters--bare">
       <div class="news-filters__grid">
         <v-select
           v-model="selectedSourceId"
@@ -579,22 +579,26 @@ onBeforeUnmount(() => {
 }
 
 .news-hero {
+ 
   display: grid;
   gap: var(--space-0);
   border-inline-start: 4px solid var(--farmspot-primary);
 }
 
 .news-hero__eyebrow {
+  margin-bottom: 0.4rem;
   text-transform: uppercase;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.01em;
   font-size: var(--step--2);
-  line-height: var(--leading-tight);
+  line-height: var(--leading-body);
   color: var(--farmspot-text-on-dark-muted);
 }
 
 .news-hero h1 {
+  font-family: "Prata", Georgia, serif;
+  margin-bottom: 0.5rem;
   font-size: clamp(1.9rem, 2vw, 3.2rem);
-  line-height: var(--leading-display-m);
+  line-height: var(--leading-tight);
   letter-spacing: -0.04em;
   text-transform: uppercase;
 }
@@ -607,7 +611,14 @@ onBeforeUnmount(() => {
 .news-filters {
   margin-block: 0;
 }
-
+.news-filters--bare {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
 .news-filters__grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;

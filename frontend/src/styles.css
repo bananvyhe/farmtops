@@ -1,7 +1,7 @@
 :root {
   color-scheme: light;
   --farmspot-font-body: "Manrope", "Segoe UI", system-ui, sans-serif;
-  --farmspot-font-display: "Prata", Georgia, serif;
+  --farmspot-font-display: "Play", "Segoe UI", system-ui, sans-serif;
 
   --farmspot-primary: #c75923;
   --farmspot-primary-strong: #9d4116;
@@ -257,8 +257,16 @@ td {
   vertical-align: top;
 }
 
-h1 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--farmspot-font-display);
+}
+
+h1 {
   font-size: var(--step-4);
   line-height: var(--leading-display-lg);
   letter-spacing: -0.045em;
@@ -266,7 +274,6 @@ h1 {
 }
 
 h2 {
-  font-family: var(--farmspot-font-display);
   font-size: var(--step-2);
   line-height: var(--leading-display);
   letter-spacing: -0.03em;
