@@ -609,20 +609,30 @@ h3 {
 .prime-grid__cell {
   min-height: 2.75rem;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background:
+    linear-gradient(180deg, rgba(3, 4, 8, 0.98), rgba(9, 11, 18, 0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.02),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.48);
+  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
 }
 
 .prime-grid__cell:hover {
   transform: none;
-  box-shadow: none;
-  background: rgba(199, 89, 35, 0.18);
+  box-shadow:
+    inset 0 0 0 1px rgba(227, 182, 150, 0.18),
+    0 0 0 1px rgba(0, 0, 0, 0.12);
+  background: linear-gradient(180deg, rgba(42, 25, 18, 0.98), rgba(68, 35, 22, 0.98));
 }
 
 .prime-grid__cell--active {
-  background: linear-gradient(180deg, rgba(227, 182, 150, 0.82), rgba(199, 89, 35, 0.88));
-  border-color: rgba(255, 255, 255, 0.26);
+  background: linear-gradient(180deg, rgba(255, 191, 138, 0.98), rgba(199, 89, 35, 0.98));
+  border-color: rgba(255, 222, 194, 0.82);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 240, 0.36),
+    0 0 0 1px rgba(199, 89, 35, 0.2),
+    0 8px 18px rgba(199, 89, 35, 0.22);
 }
 
 .profile-columns {

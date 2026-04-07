@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from "vue"
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { RouterLink } from "vue-router"
 import { api } from "../api"
 import { sessionState } from "../useSession"
@@ -17,6 +17,9 @@ const selectedSlotsLocal = ref(new Set())
 const dragActive = ref(false)
 const dragPaintValue = ref(true)
 const browserTimeZone = ref(detectTimeZone())
+const profileHydrated = ref(false)
+const lastSavedSignature = ref("")
+let autoSaveTimer = null
 
 function detectTimeZone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
@@ -45,7 +48,7 @@ function utcSlotToLocalKey(utcSlot) {
 }
 
 function setSelectionFromUtcSlots(slots) {
-  selectedSlotsLocal.value = new Set(Array(slots).map((slot) => utcSlotToLocalKey(Number(slot))))
+  selectedSlotsLocal.value = new Set(Array.from(slots || []).map((slot) => utcSlotToLocalKey(Number(slot))))
 }
 
 function selectedUtcSlots() {
@@ -93,6 +96,8 @@ async function loadProfile() {
     sessionState.user = data.user
     browserTimeZone.value = detectTimeZone()
     setSelectionFromUtcSlots(data.user.prime_slots_utc || [])
+    lastSavedSignature.value = scheduleSignature.value
+    profileHydrated.value = true
   } catch (err) {
     error.value = err.message
   } finally {
@@ -100,10 +105,12 @@ async function loadProfile() {
   }
 }
 
-async function saveProfile() {
+async function saveProfile({ silent = false } = {}) {
+  if (scheduleSignature.value === lastSavedSignature.value) return
+
   saving.value = true
   error.value = ""
-  success.value = ""
+  if (!silent) success.value = ""
 
   try {
     const data = await api.updateProfile({
@@ -112,7 +119,8 @@ async function saveProfile() {
     })
     sessionState.user = data.user
     setSelectionFromUtcSlots(data.user.prime_slots_utc || [])
-    success.value = "Прайм-окна сохранены."
+    lastSavedSignature.value = scheduleSignature.value
+    success.value = silent ? "Изменения сохранены автоматически." : "Прайм-окна сохранены."
   } catch (err) {
     error.value = err.message
   } finally {
@@ -121,6 +129,8 @@ async function saveProfile() {
 }
 
 const selectedLocalCount = computed(() => selectedSlotsLocal.value.size)
+const selectedSlotsSignature = computed(() => selectedUtcSlots().join(","))
+const scheduleSignature = computed(() => `${browserTimeZone.value}|${selectedSlotsSignature.value}`)
 
 const utcSummary = computed(() => {
   const grouped = new Map()
@@ -146,6 +156,19 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("pointerup", stopDragSelection)
+  if (autoSaveTimer) window.clearTimeout(autoSaveTimer)
+})
+
+watch(scheduleSignature, (nextValue) => {
+  if (!profileHydrated.value) return
+  if (nextValue === lastSavedSignature.value) return
+
+  error.value = ""
+  success.value = "Сохраняем изменения..."
+  if (autoSaveTimer) window.clearTimeout(autoSaveTimer)
+  autoSaveTimer = window.setTimeout(() => {
+    saveProfile({ silent: true })
+  }, 350)
 })
 </script>
 
