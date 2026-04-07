@@ -21,7 +21,7 @@ onMounted(async () => {
   try {
     await loadSession()
     if (sessionState.authenticated && currentPath.value === "/login") {
-      router.replace(sessionState.user?.role === "admin" ? "/admin" : "/dashboard")
+      router.replace(sessionState.user?.role === "admin" ? "/admin" : "/profile")
     }
     if (!sessionState.authenticated && !publicPaths.has(currentPath.value) && !isPublicNewsRoute.value) {
       router.replace("/news")
@@ -52,7 +52,7 @@ async function handleLogout() {
       <nav class="nav">
         <RouterLink to="/news" class="ghost">Новости</RouterLink>
         <RouterLink v-if="!sessionState.authenticated" to="/login" class="ghost">Войти</RouterLink>
-        <RouterLink v-if="sessionState.authenticated" to="/dashboard" class="ghost">Кабинет</RouterLink>
+        <RouterLink v-if="sessionState.authenticated" to="/profile" class="ghost">Профиль</RouterLink>
         <RouterLink v-if="sessionState.authenticated && sessionState.user?.role === 'admin'" to="/admin" class="ghost">Админка</RouterLink>
         <button v-if="sessionState.authenticated" class="danger" @click="handleLogout">Выйти</button>
       </nav>

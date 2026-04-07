@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_04_01_095528) do
+ActiveRecord::Schema[8.0].define(version: 2026_04_07_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -218,8 +218,11 @@ ActiveRecord::Schema[8.0].define(version: 2026_04_01_095528) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "tariff_id"
+    t.string "prime_time_zone", default: "UTC", null: false
+    t.integer "prime_slots_utc", default: [], null: false, array: true
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["external_id"], name: "index_users_on_external_id"
+    t.index ["prime_slots_utc"], name: "index_users_on_prime_slots_utc", using: :gin
     t.index ["tariff_id"], name: "index_users_on_tariff_id"
   end
 

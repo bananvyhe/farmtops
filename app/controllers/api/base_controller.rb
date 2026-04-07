@@ -34,7 +34,10 @@ module Api
         hourly_rate_cents: user.effective_hourly_rate_cents,
         manual_hourly_rate_cents: user.hourly_rate_cents,
         remaining_days: user.remaining_days,
-        last_hourly_charge_at: user.last_hourly_charge_at
+        last_hourly_charge_at: user.last_hourly_charge_at,
+        prime_time_zone: user.prime_time_zone,
+        prime_slots_utc: user.prime_slots_utc,
+        prime_slots_count: user.prime_slots_utc.size
       }
     end
 

@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from "vue-router"
 import App from "./App.vue"
 import LoginPage from "./pages/LoginPage.vue"
 import DashboardPage from "./pages/DashboardPage.vue"
+import ProfilePage from "./pages/ProfilePage.vue"
 import AdminPage from "./pages/AdminPage.vue"
 import NewsPage from "./pages/NewsPage.vue"
 import NewsArticlePage from "./pages/NewsArticlePage.vue"
@@ -30,6 +31,7 @@ const routes = [
   { path: "/login", component: LoginPage },
   { path: "/news", component: NewsPage },
   { path: "/news/:id", component: NewsArticlePage },
+  { path: "/profile", component: ProfilePage },
   { path: "/dashboard", component: DashboardPage },
   { path: "/admin", component: AdminPage }
 ]

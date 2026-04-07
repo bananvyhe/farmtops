@@ -44,7 +44,7 @@ async function submit() {
           password_confirmation: form.passwordConfirmation
         })
 
-    router.replace(data.user.role === "admin" ? "/admin" : "/dashboard")
+    router.replace(data.user.role === "admin" ? "/admin" : "/profile")
   } catch (err) {
     error.value = err.message
   } finally {
