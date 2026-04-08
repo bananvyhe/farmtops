@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useIntersectionObserver, useWindowScroll, watchThrottled } from "@vueuse/core"
 import { api } from "../api"
+import { sessionState } from "../useSession"
 import { useNewsUiStore } from "../stores/newsUi"
 
 const articles = ref([])
@@ -21,6 +22,7 @@ const activeQueryKey = ref("")
 const articleRefs = new Map()
 const readTimers = new Map()
 const pendingReadIds = new Set()
+const creatingShardGameId = ref(null)
 const READ_VISIBILITY_RATIO = 0.75
 const READ_VISIBILITY_MS = 1000
 let readObserver = null
@@ -281,6 +283,33 @@ function gameFollowersLabel(count) {
     other: "следят"
   }
   return `${value} ${forms[pr.select(value)] || forms.other}`
+}
+
+function shardTooltip(article) {
+  if (!article.game?.can_create_shard) return "У игры пока нет следящих."
+  if (!sessionState.authenticated) return "Для входа в мир необходима регистрация."
+  return "Создать шард этой игры."
+}
+
+function canEnterWorld(article) {
+  return Boolean(article.game?.can_create_shard && sessionState.authenticated)
+}
+
+async function enterWorld(article) {
+  if (!canEnterWorld(article)) return
+  if (creatingShardGameId.value === article.game.id) return
+
+  creatingShardGameId.value = article.game.id
+  error.value = ""
+
+  try {
+    const data = await api.createShard(article.game.id)
+    await router.push({ path: "/profile", query: { shard_id: String(data.shard.id) } })
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    creatingShardGameId.value = null
+  }
 }
 
 async function toggleGameBookmark(article) {
@@ -548,6 +577,29 @@ onBeforeUnmount(() => {
             >
               {{ gameFollowersLabel(article.game.bookmarks_count) }}
             </v-chip>
+            <v-tooltip :text="shardTooltip(article)" location="top">
+              <template #activator="{ props }">
+                <span v-bind="props" class="news-card__world-button-wrap">
+                  <button
+                    v-if="article.game?.can_create_shard"
+                    class="news-card__world-button"
+                    type="button"
+                    :disabled="!canEnterWorld(article) || creatingShardGameId === article.game.id"
+                    @click.stop="enterWorld(article)"
+                  >
+                    {{ creatingShardGameId === article.game.id ? "Создаем..." : "Войти в мир" }}
+                  </button>
+                  <button
+                    v-else
+                    class="news-card__world-button news-card__world-button--disabled"
+                    type="button"
+                    disabled
+                  >
+                    Войти в мир
+                  </button>
+                </span>
+              </template>
+            </v-tooltip>
             <v-chip size="small" variant="flat" color="primary">{{ article.source_name }}</v-chip>
             <v-chip size="small" variant="outlined">{{ article.section_name }}</v-chip>
             <span class="news-card__time">{{ formatDate(article.published_at || article.fetched_at) }}</span>
@@ -706,6 +758,37 @@ onBeforeUnmount(() => {
 
 .news-card__game-count {
   color: var(--farmspot-text-on-dark-muted);
+}
+
+.news-card__world-button-wrap {
+  display: inline-flex;
+}
+
+.news-card__world-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0 var(--space-xs);
+  border-radius: 999px;
+  border: 1px solid rgba(255, 222, 194, 0.22);
+  background: rgba(199, 89, 35, 0.14);
+  color: var(--farmspot-text-on-dark);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+
+.news-card__world-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: rgba(199, 89, 35, 0.24);
+  border-color: rgba(255, 222, 194, 0.42);
+  box-shadow: 0 10px 18px rgba(199, 89, 35, 0.18);
+}
+
+.news-card__world-button--disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .news-card__time {

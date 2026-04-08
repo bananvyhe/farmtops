@@ -665,6 +665,31 @@ h3 {
   margin-top: var(--space-s);
 }
 
+.profile-shards-card {
+  display: grid;
+  gap: var(--space-s);
+}
+
+.profile-shards-tabs .v-tab {
+  text-transform: none;
+  letter-spacing: 0.01em;
+}
+
+.profile-shard-panel {
+  display: grid;
+  gap: var(--space-s);
+}
+
+.profile-shard-card {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.profile-shard-card--summary {
+  padding-top: var(--space-xs);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .nickname-editor {
   display: grid;
   gap: var(--space-s);

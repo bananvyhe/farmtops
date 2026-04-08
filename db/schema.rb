@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_04_08_090000) do
+ActiveRecord::Schema[8.0].define(version: 2026_04_08_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -193,6 +193,20 @@ ActiveRecord::Schema[8.0].define(version: 2026_04_08_090000) do
     t.index ["user_id"], name: "index_payment_transactions_on_user_id"
   end
 
+  create_table "shards", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "game_id", null: false
+    t.string "name", null: false
+    t.string "world_seed", null: false
+    t.integer "status", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["game_id"], name: "index_shards_on_game_id"
+    t.index ["status"], name: "index_shards_on_status"
+    t.index ["user_id", "game_id"], name: "index_shards_on_user_id_and_game_id", unique: true
+    t.index ["user_id"], name: "index_shards_on_user_id"
+  end
+
   create_table "tariffs", force: :cascade do |t|
     t.string "name", null: false
     t.integer "monthly_price_cents", default: 0, null: false
@@ -244,5 +258,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_04_08_090000) do
   add_foreign_key "news_game_bookmarks", "users"
   add_foreign_key "news_sections", "news_sources"
   add_foreign_key "payment_transactions", "users"
+  add_foreign_key "shards", "games"
+  add_foreign_key "shards", "users"
   add_foreign_key "users", "tariffs"
 end

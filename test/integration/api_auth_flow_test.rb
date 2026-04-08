@@ -110,6 +110,10 @@ class ApiAuthFlowTest < ActionDispatch::IntegrationTest
     post "/api/news/reads", params: { article_ids: [article.id] }.to_json, headers: { "CONTENT_TYPE" => "application/json" }
     post "/api/news/#{article.id}/bookmark_game"
 
+    visitor_uuid = cookies[:farmspot_visitor_id].to_s
+    assert_equal 1, NewsArticleRead.for_visitor(visitor_uuid).count
+    assert_equal 1, NewsGameBookmark.for_visitor(visitor_uuid).count
+
     user = User.create!(
       email: "session@example.com",
       password: "Password123!",
@@ -125,6 +129,9 @@ class ApiAuthFlowTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_equal(user.email, json_response.dig("user", "email"))
     assert_not_nil(json_response["csrf_token"])
+    assert_empty cookies[:farmspot_visitor_id].to_s
+    assert_equal 0, NewsArticleRead.for_visitor(visitor_uuid).count
+    assert_equal 0, NewsGameBookmark.for_visitor(visitor_uuid).count
 
     get "/api/news"
     assert_response :success

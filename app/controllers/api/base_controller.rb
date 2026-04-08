@@ -155,7 +155,8 @@ module Api
         slug: game.slug,
         external_game_id: game.external_game_id,
         bookmarked:,
-        bookmarks_count:
+        bookmarks_count:,
+        can_create_shard: bookmarks_count.to_i > 0
       }
     end
 

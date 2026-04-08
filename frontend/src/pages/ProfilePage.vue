@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
-import { RouterLink } from "vue-router"
+import { RouterLink, useRoute } from "vue-router"
 import { api } from "../api"
 import { sessionState } from "../useSession"
 
@@ -25,8 +25,12 @@ const nicknameChecking = ref(false)
 const nicknameStatus = ref("")
 const nicknameStatusKind = ref("muted")
 const nicknameSaving = ref(false)
+const shards = ref([])
+const loadingShards = ref(false)
+const activeShardId = ref(null)
 let autoSaveTimer = null
 let nicknameCheckTimer = null
+const route = useRoute()
 
 function detectTimeZone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
@@ -113,6 +117,28 @@ async function loadProfile() {
     error.value = err.message
   } finally {
     loading.value = false
+  }
+}
+
+async function loadShards() {
+  loadingShards.value = true
+
+  try {
+    const data = await api.shards()
+    shards.value = data.shards || []
+
+    const requestedShardId = route.query.shard_id ? String(route.query.shard_id) : null
+    const shardIds = new Set(shards.value.map((shard) => String(shard.id)))
+
+    if (requestedShardId && shardIds.has(requestedShardId)) {
+      activeShardId.value = requestedShardId
+    } else if (!activeShardId.value || !shardIds.has(String(activeShardId.value))) {
+      activeShardId.value = shards.value[0] ? String(shards.value[0].id) : null
+    }
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    loadingShards.value = false
   }
 }
 
@@ -225,9 +251,24 @@ const utcSummary = computed(() => {
   })).filter(({ hours }) => hours.length > 0)
 })
 
+const activeShard = computed(() => shards.value.find((shard) => String(shard.id) === String(activeShardId.value)) || null)
+
+function shardStatusLabel(status) {
+  if (status === "draft") return "Черновик"
+  if (status === "active") return "Активен"
+  if (status === "archived") return "Архив"
+  return status
+}
+
+function shardSeedShort(seed) {
+  return String(seed || "").slice(0, 8)
+}
+
 onMounted(() => {
   window.addEventListener("pointerup", stopDragSelection)
-  loadProfile()
+  Promise.resolve()
+    .then(() => loadProfile())
+    .then(() => loadShards())
 })
 
 onBeforeUnmount(() => {
@@ -307,6 +348,52 @@ watch(nicknameDraft, (nextValue) => {
 
       <p v-if="success" class="success">{{ success }}</p>
       <p v-if="error" class="error">{{ error }}</p>
+    </section>
+
+    <section class="card profile-shards-card" v-if="!loading">
+      <div class="profile-grid-card__header">
+        <div>
+          <h2>Шарды</h2>
+          <p class="muted">Отдельные вкладки по играм, где уже создана своя world-сессия.</p>
+        </div>
+      </div>
+
+      <template v-if="loadingShards">
+        <p class="muted">Загружаем шарды...</p>
+      </template>
+      <template v-else-if="shards.length">
+        <v-tabs v-model="activeShardId" class="profile-shards-tabs" color="primary" show-arrows>
+          <v-tab v-for="shard in shards" :key="shard.id" :value="String(shard.id)">
+            {{ shard.game_name }}
+          </v-tab>
+        </v-tabs>
+
+        <v-window v-model="activeShardId" class="profile-shard-panel">
+          <v-window-item v-for="shard in shards" :key="shard.id" :value="String(shard.id)">
+            <article class="profile-shard-card">
+              <h3>{{ shard.name }}</h3>
+              <div class="detail-list">
+                <div><span>Игра</span><strong>{{ shard.game_name }}</strong></div>
+                <div><span>Статус</span><strong>{{ shardStatusLabel(shard.status) }}</strong></div>
+                <div><span>Seed</span><strong>{{ shardSeedShort(shard.world_seed) }}</strong></div>
+                <div><span>Создан</span><strong>{{ new Date(shard.created_at).toLocaleString("ru-RU") }}</strong></div>
+              </div>
+            </article>
+          </v-window-item>
+        </v-window>
+      </template>
+      <p v-else class="muted">
+        Пока нет созданных шардов. Нажмите «Войти в мир» на карточке игры с активными следящими.
+      </p>
+
+      <div v-if="activeShard" class="profile-shard-card profile-shard-card--summary">
+        <h3>Активный шард</h3>
+        <div class="detail-list">
+          <div><span>Игра</span><strong>{{ activeShard.game_name }}</strong></div>
+          <div><span>Статус</span><strong>{{ shardStatusLabel(activeShard.status) }}</strong></div>
+          <div><span>Seed</span><strong>{{ shardSeedShort(activeShard.world_seed) }}</strong></div>
+        </div>
+      </div>
     </section>
 
     <section class="profile-columns" v-if="!loading">

@@ -221,7 +221,7 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
     assert_equal true, json_response.dig("articles", 0, "read")
   end
 
-  test "bookmarks a game for an anonymous visitor and merges it on login" do
+  test "bookmarks a game for an anonymous visitor and merges it on registration" do
     post "/api/news/#{@article.id}/bookmark_game"
 
     assert_response :success
@@ -247,6 +247,37 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_equal true, json_response.dig("article", "game", "bookmarked")
+  end
+
+  test "creates a shard only for authenticated users with a followed game" do
+    post "/api/news/#{@article.id}/bookmark_game"
+
+    post "/api/registration",
+      params: {
+        email: "shard@example.com",
+        password: "Password123!",
+        password_confirmation: "Password123!"
+      }.to_json,
+      headers: { "CONTENT_TYPE" => "application/json" }
+
+    assert_response :created
+
+    get "/api/news"
+
+    assert_response :success
+    assert_equal true, json_response.dig("articles", 0, "game", "can_create_shard")
+
+    post "/api/games/#{@game.id}/shard"
+
+    assert_response :created
+    assert_equal @game.id, json_response.dig("shard", "game_id")
+    assert_equal "draft", json_response.dig("shard", "status")
+
+    get "/api/shards"
+
+    assert_response :success
+    assert_equal 1, json_response["shards"].size
+    assert_equal @game.id, json_response["shards"].first["game_id"]
   end
 
   test "unbookmarks a game" do
