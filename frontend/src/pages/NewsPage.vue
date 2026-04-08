@@ -304,7 +304,7 @@ async function enterWorld(article) {
 
   try {
     const data = await api.createShard(article.game.id)
-    await router.push({ path: "/profile", query: { shard_id: String(data.shard.id) } })
+    await router.push({ path: `/world/${data.shard.id}` })
   } catch (err) {
     error.value = err.message
   } finally {

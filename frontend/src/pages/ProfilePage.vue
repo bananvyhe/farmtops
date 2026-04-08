@@ -432,6 +432,7 @@ watch(nicknameDraft, (nextValue) => {
           </div>
           <p class="muted">Ник можно поменять только один раз. Доступность проверяется по мере ввода.</p>
         </div>
+        <RouterLink v-if="activeShard" :to="`/world/${activeShard.id}`" class="ghost profile-dashboard-link">Открыть мир</RouterLink>
         <RouterLink to="/dashboard" class="ghost profile-dashboard-link">Платежи и история списаний</RouterLink>
       </section>
 

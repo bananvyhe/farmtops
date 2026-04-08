@@ -16,6 +16,7 @@
 ## Что синхронизируется
 
 - shard lifecycle;
+- shard layers and layer occupancy;
 - список участников;
 - presence events;
 - позиции игроков и bot avatars;
@@ -65,6 +66,7 @@
 - `PUT /api/profile/prime-grid`
 - `POST /api/games/:id/world-entry`
 - `GET /api/shards/:id`
+- `GET /api/shards/:id/layers`
 - `GET /api/shards/:id/snapshot`
 - `POST /api/shards/:id/presence`
 - `POST /api/shards/:id/actions`

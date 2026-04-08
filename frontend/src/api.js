@@ -55,6 +55,10 @@ export const api = {
   updateProfile: (payload) => request("/api/profile", { method: "PATCH", body: JSON.stringify(payload) }),
   checkProfileNickname: (nickname) => request(withQuery("/api/profile/nickname_check", { nickname })),
   shards: () => request("/api/shards"),
+  shardWorld: (id) => request(`/api/shards/${id}/world`),
+  enterShard: (id, layerId = null) =>
+    request(withQuery(`/api/shards/${id}/enter`, { layer_id: layerId }), { method: "POST" }),
+  leaveShard: (id) => request(`/api/shards/${id}/leave`, { method: "DELETE" }),
   createShard: (gameId) => request(`/api/games/${gameId}/shard`, { method: "POST" }),
   dashboard: () => request("/api/dashboard"),
   createPayment: (payload) => request("/api/payments", { method: "POST", body: JSON.stringify(payload) }),

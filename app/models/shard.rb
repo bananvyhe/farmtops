@@ -1,6 +1,8 @@
 class Shard < ApplicationRecord
   belongs_to :user
   belongs_to :game
+  has_many :layers, class_name: "ShardLayer", dependent: :destroy
+  has_many :layer_memberships, class_name: "ShardLayerMembership", dependent: :destroy
 
   enum :status, { draft: 0, active: 1, archived: 2 }, default: :draft
 
@@ -14,5 +16,9 @@ class Shard < ApplicationRecord
 
   def self.build_seed
     SecureRandom.alphanumeric(16).downcase
+  end
+
+  def default_layer
+    layers.order(:layer_index).first_or_create!(layer_index: 1)
   end
 end

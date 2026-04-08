@@ -7,6 +7,7 @@ import ProfilePage from "./pages/ProfilePage.vue"
 import AdminPage from "./pages/AdminPage.vue"
 import NewsPage from "./pages/NewsPage.vue"
 import NewsArticlePage from "./pages/NewsArticlePage.vue"
+import ShardWorldPage from "./pages/ShardWorldPage.vue"
 import { createPinia } from "pinia"
 import vuetify from "./plugins/vuetify"
 import "./styles.css"
@@ -32,6 +33,7 @@ const routes = [
   { path: "/news", component: NewsPage },
   { path: "/news/:id", component: NewsArticlePage },
   { path: "/profile", component: ProfilePage },
+  { path: "/world/:id", component: ShardWorldPage },
   { path: "/dashboard", component: DashboardPage },
   { path: "/admin", component: AdminPage }
 ]

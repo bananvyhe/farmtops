@@ -32,6 +32,8 @@
 
 - [netcode/overview.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/overview.md)
   Реализация shard lifecycle, presence, prime-time matching, sync loop, authoritative backend и клиентское состояние.
+- [netcode/shard_layers.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/shard_layers.md)
+  Правила слоев внутри шарда, лимит 10 активных участников на слой, выбор свободного слоя и ограничения изоляции.
 - [runbooks/news_translation.md](/Users/rufus/workspace/projects/farmspot/docs/runbooks/news_translation.md)
   Короткий runbook по очереди перевода новостей, повторным job'ам, lock/recovery и проверке окружения Sidekiq.
 
@@ -40,7 +42,7 @@
 - Если задача про общий смысл продукта: открыть [vision.md](/Users/rufus/workspace/projects/farmspot/docs/vision.md) и [glossary.md](/Users/rufus/workspace/projects/farmspot/docs/glossary.md).
 - Если задача про генерацию мира и контент: открыть [worldgen/overview.md](/Users/rufus/workspace/projects/farmspot/docs/worldgen/overview.md).
 - Если задача про баланс, XP, мобов и босса: открыть [gameplay/combat.md](/Users/rufus/workspace/projects/farmspot/docs/gameplay/combat.md) и [gameplay/resources.md](/Users/rufus/workspace/projects/farmspot/docs/gameplay/resources.md).
-- Если задача про API, БД, presence, синхронизацию и прайм-сетку: открыть [architecture.md](/Users/rufus/workspace/projects/farmspot/docs/architecture.md) и [netcode/overview.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/overview.md).
+- Если задача про API, БД, presence, синхронизацию, прайм-сетку и слои шарда: открыть [architecture.md](/Users/rufus/workspace/projects/farmspot/docs/architecture.md), [netcode/overview.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/overview.md) и [netcode/shard_layers.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/shard_layers.md).
 
 ## Текущий статус репозитория
 

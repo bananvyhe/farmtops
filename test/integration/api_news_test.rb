@@ -261,13 +261,14 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
       headers: { "CONTENT_TYPE" => "application/json" }
 
     assert_response :created
+    csrf_token = json_response["csrf_token"]
 
     get "/api/news"
 
     assert_response :success
     assert_equal true, json_response.dig("articles", 0, "game", "can_create_shard")
 
-    post "/api/games/#{@game.id}/shard"
+    post "/api/games/#{@game.id}/shard", headers: { "X-CSRF-Token" => csrf_token }
 
     assert_response :created
     assert_equal @game.id, json_response.dig("shard", "game_id")

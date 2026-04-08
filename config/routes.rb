@@ -24,7 +24,11 @@ Rails.application.routes.draw do
     resource :profile, only: %i[show update] do
       get :nickname_check, on: :collection
     end
-    resources :shards, only: %i[index create]
+    resources :shards, only: %i[index create] do
+      get :world, on: :member
+      post :enter, on: :member
+      delete :leave, on: :member
+    end
     post "games/:game_id/shard", to: "shards#create"
     resource :dashboard, only: :show, controller: :dashboard
     resources :payment_transactions, path: "payments", only: %i[create show]

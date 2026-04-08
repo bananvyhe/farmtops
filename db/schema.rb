@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_04_08_102000) do
+ActiveRecord::Schema[8.0].define(version: 2026_04_08_110000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -193,6 +193,33 @@ ActiveRecord::Schema[8.0].define(version: 2026_04_08_102000) do
     t.index ["user_id"], name: "index_payment_transactions_on_user_id"
   end
 
+  create_table "shard_layer_memberships", force: :cascade do |t|
+    t.bigint "shard_id", null: false
+    t.bigint "shard_layer_id", null: false
+    t.bigint "user_id", null: false
+    t.datetime "joined_at", null: false
+    t.datetime "last_seen_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["last_seen_at"], name: "index_shard_layer_memberships_on_last_seen_at"
+    t.index ["shard_id", "user_id"], name: "index_shard_layer_memberships_on_shard_id_and_user_id", unique: true
+    t.index ["shard_id"], name: "index_shard_layer_memberships_on_shard_id"
+    t.index ["shard_layer_id", "user_id"], name: "index_shard_layer_memberships_on_shard_layer_id_and_user_id", unique: true
+    t.index ["shard_layer_id"], name: "index_shard_layer_memberships_on_shard_layer_id"
+    t.index ["user_id"], name: "index_shard_layer_memberships_on_user_id"
+  end
+
+  create_table "shard_layers", force: :cascade do |t|
+    t.bigint "shard_id", null: false
+    t.integer "layer_index", null: false
+    t.integer "status", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["shard_id", "layer_index"], name: "index_shard_layers_on_shard_id_and_layer_index", unique: true
+    t.index ["shard_id"], name: "index_shard_layers_on_shard_id"
+    t.index ["status"], name: "index_shard_layers_on_status"
+  end
+
   create_table "shards", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.bigint "game_id", null: false
@@ -258,6 +285,10 @@ ActiveRecord::Schema[8.0].define(version: 2026_04_08_102000) do
   add_foreign_key "news_game_bookmarks", "users", on_delete: :cascade
   add_foreign_key "news_sections", "news_sources"
   add_foreign_key "payment_transactions", "users", on_delete: :cascade
+  add_foreign_key "shard_layer_memberships", "shard_layers"
+  add_foreign_key "shard_layer_memberships", "shards"
+  add_foreign_key "shard_layer_memberships", "users"
+  add_foreign_key "shard_layers", "shards"
   add_foreign_key "shards", "games"
   add_foreign_key "shards", "users", on_delete: :cascade
   add_foreign_key "users", "tariffs"
