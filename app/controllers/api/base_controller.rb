@@ -43,6 +43,7 @@ module Api
         prime_slots_count: user.prime_slots_utc.size,
         world_level: user.world_level,
         world_xp_total: user.world_xp_total,
+        world_xp_to_next_level: user.world_xp_to_next_level,
         world_xp_bank: user.world_xp_bank,
         world_boss_kills: user.world_boss_kills
       }

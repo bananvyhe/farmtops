@@ -46,8 +46,10 @@
 - карту;
 - спавны игроков;
 - мобов, босса, ресурсы, расходники;
-- bot runtime;
-- результаты сессии.
+- server-side bot runtime;
+- authoritative combat and gathering resolution;
+- respawn timers;
+- результаты сессии и farm logs.
 
 ### 4. Progression Context
 
@@ -69,6 +71,7 @@
 - состояния шарда;
 - боевых расчетов;
 - экономики;
+- серверной симуляции mobs/resources/player avatars;
 - хранения прайм-сетки;
 - матчмейкинга;
 - оркестрации генерации контента;
@@ -81,8 +84,9 @@
 - создания шарда по расписанию или при готовности группы;
 - генерации названий и описаний контента;
 - запроса pixel-art ассетов через tunnel;
-- симуляции bot runtime между клиентскими тиками;
+- симуляции world tick loop и bot runtime без зависимости от клиента;
 - запуска prime-based bot simulation;
+- расчета respawn, drops и farm logs;
 - ретраев внешних AI-вызовов.
 
 ### Vue + PixiJS Client
@@ -90,12 +94,13 @@
 Клиентский слой разделяется на:
 
 - обычный UI на Vue;
-- игровую сцену на PixiJS;
+- игровую сцену на PixiJS как renderer-only слой;
 - GSAP только для экранных переходов, панелей, раскрытий, onboarding и non-world UI.
 
 ## Принципы
 
 - Backend authoritative.
+- Client does not own combat, loot or respawn rules.
 - Deterministic world seed wherever possible.
 - Heavy generation async with caching.
 - Game-specific flavor through existing AI infrastructure, not hardcoded tables.
@@ -132,13 +137,14 @@
 
 - добавить matchmaking по prime grid;
 - реализовать базовый shard lifecycle;
-- сгенерировать текстовый world seed и системные параметры без рендера.
+- сгенерировать текстовый world seed и системные параметры;
+- запустить server-side simulation loop без зависимости от Vue/Pixi.
 
 ### Phase 3
 
-- подключить PixiJS сцену;
-- реализовать карту, точки спавна, мобов, босса и ресурсы;
-- включить bot runtime и progression.
+- подключить PixiJS сцену как визуальный клиент к snapshot API;
+- реализовать карту, точки спавна, мобов, босса и ресурсы на backend;
+- включить bot runtime, progression, respawn и farm logs.
 
 ### Phase 4
 

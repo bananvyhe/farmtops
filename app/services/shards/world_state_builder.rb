@@ -72,73 +72,7 @@ module Shards
     end
 
     def world_payload
-      layer = @layer || @shard.default_layer
-      seed = seed_value(layer)
-      rng = Random.new(seed)
-      members = layer.memberships.includes(:user).order(:joined_at).to_a
-      current_slot_utc = current_week_slot_utc
-      active_members = members.select { |membership| membership.user.prime_slots_utc.include?(current_slot_utc) }
-      active_count = active_members.size
-      campaign_started_at = layer.campaign_started_at || layer.created_at
-      elapsed_seconds = [Time.current - campaign_started_at, 0].max
-      elapsed_hours = active_count.positive? ? (elapsed_seconds / 3600.0) : 0.0
-      target_players = [layer.campaign_target_players || active_count, MIN_BOSS_PARTICIPANTS].max
-      required_hours = active_count.positive? ? [10.0 / target_players, 1.0].max : 0.0
-      group_progress = if active_count.positive?
-        [[(elapsed_hours / required_hours) * 100.0, 100.0].min.round, 0].max
-      else
-        0
-      end
-      boss_ready = active_count >= MIN_BOSS_PARTICIPANTS && group_progress >= 100
-      boss_hp = 4_000 + active_count * 1_200 + layer.layer_index * 500
-      inventory = inventory_payload(elapsed_hours, active_count, active_members)
-      resources = resource_payloads(rng)
-      farm_log = farm_log_payload(active_members, elapsed_seconds, current_slot_utc)
-
-      {
-        tick: Time.current.to_i / 2,
-        seed: "#{@shard.world_seed}:#{layer.layer_index}",
-        map: map_payload(rng),
-        players: player_payloads(active_members, resources, group_progress, inventory, rng, elapsed_seconds),
-        mobs: mob_payloads(rng, active_count, group_progress, elapsed_seconds),
-        resources: resources,
-        drops: drop_payloads(rng, active_count, group_progress, elapsed_seconds),
-        inventory: inventory,
-        farm_log: farm_log,
-        current_week_slot_utc: current_slot_utc,
-        active_players_count: active_count,
-        active_players_required: MIN_BOSS_PARTICIPANTS,
-        mode: active_count.positive? ? "active" : "idle",
-        boss: {
-          id: "boss-#{layer.id}",
-          name: boss_name(seed),
-          x: MAP_WIDTH / 2,
-          y: MAP_HEIGHT / 2,
-          hp: boss_hp,
-          max_hp: boss_hp,
-          progress: group_progress,
-          required_hours: required_hours.round(2),
-          required_participants: MIN_BOSS_PARTICIPANTS,
-          ready: boss_ready,
-          reward_xp: inventory[:pending_xp]
-        },
-        progress: {
-          layer_index: layer.layer_index,
-          occupancy: active_count,
-          members_count: members.size,
-          capacity: layer.capacity,
-          energy_flow: active_count.positive? ? 40 + active_count * 7 : 0,
-          elapsed_hours: elapsed_hours.round(2),
-          required_hours: required_hours.round(2),
-          boss_unlock_progress: group_progress,
-          session_progress: group_progress,
-          group_goal: 100,
-          group_progress: group_progress,
-          boss_unlock_minutes: (required_hours * 60).round,
-          active_players_count: active_count,
-          current_week_slot_utc: current_slot_utc
-        }
-      }
+      Shards::WorldSimulator.new(shard: @shard, layer: @layer || @shard.default_layer).call
     end
 
     def map_payload(rng)
@@ -223,7 +157,6 @@ module Shards
           resource_stop_phase: resource_stop_phase.round(2),
           resource_stop_window: resource_stop_window.round(2),
           active_now: true,
-          bot: true,
           role: index.zero? ? "leader" : "support",
           action: activity,
           path: route_path
@@ -280,10 +213,6 @@ module Shards
       Array.new(total) do |index|
         anchor_x = rng.rand(3..MAP_WIDTH - 4)
         anchor_y = rng.rand(3..MAP_HEIGHT - 4)
-        life_cycle_seconds = 180 + (index % 5) * 34
-        alive_window_seconds = 96 + (index % 4) * 10
-        life_phase = (elapsed_seconds + index * 13) % life_cycle_seconds
-        alive = players_count.zero? ? true : life_phase < alive_window_seconds
         {
           id: "mob-#{index}",
           name: ["Slime", "Scout", "Watcher", "Guard"].sample(random: rng),
@@ -294,21 +223,15 @@ module Shards
           patrol_radius: 0.4 + rng.rand * 0.9,
           patrol_speed: 0.08 + rng.rand * 0.07,
           patrol_phase: rng.rand * Math::PI * 2,
-          hp: alive ? 45 + players_count * 10 : 0,
+          hp: 45 + players_count * 10,
           max_hp: 45 + players_count * 10,
           level: 1 + index / 3,
           asset_key: ["slime", "beast", "hunter"].sample(random: rng),
           hostile: true,
           pressure: progress_pct,
-          alive: alive,
-          state: if players_count.zero?
-            "idle"
-          elsif alive
-            elapsed_seconds > 0 ? "patrol" : "spawn"
-          else
-            "dead"
-          end,
-          respawn_in_seconds: alive ? 0 : (life_cycle_seconds - life_phase).round
+          alive: true,
+          state: elapsed_seconds > 0 ? "patrol" : "spawn",
+          respawn_in_seconds: 0
         }
       end
     end
@@ -316,11 +239,10 @@ module Shards
     def resource_payloads(rng)
       kinds = [
         { kind: "energy_crystal", asset_key: "resource_energy" },
-        { kind: "heal_herb", asset_key: "resource_heal" },
         { kind: "shard_ore", asset_key: "resource_shard" }
       ]
 
-      Array.new(12) do |index|
+      Array.new(24) do |index|
         kind = kinds[index % kinds.length]
         {
           id: "resource-#{index}",
@@ -328,10 +250,10 @@ module Shards
           asset_key: kind[:asset_key],
           x: rng.rand(1..MAP_WIDTH - 2),
           y: rng.rand(1..MAP_HEIGHT - 2),
-          amount: 10 + rng.rand(30),
+          amount: 12 + rng.rand(36),
           respawns_in: 20 + rng.rand(40),
           pulse_phase: (index * 0.9 + rng.rand).round(2),
-          pulse_speed: (0.8 + rng.rand * 0.55).round(2)
+          pulse_speed: (0.95 + rng.rand * 0.55).round(2)
         }
       end
     end

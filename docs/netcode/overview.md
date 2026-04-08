@@ -11,7 +11,8 @@
 - Rails API хранит и подтверждает состояние.
 - Клиент получает snapshot и delta updates.
 - Боевые и экономические расчеты выполняются на backend или worker side.
-- PixiJS отображает состояние и локально интерполирует перемещения и UI.
+- PixiJS только отображает server-authoritative snapshot и UI.
+- Любая имитация движения, смерти, respawn и loot pickup должна исходить из server state, а не из локальной клиентской логики.
 
 ## Что синхронизируется
 
@@ -19,7 +20,7 @@
 - shard layers and layer occupancy;
 - список участников;
 - presence events;
-- позиции игроков и bot avatars;
+- позиции player avatars, привязанных к аккаунтам живых пользователей;
 - состояние мобов и босса;
 - resource nodes и pickups;
 - XP bank, HP, энергия и ключевые статусы.
@@ -37,10 +38,11 @@
 
 Смысл prime grid:
 
-- это расписание для bot runtime;
-- в эти часы персонаж должен автоматически участвовать в симуляции;
+- это расписание для server spawn eligibility и account-driven avatar runtime;
+- в эти часы аккаунт должен автоматически участвовать в симуляции через свой avatar;
 - реальный вход пользователя не обязателен;
-- совпадение праймов нескольких пользователей должно переводить ботов из разрозненного фарма в совместное движение к цели.
+- совпадение праймов нескольких пользователей должно переводить их avatars из разрозненного фарма в совместное движение к цели;
+- если слот не активен, на сервере не создается активный player avatar для этого аккаунта.
 
 Матчмейкинг использует:
 
@@ -81,6 +83,26 @@ UI state стоит держать в слоях:
 - shard lobby state;
 - active shard runtime state;
 - Pixi entity cache and render adapters.
+
+## Server Simulation Contract
+
+Сервер отвечает за:
+
+- spawn и despawn игрока на основе prime slots;
+- deterministic placement мобов, ресурсов и босса по seed;
+- movement path generation и pacing для account avatars;
+- combat resolution, death, drop spawning и respawn;
+- resource gathering, inventory gain и session logs;
+- ship of active players across layers, если один слой переполнен.
+
+Клиент отвечает только за:
+
+- визуализацию entities;
+- interpolation поверх уже подтвержденного snapshot;
+- анимации hit, gather, loot popup;
+- подписку на свежий snapshot и отображение farm logs.
+
+Если задача требует изменения game behavior, сначала меняется server simulation contract, а уже потом Pixi renderer.
 
 В UI важно показывать watcher-сигналы:
 

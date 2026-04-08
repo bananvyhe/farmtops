@@ -26,6 +26,13 @@ Rails.application.config.after_initialize do
   )
 
   Sidekiq::Cron::Job.load_from_hash(
+    "shard_world_tick" => {
+      "class" => "ShardWorldTickJob",
+      "cron" => "* * * * *"
+    }
+  )
+
+  Sidekiq::Cron::Job.load_from_hash(
     "news_crawl_sources" => {
       "class" => "NewsCrawlSourcesJob",
       "cron" => News::Scheduler.cron_expression

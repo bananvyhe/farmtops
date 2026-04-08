@@ -93,6 +93,41 @@ class User < ApplicationRecord
     self[:world_boss_kills] || 0
   end
 
+  def world_xp_threshold_for(level)
+    level = level.to_i
+    return 0 if level <= 1
+
+    ((level - 1)**2 * 1_000).to_i
+  end
+
+  def world_xp_to_next_level
+    [world_xp_threshold_for(world_level.to_i + 1) - world_xp_total.to_i, 0].max
+  end
+
+  def apply_world_xp_bank!
+    with_lock do
+      banked_xp = world_xp_bank.to_i
+      return 0 if banked_xp <= 0
+
+      total_xp = world_xp_total.to_i + banked_xp
+      level = world_level.to_i
+
+      loop do
+        threshold = world_xp_threshold_for(level + 1)
+        break if threshold <= 0 || total_xp < threshold
+
+        level += 1
+      end
+
+      update_columns(
+        world_xp_total: total_xp,
+        world_xp_bank: 0,
+        world_level: level
+      )
+      banked_xp
+    end
+  end
+
   def self.generate_unique_nickname
     loop do
       candidate = "u_#{SecureRandom.alphanumeric(8).downcase}"

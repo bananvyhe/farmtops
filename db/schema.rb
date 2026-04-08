@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_04_08_125500) do
+ActiveRecord::Schema[8.0].define(version: 2026_04_08_140000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -217,6 +217,9 @@ ActiveRecord::Schema[8.0].define(version: 2026_04_08_125500) do
     t.datetime "updated_at", null: false
     t.datetime "campaign_started_at"
     t.integer "campaign_target_players", default: 2, null: false
+    t.jsonb "world_state", default: {}, null: false
+    t.integer "world_state_version", default: 0, null: false
+    t.datetime "world_state_simulated_at"
     t.index ["shard_id", "layer_index"], name: "index_shard_layers_on_shard_id_and_layer_index", unique: true
     t.index ["shard_id"], name: "index_shard_layers_on_shard_id"
     t.index ["status"], name: "index_shard_layers_on_status"

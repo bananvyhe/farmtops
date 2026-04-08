@@ -34,6 +34,8 @@
 
 - [netcode/overview.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/overview.md)
   Реализация shard lifecycle, presence, prime-time matching, sync loop, authoritative backend и клиентское состояние.
+- [netcode/server_simulation.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/server_simulation.md)
+  Отдельный узкий план серверной симуляции: spawn, movement, combat, resource gathering, respawn, logs и snapshot delivery.
 - [netcode/shard_layers.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/shard_layers.md)
   Правила слоев внутри шарда, лимит 10 активных участников на слой, выбор свободного слоя и ограничения изоляции.
 - [runbooks/news_translation.md](/Users/rufus/workspace/projects/farmspot/docs/runbooks/news_translation.md)
@@ -44,10 +46,10 @@
 - Если задача про общий смысл продукта: открыть [vision.md](/Users/rufus/workspace/projects/farmspot/docs/vision.md) и [glossary.md](/Users/rufus/workspace/projects/farmspot/docs/glossary.md).
 - Если задача про генерацию мира и контент: открыть [worldgen/overview.md](/Users/rufus/workspace/projects/farmspot/docs/worldgen/overview.md).
 - Если задача про баланс, XP, мобов и босса: открыть [gameplay/combat.md](/Users/rufus/workspace/projects/farmspot/docs/gameplay/combat.md) и [gameplay/resources.md](/Users/rufus/workspace/projects/farmspot/docs/gameplay/resources.md).
-- Если задача про API, БД, presence, синхронизацию, прайм-сетку и слои шарда: открыть [architecture.md](/Users/rufus/workspace/projects/farmspot/docs/architecture.md), [netcode/overview.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/overview.md) и [netcode/shard_layers.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/shard_layers.md).
+- Если задача про API, БД, presence, синхронизацию, прайм-сетку и слои шарда: открыть [architecture.md](/Users/rufus/workspace/projects/farmspot/docs/architecture.md), [netcode/overview.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/overview.md), [netcode/server_simulation.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/server_simulation.md) и [netcode/shard_layers.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/shard_layers.md).
 
 ## Текущий статус репозитория
 
 - Сейчас в коде уже есть Rails API, Vue frontend, каталог игр, идентификация игр через существующую нейро-инфраструктуру и счетчик подписчиков на игру.
-- Игровой слой с шардом, прайм-сеткой пользователя, world join, PixiJS-сценой, ботами, боевой системой и ресурсной экономикой еще не реализован.
+- Игровой слой с шардом, прайм-сеткой пользователя, world join, PixiJS-сценой, ботами, боевой системой и ресурсной экономикой еще не доведен до server-authoritative simulation.
 - Эти документы описывают целевую структуру, чтобы дальнейшая реализация шла по подсистемам, а не одним большим контекстом.

@@ -9,6 +9,18 @@ class ShardLayer < ApplicationRecord
   validates :layer_index, uniqueness: { scope: :shard_id }
   validates :campaign_target_players, numericality: { greater_than_or_equal_to: 2 }
 
+  def world_state
+    self[:world_state] || {}
+  end
+
+  def world_state=(value)
+    super(value.presence || {})
+  end
+
+  def world_state_simulated_at
+    self[:world_state_simulated_at]
+  end
+
   def occupancy
     memberships.count
   end

@@ -13,10 +13,18 @@ const selectedLayerId = ref(null)
 const pixiHostRef = ref(null)
 const sceneSummary = ref("")
 let frameHandle = null
+let renderHandle = null
 let refreshHandle = null
+let visibilityHandler = null
 let app = null
 let stageContainer = null
 let pixiMounted = false
+const renderState = {
+  seed: null,
+  players: new Map(),
+  mobs: new Map(),
+  boss: null
+}
 
 const shard = computed(() => worldResponse.value?.shard || null)
 const layers = computed(() => worldResponse.value?.layers || [])
@@ -41,78 +49,90 @@ function hexColor(value) {
   return Number.parseInt(String(value).replace("#", ""), 16)
 }
 
-function lerp(from, to, progress) {
-  return from + (to - from) * progress
+function currentSceneInventory() {
+  return world.value?.inventory || {}
 }
 
-function easeInOutCubic(value) {
-  if (value < 0.5) return 4 * value * value * value
-  const offset = -2 * value + 2
-  return 1 - (offset * offset * offset) / 2
+function farmLogPlayers(entry) {
+  if (Array.isArray(entry?.players) && entry.players.length) return entry.players
+  if (entry?.player) return [entry.player]
+  return ["—"]
 }
 
-function phaseDistance(from, to) {
-  const forward = ((to - from) % 1 + 1) % 1
-  return Math.min(forward, 1 - forward)
+function farmLogDuration(entry) {
+  if (entry?.together_minutes != null) return `${entry.together_minutes} мин вместе`
+  if (entry?.shared_prime_hours != null) return `${entry.shared_prime_hours} ч совпадения`
+  return "ожидает агрегации"
 }
 
-function routeProgressFromTimestamp(player, timestamp) {
-  const cycleSeconds = Number(player.route_cycle_seconds || 48)
-  const routeOffset = Number(player.route_offset_seconds || 0)
-  const clock = timestamp / 1000 + routeOffset
-  return ((clock % cycleSeconds) + cycleSeconds) % cycleSeconds / cycleSeconds
+function resetRenderState(seed = null) {
+  renderState.seed = seed
+  renderState.players.clear()
+  renderState.mobs.clear()
+  renderState.boss = null
 }
 
-function routePositionAtTimestamp(player, timestamp) {
-  const path = Array.isArray(player.path) ? player.path : []
-  if (path.length < 2) {
-    return {
+function smoothPosition(current, target, factor = 0.12) {
+  return current + (target - current) * factor
+}
+
+function syncRenderState(snapshot) {
+  if (!snapshot?.seed) {
+    resetRenderState()
+    return
+  }
+
+  if (renderState.seed !== snapshot.seed) {
+    resetRenderState(snapshot.seed)
+  }
+
+  const playerIds = new Set()
+  snapshot.players.forEach((player) => {
+    const target = {
       x: Number(player.x || 0),
-      y: Number(player.y || 0),
-      phase: 0,
-      action: player.action || "idle"
+      y: Number(player.y || 0)
     }
-  }
+    playerIds.add(String(player.id))
 
-  const routeSpeedFactor = Number(player.route_speed_factor || 1)
-  const phase = (routeProgressFromTimestamp(player, timestamp) * routeSpeedFactor) % 1
-  const resourceStopPhase = Number(player.resource_stop_phase || 0.24)
-  const resourceStopWindow = Number(player.resource_stop_window || 0.08)
-  const stopDistance = phaseDistance(phase, resourceStopPhase)
-  const resourceX = Number(player.resource_target_x ?? player.x ?? 0)
-  const resourceY = Number(player.resource_target_y ?? player.y ?? 0)
-
-  if (stopDistance < resourceStopWindow / 2) {
-    const orbitPhase = timestamp / 1200 + Number(player.route_offset_seconds || 0) / 7
-    const orbitRadius = 0.18 + Number(player.route_cycle_seconds || 48) / 1200
-    return {
-      x: resourceX + Math.cos(orbitPhase) * orbitRadius,
-      y: resourceY + Math.sin(orbitPhase * 1.2) * orbitRadius * 0.7,
-      phase,
-      action: "gather"
+    if (!renderState.players.has(String(player.id))) {
+      renderState.players.set(String(player.id), { ...target })
+      return
     }
-  }
 
-  const segmentCount = path.length - 1
-  const segmentFloat = phase * segmentCount
-  const segmentIndex = Math.min(segmentCount - 1, Math.floor(segmentFloat))
-  const localPhase = easeInOutCubic(segmentFloat - segmentIndex)
-  const from = path[segmentIndex]
-  const to = path[segmentIndex + 1]
-  const dx = Number(to.x || 0) - Number(from.x || 0)
-  const dy = Number(to.y || 0) - Number(from.y || 0)
-  const length = Math.max(Math.hypot(dx, dy), 0.0001)
-  const swayPhase = Math.sin(timestamp / 2400 + Number(player.route_offset_seconds || 0) / 3)
-  const sway = 0.1 + Number(player.route_cycle_seconds || 48) / 1400
-  const swayX = (-dy / length) * sway * swayPhase
-  const swayY = (dx / length) * sway * swayPhase
-  const action = player.action || (segmentIndex === 0 ? "gather" : segmentIndex === 1 ? "fight" : "return")
+    const current = renderState.players.get(String(player.id))
+      current.x = smoothPosition(current.x, target.x, 0.05)
+      current.y = smoothPosition(current.y, target.y, 0.05)
+  })
 
-  return {
-    x: lerp(Number(from.x || 0), Number(to.x || 0), localPhase) + swayX,
-    y: lerp(Number(from.y || 0), Number(to.y || 0), localPhase) + swayY,
-    phase,
-    action
+  Array.from(renderState.players.keys()).forEach((id) => {
+    if (!playerIds.has(id)) renderState.players.delete(id)
+  })
+
+  const mobIds = new Set()
+  snapshot.mobs.forEach((mob) => {
+    const target = {
+      x: Number(mob.x || 0),
+      y: Number(mob.y || 0)
+    }
+    mobIds.add(String(mob.id))
+
+    if (!renderState.mobs.has(String(mob.id))) {
+      renderState.mobs.set(String(mob.id), { ...target })
+      return
+    }
+
+    const current = renderState.mobs.get(String(mob.id))
+    current.x = smoothPosition(current.x, target.x, 0.04)
+    current.y = smoothPosition(current.y, target.y, 0.04)
+  })
+
+  Array.from(renderState.mobs.keys()).forEach((id) => {
+    if (!mobIds.has(id)) renderState.mobs.delete(id)
+  })
+
+  renderState.boss = {
+    x: Number(snapshot.boss?.x || 0),
+    y: Number(snapshot.boss?.y || 0)
   }
 }
 
@@ -150,8 +170,9 @@ async function loadWorld() {
 
 async function refreshWorld() {
   if (!route.params.id) return
-  if (refreshing.value) return
+  if (refreshing.value || loading.value || document.hidden) return
 
+  refreshing.value = true
   try {
     const data = await api.shardWorld(route.params.id)
     worldResponse.value = data
@@ -160,6 +181,8 @@ async function refreshWorld() {
     }
   } catch (err) {
     error.value = err.message
+  } finally {
+    refreshing.value = false
   }
 }
 
@@ -178,7 +201,9 @@ async function mountPixiScene() {
     background: "#0a0d14",
     width: hostWidth,
     height: hostHeight,
+    preference: "canvas",
     antialias: false,
+    autoStart: false,
     autoDensity: true,
     resolution: window.devicePixelRatio || 1
   })
@@ -226,7 +251,10 @@ function drawWorld(timestamp) {
   const { gridWidth, gridHeight, tiles, width, height, tileSize, offsetX, offsetY, mapWidth, mapHeight } = metrics
   const hasWorld = Boolean(world.value)
   const progress = Number(world.value?.progress?.boss_unlock_progress || world.value?.progress?.group_progress || 0)
+  const inventory = world.value?.inventory || {}
   const stage = stageContainer
+
+  syncRenderState(world.value)
 
   stage.removeChildren()
 
@@ -277,25 +305,6 @@ function drawWorld(timestamp) {
   })
   stage.addChild(gridGfx)
 
-  const routeGfx = new Graphics()
-  const routeNodesGfx = new Graphics()
-  world.value.players.forEach((player) => {
-    if (!Array.isArray(player.path) || player.path.length < 2) return
-    const points = player.path.map((point) => ({
-      x: offsetX + point.x * tileSize + tileSize / 2,
-      y: offsetY + point.y * tileSize + tileSize / 2
-    }))
-    routeGfx.moveTo(points[0].x, points[0].y)
-    points.slice(1).forEach((point) => routeGfx.lineTo(point.x, point.y))
-    routeGfx.stroke({ width: 1, color: hexColor("#7dd3fc"), alpha: 0.08 })
-    points.forEach((point, pointIndex) => {
-      const radius = pointIndex === 0 || pointIndex === points.length - 1 ? 2.5 : 1.8
-      routeNodesGfx.circle(point.x, point.y, radius).fill({ color: hexColor("#7dd3fc"), alpha: 0.12 })
-    })
-  })
-  stage.addChild(routeGfx)
-  stage.addChild(routeNodesGfx)
-
   const entities = new Container()
   const shapes = new Graphics()
   const labels = new Container()
@@ -303,20 +312,24 @@ function drawWorld(timestamp) {
   entities.addChild(labels)
 
   world.value.resources.forEach((resource) => {
-    const radius = resource.kind === "shard_ore" ? 8 : 6
-    const fill =
-      resource.kind === "energy_crystal"
-        ? "#83d8ff"
-        : resource.kind === "heal_herb"
-          ? "#96ef9a"
-          : "#d9b065"
+    if (resource.alive === false) return
+    const isEnergy = resource.kind === "energy_crystal"
+    const radius = isEnergy ? 6 : 9
+    const fill = isEnergy ? "#83d8ff" : "#d9b065"
     const cx = offsetX + resource.x * tileSize + tileSize / 2
     const cy = offsetY + resource.y * tileSize + tileSize / 2
     const pulsePhase = Number(resource.pulse_phase || 0) + timestamp / (900 / Number(resource.pulse_speed || 1))
     const pulse = 0.5 + Math.sin(pulsePhase) * 0.5
-    shapes.circle(cx, cy, radius + 4 + pulse * 2).fill({ color: hexColor(fill), alpha: 0.08 + pulse * 0.06 })
-    shapes.circle(cx, cy, radius + pulse * 0.8).stroke({ width: 1.2, color: hexColor(fill), alpha: 0.24 + pulse * 0.2 })
-    shapes.circle(cx, cy, radius).fill({ color: hexColor(fill), alpha: 0.92 })
+    if (isEnergy) {
+      shapes.circle(cx, cy, radius + 4 + pulse * 2).fill({ color: hexColor(fill), alpha: 0.08 + pulse * 0.06 })
+      shapes.circle(cx, cy, radius + pulse * 0.8).stroke({ width: 1.2, color: hexColor(fill), alpha: 0.24 + pulse * 0.2 })
+      shapes.circle(cx, cy, radius).fill({ color: hexColor(fill), alpha: 0.94 })
+      shapes.circle(cx, cy, radius * 0.38).fill({ color: hexColor("#f5fdff"), alpha: 0.95 })
+    } else {
+      shapes.roundRect(cx - radius, cy - radius, radius * 2, radius * 2, 3).fill({ color: hexColor(fill), alpha: 0.9 })
+      shapes.roundRect(cx - radius - 2, cy - radius - 2, radius * 2 + 4, radius * 2 + 4, 4).stroke({ width: 1.2, color: hexColor("#fff0c9"), alpha: 0.18 + pulse * 0.12 })
+      shapes.rect(cx - 2, cy - radius + 2, 4, radius * 2 - 4).fill({ color: hexColor("#6d4b2f"), alpha: 0.35 })
+    }
   })
 
   world.value.drops?.forEach((drop) => {
@@ -326,33 +339,39 @@ function drawWorld(timestamp) {
     shapes.roundRect(cx - 4, cy - 4, 8, 8, 2).fill({ color: hexColor(fill), alpha: 0.8 })
   })
 
-  world.value.mobs.forEach((mob, index) => {
+  Array.from(renderState.mobs.entries()).forEach(([mobId, mobState], index) => {
+    const mob = world.value.mobs.find((item) => String(item.id) === mobId) || { level: 1, alive: true }
     if (mob.alive === false) return
-    const anchorX = Number(mob.anchor_x ?? mob.x ?? 0)
-    const anchorY = Number(mob.anchor_y ?? mob.y ?? 0)
-    const patrolRadius = Number(mob.patrol_radius || 0.9)
-    const patrolSpeed = Number(mob.patrol_speed || 0.12)
-    const patrolPhase = Number(mob.patrol_phase || 0)
-    const driftX = Math.sin(timestamp / (1100 / patrolSpeed) + patrolPhase + index * 0.4) * patrolRadius
-    const driftY = Math.cos(timestamp / (1300 / patrolSpeed) + patrolPhase + index * 0.3) * (patrolRadius * 0.7)
-    const cx = offsetX + (anchorX + driftX) * tileSize + tileSize / 2
-    const cy = offsetY + (anchorY + driftY) * tileSize + tileSize / 2
-    shapes.circle(cx, cy, 7 + (mob.level % 2)).fill({ color: hexColor("#ff8858"), alpha: 0.82 })
+    const cx = offsetX + Number(mobState.x || 0) * tileSize + tileSize / 2
+    const cy = offsetY + Number(mobState.y || 0) * tileSize + tileSize / 2
+    const mobLevel = Number(mob.level || 1)
+    shapes.circle(cx, cy, 7 + (mobLevel % 2)).fill({ color: hexColor("#ff8858"), alpha: 0.82 })
     shapes.circle(cx, cy, 11).stroke({ width: 1, color: hexColor("#ff8858"), alpha: 0.1 })
   })
 
-  world.value.players.forEach((player, index) => {
-    const routePoint = routePositionAtTimestamp(player, timestamp)
-    const px = routePoint.x
-    const py = routePoint.y
-    const cx = offsetX + px * tileSize + tileSize / 2
-    const cy = offsetY + py * tileSize + tileSize / 2
+  Array.from(renderState.players.entries()).forEach(([playerId, playerState], index) => {
+    const player = world.value.players.find((item) => String(item.id) === playerId) || {}
+    const cx = offsetX + Number(playerState.x || 0) * tileSize + tileSize / 2
+    const cy = offsetY + Number(playerState.y || 0) * tileSize + tileSize / 2
+    const targetX = Number(player.target_x)
+    const targetY = Number(player.target_y)
+    const hasTarget = Number.isFinite(targetX) && Number.isFinite(targetY)
     const color =
-      routePoint.action === "fight"
+      player.action === "fight"
         ? "#7dd3fc"
-        : routePoint.action === "return"
+        : player.action === "return"
           ? "#c7d2fe"
           : "#ffd18a"
+
+    if (hasTarget) {
+      const tx = offsetX + targetX * tileSize + tileSize / 2
+      const ty = offsetY + targetY * tileSize + tileSize / 2
+      shapes.moveTo(cx, cy)
+      shapes.lineTo(tx, ty)
+      shapes.stroke({ width: 1, color: hexColor(color), alpha: 0.12 })
+      shapes.circle(tx, ty, 2.5).fill({ color: hexColor(color), alpha: 0.22 })
+    }
+
     shapes.circle(cx, cy, 10).fill({ color: hexColor(color), alpha: 1 })
     shapes.circle(cx, cy, 14).stroke({ width: 1, color: hexColor(color), alpha: 0.24 })
     shapes.circle(cx + 11, cy + 11, 2.2).fill({ color: hexColor(color), alpha: 0.72 })
@@ -375,44 +394,48 @@ function drawWorld(timestamp) {
   })
 
   const boss = world.value.boss
-  const bossCx = offsetX + boss.x * tileSize + tileSize / 2
-  const bossCy = offsetY + boss.y * tileSize + tileSize / 2 + Math.sin(timestamp / 400) * 2
+  const bossPosition = renderState.boss || { x: boss.x, y: boss.y }
+  const bossCx = offsetX + bossPosition.x * tileSize + tileSize / 2
+  const bossCy = offsetY + bossPosition.y * tileSize + tileSize / 2 + Math.sin(timestamp / 400) * 2
   shapes.circle(bossCx, bossCy, 16 + Math.sin(timestamp / 500) * 2).fill({ color: hexColor("#b93b3b"), alpha: 1 })
   shapes.circle(bossCx, bossCy, 22).stroke({ width: 2, color: hexColor("#ffd2d2"), alpha: 0.45 })
   stage.addChild(entities)
 
-  sceneSummary.value = `boss:${progress}% bank:${world.value.inventory?.banked_xp || 0} pending:${world.value.inventory?.pending_xp || 0}`
-  world.value.players.forEach((player) => {
-    const routePoint = routePositionAtTimestamp(player, timestamp)
-    const cx = offsetX + routePoint.x * tileSize + tileSize / 2
-    const cy = offsetY + routePoint.y * tileSize + tileSize / 2
-    const marker = new Graphics()
-    marker.circle(cx - 12, cy - 12, 2).fill({ color: hexColor("#ffffff"), alpha: 0.65 })
-    stage.addChild(marker)
-  })
+  sceneSummary.value = `boss:${progress}% loot:${inventory.loot} energy:${inventory.energy} ore:${inventory.shard_ore}`
 }
 
 function animationLoop(timestamp) {
   drawWorld(timestamp)
-  frameHandle = window.requestAnimationFrame(animationLoop)
+  app?.render()
 }
 
 onMounted(async () => {
   await nextTick()
   await mountPixiScene()
-  frameHandle = window.requestAnimationFrame(animationLoop)
   await loadWorld()
   await enterLayer(selectedLayerId.value)
-  refreshHandle = window.setInterval(refreshWorld, 4000)
+  drawWorld(performance.now())
+  app?.render()
+  renderHandle = window.setInterval(() => {
+    animationLoop(performance.now())
+  }, 80)
+  refreshHandle = window.setInterval(refreshWorld, 5000)
+  visibilityHandler = () => {
+    if (!document.hidden) refreshWorld()
+  }
+  document.addEventListener("visibilitychange", visibilityHandler)
 })
 
 onBeforeUnmount(() => {
   if (frameHandle) window.cancelAnimationFrame(frameHandle)
+  if (renderHandle) window.clearInterval(renderHandle)
   if (refreshHandle) window.clearInterval(refreshHandle)
+  if (visibilityHandler) document.removeEventListener("visibilitychange", visibilityHandler)
   app?.destroy(true, { children: true, texture: true, context: true })
   app = null
   stageContainer = null
   pixiMounted = false
+  resetRenderState()
 })
 </script>
 
@@ -490,7 +513,7 @@ onBeforeUnmount(() => {
         </div>
         <div class="world-scene-stat">
           <span>XP банк</span>
-          <strong>{{ world.inventory.banked_xp }}</strong>
+          <strong>{{ currentSceneInventory().banked_xp }}</strong>
         </div>
         <div class="world-scene-stat">
           <span>UTC слот</span>
@@ -512,9 +535,10 @@ onBeforeUnmount(() => {
         </div>
       <div class="world-scene-hud world-scene-hud--bottom">
         <div class="world-legend">
-          <span><i class="legend-dot legend-dot--player"></i> Игроки и боты</span>
+          <span><i class="legend-dot legend-dot--player"></i> Аватары аккаунтов</span>
           <span><i class="legend-dot legend-dot--mob"></i> Мобы</span>
-          <span><i class="legend-dot legend-dot--resource"></i> Ресурсы</span>
+          <span><i class="legend-dot legend-dot--resource legend-dot--energy"></i> Энергия</span>
+          <span><i class="legend-dot legend-dot--resource legend-dot--ore"></i> Руда</span>
           <span><i class="legend-dot legend-dot--boss"></i> Босс</span>
         </div>
         <p class="world-scene-caption">{{ sceneSummary }}</p>
@@ -568,20 +592,20 @@ onBeforeUnmount(() => {
       <section class="card card--dark world-panel">
         <h2>Инвентарь</h2>
         <div v-if="world" class="detail-list">
-          <div><span>Лут</span><strong>{{ world.inventory.loot }}</strong></div>
-          <div><span>Энергия</span><strong>{{ world.inventory.energy }}</strong></div>
-          <div><span>Лечение</span><strong>{{ world.inventory.healing }}</strong></div>
-          <div><span>Руда</span><strong>{{ world.inventory.shard_ore }}</strong></div>
-          <div><span>Банк XP</span><strong>{{ world.inventory.pending_xp }}</strong></div>
+          <div><span>Лут</span><strong>{{ currentSceneInventory().loot }}</strong></div>
+          <div><span>Энергия</span><strong>{{ currentSceneInventory().energy }}</strong></div>
+          <div><span>Лечение</span><strong>{{ currentSceneInventory().healing }}</strong></div>
+          <div><span>Руда</span><strong>{{ currentSceneInventory().shard_ore }}</strong></div>
+          <div><span>Банк XP</span><strong>{{ currentSceneInventory().pending_xp }}</strong></div>
         </div>
       </section>
 
       <section class="card card--dark world-panel world-panel--wide">
         <h2>Фарм-лог</h2>
         <div v-if="world && world.farm_log?.length" class="world-log-list">
-          <div v-for="entry in world.farm_log" :key="entry.players.join('-')" class="world-log-item">
-            <strong>{{ entry.players.join(" + ") }}</strong>
-            <span>{{ entry.shared_prime_hours }} ч совпадения · {{ entry.together_minutes }} мин вместе</span>
+          <div v-for="(entry, index) in world.farm_log" :key="`${entry.kind || 'event'}-${entry.at || index}`" class="world-log-item">
+            <strong>{{ farmLogPlayers(entry).join(" + ") }}</strong>
+            <span>{{ entry.kind || "event" }} · {{ entry.target || "—" }} · {{ farmLogDuration(entry) }}</span>
           </div>
         </div>
         <p v-else class="muted">Сейчас нет совпавших праймов, поэтому фарм-лог пуст.</p>
@@ -805,6 +829,16 @@ onBeforeUnmount(() => {
 
 .legend-dot--resource {
   background: #9de7a5;
+}
+
+.legend-dot--energy {
+  background: #83d8ff;
+  box-shadow: 0 0 0 1px rgba(131, 216, 255, 0.25), 0 0 10px rgba(131, 216, 255, 0.18);
+}
+
+.legend-dot--ore {
+  background: #d9b065;
+  box-shadow: 0 0 0 1px rgba(217, 176, 101, 0.22), 0 0 10px rgba(217, 176, 101, 0.12);
 }
 
 .legend-dot--boss {
