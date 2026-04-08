@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_04_08_100000) do
+ActiveRecord::Schema[8.0].define(version: 2026_04_08_102000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -243,22 +243,22 @@ ActiveRecord::Schema[8.0].define(version: 2026_04_08_100000) do
     t.index ["tariff_id"], name: "index_users_on_tariff_id"
   end
 
-  add_foreign_key "balance_ledger_entries", "payment_transactions"
-  add_foreign_key "balance_ledger_entries", "users"
+  add_foreign_key "balance_ledger_entries", "payment_transactions", on_delete: :cascade
+  add_foreign_key "balance_ledger_entries", "users", on_delete: :cascade
   add_foreign_key "news_article_games", "games"
   add_foreign_key "news_article_games", "news_articles"
   add_foreign_key "news_article_reads", "news_articles"
-  add_foreign_key "news_article_reads", "users"
+  add_foreign_key "news_article_reads", "users", on_delete: :cascade
   add_foreign_key "news_articles", "news_crawl_runs"
   add_foreign_key "news_articles", "news_sections"
   add_foreign_key "news_articles", "news_sources"
   add_foreign_key "news_crawl_runs", "news_sections"
   add_foreign_key "news_crawl_runs", "news_sources"
   add_foreign_key "news_game_bookmarks", "games"
-  add_foreign_key "news_game_bookmarks", "users"
+  add_foreign_key "news_game_bookmarks", "users", on_delete: :cascade
   add_foreign_key "news_sections", "news_sources"
-  add_foreign_key "payment_transactions", "users"
+  add_foreign_key "payment_transactions", "users", on_delete: :cascade
   add_foreign_key "shards", "games"
-  add_foreign_key "shards", "users"
+  add_foreign_key "shards", "users", on_delete: :cascade
   add_foreign_key "users", "tariffs"
 end

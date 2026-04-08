@@ -7,6 +7,7 @@ class User < ApplicationRecord
   belongs_to :tariff, optional: true
   has_many :payment_transactions, dependent: :destroy
   has_many :balance_ledger_entries, dependent: :destroy
+  has_many :news_article_reads, dependent: :destroy
   has_many :news_game_bookmarks, dependent: :destroy
   has_many :shards, dependent: :destroy
 

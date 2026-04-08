@@ -21,6 +21,14 @@ module Api
         end
       end
 
+      def destroy
+        user = User.find(params[:id])
+        return render_error("You cannot delete your own account from admin", status: :forbidden) if current_user == user
+
+        user.destroy!
+        render json: { ok: true }
+      end
+
       private
 
       def admin_user_params

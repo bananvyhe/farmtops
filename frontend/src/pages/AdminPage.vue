@@ -41,6 +41,17 @@ async function saveUser(user) {
   }
 }
 
+async function deleteUser(user) {
+  if (!window.confirm(`Удалить пользователя ${user.email}? Все его данные будут удалены.`)) return
+
+  try {
+    await api.deleteAdminUser(user.id)
+    users.value = users.value.filter((candidate) => candidate.id !== user.id)
+  } catch (err) {
+    error.value = err.message
+  }
+}
+
 async function createTariff() {
   try {
     await api.createTariff({
@@ -118,7 +129,7 @@ onMounted(loadAdmin)
     <section class="card card-wide">
       <h2>Пользователи</h2>
       <table>
-        <thead><tr><th>E-mail</th><th>Роль</th><th>Тариф</th><th>Ручное списание</th><th>Баланс</th><th>Активен</th><th></th></tr></thead>
+        <thead><tr><th>E-mail</th><th>Роль</th><th>Тариф</th><th>Ручное списание</th><th>Баланс</th><th>Активен</th><th></th><th></th></tr></thead>
         <tbody>
           <tr v-for="user in users" :key="user.id">
             <td>{{ user.email }}</td>
@@ -139,6 +150,17 @@ onMounted(loadAdmin)
             <td>{{ formatCurrency(user.balance_cents) }}</td>
             <td><input v-model="user.active" type="checkbox" /></td>
             <td><button @click="saveUser(user)">Сохранить</button></td>
+            <td>
+              <v-btn
+                icon="mdi-delete"
+                variant="tonal"
+                color="error"
+                size="small"
+                aria-label="Удалить пользователя"
+                title="Удалить пользователя"
+                @click="deleteUser(user)"
+              />
+            </td>
           </tr>
         </tbody>
       </table>

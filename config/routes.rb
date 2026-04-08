@@ -37,7 +37,7 @@ Rails.application.routes.draw do
     end
 
     namespace :admin do
-      resources :users, only: %i[index update]
+      resources :users, only: %i[index update destroy]
       resources :tariffs, only: %i[index create update destroy]
       resources :news_sources do
         post :crawl, on: :member

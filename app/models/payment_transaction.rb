@@ -1,6 +1,6 @@
 class PaymentTransaction < ApplicationRecord
   belongs_to :user
-  has_many :balance_ledger_entries, dependent: :nullify
+  has_many :balance_ledger_entries, dependent: :destroy
 
   enum :status, { pending: 0, paid: 1, failed: 2, canceled: 3 }, default: :pending
 

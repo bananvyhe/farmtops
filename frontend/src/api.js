@@ -61,6 +61,7 @@ export const api = {
   getPayment: (id) => request(`/api/payments/${id}`),
   adminUsers: () => request("/api/admin/users"),
   updateAdminUser: (id, payload) => request(`/api/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteAdminUser: (id) => request(`/api/admin/users/${id}`, { method: "DELETE" }),
   adminTariffs: () => request("/api/admin/tariffs"),
   createTariff: (payload) => request("/api/admin/tariffs", { method: "POST", body: JSON.stringify(payload) }),
   updateTariff: (id, payload) => request(`/api/admin/tariffs/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
