@@ -1,7 +1,7 @@
 module Shards
   class WorldStateBuilder
-    MAP_WIDTH = 28
-    MAP_HEIGHT = 16
+    MAP_WIDTH = 36
+    MAP_HEIGHT = 20
     MIN_BOSS_PARTICIPANTS = 2
 
     def initialize(shard:, current_user: nil, layer: nil)
@@ -159,21 +159,19 @@ module Shards
       members.each_with_index.map do |membership, index|
         base_x, base_y = spawn_points[index % spawn_points.length]
         resource_target = resources[index % resources.size]
-        route_cycle_seconds = 40 + index * 7
-        route_offset_seconds = index * 11 + membership.user_id % 9
+        route_cycle_seconds = 180 + index * 26 + (membership.user_id % 5) * 5
+        route_offset_seconds = index * 17 + membership.user_id % 13
+        route_speed_factor = [0.78 + index * 0.045 + (membership.user_id % 4) * 0.03, 1.16].min
+        resource_stop_phase = 0.2 + (index % 3) * 0.08
+        resource_stop_window = 0.08 + (index % 2) * 0.03
         route_phase = ((elapsed_seconds + route_offset_seconds) % route_cycle_seconds) / route_cycle_seconds.to_f
-        route_segments = [
-          { x: base_x, y: base_y },
-          { x: resource_target[:x], y: resource_target[:y] },
-          { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 },
-          { x: base_x, y: base_y }
-        ]
-        segment_count = route_segments.length - 1
+        route_path = route_path_points(base_x, base_y, resource_target, index, rng)
+        segment_count = route_path.length - 1
         segment_float = route_phase * segment_count
         segment_index = segment_float.floor
         local_phase = segment_float - segment_index
-        from = route_segments[segment_index]
-        to = route_segments[segment_index + 1]
+        from = route_path[segment_index]
+        to = route_path[segment_index + 1]
         activity = case segment_index
                    when 0 then "gather"
                    when 1 then "fight"
@@ -196,25 +194,81 @@ module Shards
           energy_income: inventory[:energy],
           healing_items: inventory[:healing],
           resource_target: resource_target[:kind],
+          resource_target_x: resource_target[:x],
+          resource_target_y: resource_target[:y],
           route_progress: (route_phase * 100).round(2),
           route_cycle_seconds: route_cycle_seconds,
           route_offset_seconds: route_offset_seconds,
+          route_speed_factor: route_speed_factor.round(2),
+          resource_stop_phase: resource_stop_phase.round(2),
+          resource_stop_window: resource_stop_window.round(2),
           bot: true,
           role: index.zero? ? "leader" : "support",
           action: activity,
-          path: route_segments
+          path: route_path
+        }
+      end
+    end
+
+    def route_path_points(base_x, base_y, resource_target, index, rng)
+      center_x = MAP_WIDTH / 2.0
+      center_y = MAP_HEIGHT / 2.0
+      boss_x = center_x
+      boss_y = center_y
+      phase_points = [0.0, 0.12, 0.26, 0.45, 0.62, 0.82, 1.0]
+
+      phase_points.map.with_index do |phase, waypoint_index|
+        anchor_x =
+          case waypoint_index
+          when 0 then base_x
+          when 1 then lerp(base_x, resource_target[:x], 0.35)
+          when 2 then lerp(resource_target[:x], boss_x, 0.25)
+          when 3 then lerp(base_x, boss_x, 0.55)
+          when 4 then lerp(resource_target[:x], boss_x, 0.72)
+          when 5 then lerp(base_x, boss_x, 0.88)
+          else boss_x
+          end
+
+        anchor_y =
+          case waypoint_index
+          when 0 then base_y
+          when 1 then lerp(base_y, resource_target[:y], 0.35)
+          when 2 then lerp(resource_target[:y], boss_y, 0.25)
+          when 3 then lerp(base_y, boss_y, 0.55)
+          when 4 then lerp(resource_target[:y], boss_y, 0.72)
+          when 5 then lerp(base_y, boss_y, 0.88)
+          else boss_y
+          end
+
+        jitter_scale = [2.1 - index * 0.12, 0.75].max
+        wave_x = Math.sin((phase * Math::PI * 2) + index) * jitter_scale
+        wave_y = Math.cos((phase * Math::PI * 2) + index / 2.0) * (jitter_scale * 0.55)
+        point = {
+          x: anchor_x + wave_x + rng.rand(-0.65..0.65),
+          y: anchor_y + wave_y + rng.rand(-0.65..0.65)
+        }
+        {
+          x: [[point[:x], 1.0].max, MAP_WIDTH - 2.0].min.round(2),
+          y: [[point[:y], 1.0].max, MAP_HEIGHT - 2.0].min.round(2)
         }
       end
     end
 
     def mob_payloads(rng, players_count, progress_pct, elapsed_seconds)
-      total = 6 + players_count * 2
+      total = 10 + players_count * 3
       Array.new(total) do |index|
+        anchor_x = rng.rand(3..MAP_WIDTH - 4)
+        anchor_y = rng.rand(3..MAP_HEIGHT - 4)
         {
           id: "mob-#{index}",
           name: ["Slime", "Scout", "Watcher", "Guard"].sample(random: rng),
-          x: rng.rand(2..MAP_WIDTH - 3),
-          y: rng.rand(2..MAP_HEIGHT - 3),
+          x: anchor_x,
+          y: anchor_y,
+          anchor_x: anchor_x,
+          anchor_y: anchor_y,
+          patrol_radius: 0.4 + rng.rand * 0.9,
+          patrol_speed: 0.08 + rng.rand * 0.07,
+          patrol_phase: rng.rand * Math::PI * 2,
           hp: 45 + players_count * 10,
           max_hp: 45 + players_count * 10,
           level: 1 + index / 3,
@@ -233,7 +287,7 @@ module Shards
         { kind: "shard_ore", asset_key: "resource_shard" }
       ]
 
-      Array.new(7) do |index|
+      Array.new(12) do |index|
         kind = kinds[index % kinds.length]
         {
           id: "resource-#{index}",
@@ -242,13 +296,15 @@ module Shards
           x: rng.rand(1..MAP_WIDTH - 2),
           y: rng.rand(1..MAP_HEIGHT - 2),
           amount: 10 + rng.rand(30),
-          respawns_in: 20 + rng.rand(40)
+          respawns_in: 20 + rng.rand(40),
+          pulse_phase: (index * 0.9 + rng.rand).round(2),
+          pulse_speed: (0.8 + rng.rand * 0.55).round(2)
         }
       end
     end
 
     def drop_payloads(rng, players_count, progress_pct, elapsed_seconds)
-      total = [2 + players_count, 10].min
+      total = [3 + players_count, 12].min
       Array.new(total) do |index|
         kind = index.even? ? "loot_coin" : "loot_bundle"
         {

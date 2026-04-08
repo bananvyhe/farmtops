@@ -45,6 +45,17 @@ function lerp(from, to, progress) {
   return from + (to - from) * progress
 }
 
+function easeInOutCubic(value) {
+  if (value < 0.5) return 4 * value * value * value
+  const offset = -2 * value + 2
+  return 1 - (offset * offset * offset) / 2
+}
+
+function phaseDistance(from, to) {
+  const forward = ((to - from) % 1 + 1) % 1
+  return Math.min(forward, 1 - forward)
+}
+
 function routeProgressFromTimestamp(player, timestamp) {
   const cycleSeconds = Number(player.route_cycle_seconds || 48)
   const routeOffset = Number(player.route_offset_seconds || 0)
@@ -63,18 +74,43 @@ function routePositionAtTimestamp(player, timestamp) {
     }
   }
 
-  const phase = routeProgressFromTimestamp(player, timestamp)
+  const routeSpeedFactor = Number(player.route_speed_factor || 1)
+  const phase = (routeProgressFromTimestamp(player, timestamp) * routeSpeedFactor) % 1
+  const resourceStopPhase = Number(player.resource_stop_phase || 0.24)
+  const resourceStopWindow = Number(player.resource_stop_window || 0.08)
+  const stopDistance = phaseDistance(phase, resourceStopPhase)
+  const resourceX = Number(player.resource_target_x ?? player.x ?? 0)
+  const resourceY = Number(player.resource_target_y ?? player.y ?? 0)
+
+  if (stopDistance < resourceStopWindow / 2) {
+    const orbitPhase = timestamp / 1200 + Number(player.route_offset_seconds || 0) / 7
+    const orbitRadius = 0.18 + Number(player.route_cycle_seconds || 48) / 1200
+    return {
+      x: resourceX + Math.cos(orbitPhase) * orbitRadius,
+      y: resourceY + Math.sin(orbitPhase * 1.2) * orbitRadius * 0.7,
+      phase,
+      action: "gather"
+    }
+  }
+
   const segmentCount = path.length - 1
   const segmentFloat = phase * segmentCount
   const segmentIndex = Math.min(segmentCount - 1, Math.floor(segmentFloat))
-  const localPhase = segmentFloat - segmentIndex
+  const localPhase = easeInOutCubic(segmentFloat - segmentIndex)
   const from = path[segmentIndex]
   const to = path[segmentIndex + 1]
+  const dx = Number(to.x || 0) - Number(from.x || 0)
+  const dy = Number(to.y || 0) - Number(from.y || 0)
+  const length = Math.max(Math.hypot(dx, dy), 0.0001)
+  const swayPhase = Math.sin(timestamp / 2400 + Number(player.route_offset_seconds || 0) / 3)
+  const sway = 0.1 + Number(player.route_cycle_seconds || 48) / 1400
+  const swayX = (-dy / length) * sway * swayPhase
+  const swayY = (dx / length) * sway * swayPhase
   const action = player.action || (segmentIndex === 0 ? "gather" : segmentIndex === 1 ? "fight" : "return")
 
   return {
-    x: lerp(Number(from.x || 0), Number(to.x || 0), localPhase),
-    y: lerp(Number(from.y || 0), Number(to.y || 0), localPhase),
+    x: lerp(Number(from.x || 0), Number(to.x || 0), localPhase) + swayX,
+    y: lerp(Number(from.y || 0), Number(to.y || 0), localPhase) + swayY,
     phase,
     action
   }
@@ -242,6 +278,7 @@ function drawWorld(timestamp) {
   stage.addChild(gridGfx)
 
   const routeGfx = new Graphics()
+  const routeNodesGfx = new Graphics()
   world.value.players.forEach((player) => {
     if (!Array.isArray(player.path) || player.path.length < 2) return
     const points = player.path.map((point) => ({
@@ -250,9 +287,14 @@ function drawWorld(timestamp) {
     }))
     routeGfx.moveTo(points[0].x, points[0].y)
     points.slice(1).forEach((point) => routeGfx.lineTo(point.x, point.y))
-    routeGfx.stroke({ width: 2, color: hexColor("#7dd3fc"), alpha: 0.2 })
+    routeGfx.stroke({ width: 1, color: hexColor("#7dd3fc"), alpha: 0.08 })
+    points.forEach((point, pointIndex) => {
+      const radius = pointIndex === 0 || pointIndex === points.length - 1 ? 2.5 : 1.8
+      routeNodesGfx.circle(point.x, point.y, radius).fill({ color: hexColor("#7dd3fc"), alpha: 0.12 })
+    })
   })
   stage.addChild(routeGfx)
+  stage.addChild(routeNodesGfx)
 
   const entities = new Graphics()
 
@@ -266,7 +308,11 @@ function drawWorld(timestamp) {
           : "#d9b065"
     const cx = offsetX + resource.x * tileSize + tileSize / 2
     const cy = offsetY + resource.y * tileSize + tileSize / 2
-    entities.circle(cx, cy, radius).fill({ color: hexColor(fill), alpha: 0.98 })
+    const pulsePhase = Number(resource.pulse_phase || 0) + timestamp / (900 / Number(resource.pulse_speed || 1))
+    const pulse = 0.5 + Math.sin(pulsePhase) * 0.5
+    entities.circle(cx, cy, radius + 4 + pulse * 2).fill({ color: hexColor(fill), alpha: 0.08 + pulse * 0.06 })
+    entities.circle(cx, cy, radius + pulse * 0.8).stroke({ width: 1.2, color: hexColor(fill), alpha: 0.24 + pulse * 0.2 })
+    entities.circle(cx, cy, radius).fill({ color: hexColor(fill), alpha: 0.92 })
   })
 
   world.value.drops?.forEach((drop) => {
@@ -277,10 +323,17 @@ function drawWorld(timestamp) {
   })
 
   world.value.mobs.forEach((mob, index) => {
-    const wobble = Math.sin(timestamp / 1000 + index) * 0.4
-    const cx = offsetX + mob.x * tileSize + tileSize / 2 + wobble
-    const cy = offsetY + mob.y * tileSize + tileSize / 2
-    entities.circle(cx, cy, 7 + (mob.level % 2)).fill({ color: hexColor("#ff8858"), alpha: 0.9 })
+    const anchorX = Number(mob.anchor_x ?? mob.x ?? 0)
+    const anchorY = Number(mob.anchor_y ?? mob.y ?? 0)
+    const patrolRadius = Number(mob.patrol_radius || 0.9)
+    const patrolSpeed = Number(mob.patrol_speed || 0.12)
+    const patrolPhase = Number(mob.patrol_phase || 0)
+    const driftX = Math.sin(timestamp / (1100 / patrolSpeed) + patrolPhase + index * 0.4) * patrolRadius
+    const driftY = Math.cos(timestamp / (1300 / patrolSpeed) + patrolPhase + index * 0.3) * (patrolRadius * 0.7)
+    const cx = offsetX + (anchorX + driftX) * tileSize + tileSize / 2
+    const cy = offsetY + (anchorY + driftY) * tileSize + tileSize / 2
+    entities.circle(cx, cy, 7 + (mob.level % 2)).fill({ color: hexColor("#ff8858"), alpha: 0.82 })
+    entities.circle(cx, cy, 11).stroke({ width: 1, color: hexColor("#ff8858"), alpha: 0.1 })
   })
 
   world.value.players.forEach((player, index) => {
@@ -297,8 +350,7 @@ function drawWorld(timestamp) {
           : "#ffd18a"
     entities.circle(cx, cy, 10).fill({ color: hexColor(color), alpha: 1 })
     entities.circle(cx, cy, 14).stroke({ width: 1, color: hexColor(color), alpha: 0.24 })
-    entities.roundRect(cx - 12, cy - 22, 24, 10, 4).fill({ color: hexColor("#101826"), alpha: 0.9 })
-    entities.roundRect(cx - 12, cy - 22, 24 * Math.max(0.15, routePoint.phase), 10, 4).fill({ color: hexColor(color), alpha: 0.95 })
+    entities.circle(cx + 11, cy + 11, 2.2).fill({ color: hexColor(color), alpha: 0.72 })
   })
 
   const boss = world.value.boss
@@ -386,115 +438,113 @@ onBeforeUnmount(() => {
       <p v-else class="muted">Слои еще не созданы.</p>
     </section>
 
-    <section class="world-layout">
-      <section class="card world-canvas-card card--dark">
-        <div class="world-canvas-card__header">
-          <div>
-            <h2>Сцена</h2>
-            <p class="muted">Заглушки вместо ассетов, но уже с живой картой, мобами, ресурсами и боссом.</p>
-          </div>
-          <button class="ghost" type="button" :disabled="refreshing" @click="refreshWorld">
-            {{ refreshing ? "Обновляем..." : "Обновить" }}
-          </button>
+    <section class="card world-canvas-card card--dark">
+      <div class="world-canvas-card__header">
+        <div>
+          <h2>Сцена</h2>
+          <p class="muted">Заглушки вместо ассетов, но уже с живой картой, мобами, ресурсами и боссом.</p>
         </div>
+        <button class="ghost" type="button" :disabled="refreshing" @click="refreshWorld">
+          {{ refreshing ? "Обновляем..." : "Обновить" }}
+        </button>
+      </div>
 
-        <div class="world-scene-hud world-scene-hud--top" v-if="world">
-          <div class="world-scene-stat">
-            <span>Цикл босса</span>
-            <strong>{{ world.progress.boss_unlock_progress }}%</strong>
-          </div>
-          <div class="world-scene-stat">
-            <span>Время</span>
-            <strong>{{ world.progress.elapsed_hours }} / {{ world.progress.required_hours }} ч</strong>
-          </div>
-          <div class="world-scene-stat">
-            <span>Участники</span>
-            <strong>{{ world.progress.occupancy }}/{{ world.progress.capacity }}</strong>
-          </div>
-          <div class="world-scene-stat">
-            <span>XP банк</span>
-            <strong>{{ world.inventory.banked_xp }}</strong>
-          </div>
+      <div class="world-scene-hud world-scene-hud--top" v-if="world">
+        <div class="world-scene-stat">
+          <span>Цикл босса</span>
+          <strong>{{ world.progress.boss_unlock_progress }}%</strong>
         </div>
+        <div class="world-scene-stat">
+          <span>Время</span>
+          <strong>{{ world.progress.elapsed_hours }} / {{ world.progress.required_hours }} ч</strong>
+        </div>
+        <div class="world-scene-stat">
+          <span>Участники</span>
+          <strong>{{ world.progress.occupancy }}/{{ world.progress.capacity }}</strong>
+        </div>
+        <div class="world-scene-stat">
+          <span>XP банк</span>
+          <strong>{{ world.inventory.banked_xp }}</strong>
+        </div>
+      </div>
 
-        <div class="world-canvas-shell">
-          <div class="world-canvas-frame">
-            <div ref="pixiHostRef" class="world-canvas"></div>
-            <div class="world-fallback">
-              <div class="world-fallback__grid"></div>
-              <div class="world-fallback__core"></div>
-              <div class="world-fallback__label">Loading shard scene</div>
-            </div>
-            <div v-if="loading" class="world-loading">
-              <v-skeleton-loader type="image, article" />
-            </div>
+      <div class="world-canvas-shell">
+        <div class="world-canvas-frame">
+          <div ref="pixiHostRef" class="world-canvas"></div>
+          <div class="world-fallback">
+            <div class="world-fallback__grid"></div>
+            <div class="world-fallback__core"></div>
+            <div class="world-fallback__label">Loading shard scene</div>
           </div>
-          <div class="world-scene-hud world-scene-hud--bottom">
-            <div class="world-legend">
-              <span><i class="legend-dot legend-dot--player"></i> Игроки и боты</span>
-              <span><i class="legend-dot legend-dot--mob"></i> Мобы</span>
-              <span><i class="legend-dot legend-dot--resource"></i> Ресурсы</span>
-              <span><i class="legend-dot legend-dot--boss"></i> Босс</span>
-            </div>
-            <p class="world-scene-caption">{{ sceneSummary }}</p>
+          <div v-if="loading" class="world-loading">
+            <v-skeleton-loader type="image, article" />
           </div>
         </div>
+      <div class="world-scene-hud world-scene-hud--bottom">
+        <div class="world-legend">
+          <span><i class="legend-dot legend-dot--player"></i> Игроки и боты</span>
+          <span><i class="legend-dot legend-dot--mob"></i> Мобы</span>
+          <span><i class="legend-dot legend-dot--resource"></i> Ресурсы</span>
+          <span><i class="legend-dot legend-dot--boss"></i> Босс</span>
+        </div>
+        <p class="world-scene-caption">{{ sceneSummary }}</p>
+      </div>
+      </div>
+    </section>
+
+    <section class="world-info-grid">
+      <section class="card card--dark world-panel">
+        <h2>Прогресс</h2>
+        <div v-if="world" class="detail-list">
+          <div><span>Слой</span><strong>{{ world.progress.layer_index }}</strong></div>
+          <div><span>Участники</span><strong>{{ world.progress.occupancy }}/{{ world.progress.capacity }}</strong></div>
+          <div><span>Энергия</span><strong>{{ world.progress.energy_flow }}</strong></div>
+          <div><span>Время</span><strong>{{ world.progress.elapsed_hours }} / {{ world.progress.required_hours }} ч</strong></div>
+          <div><span>Цикл босса</span><strong>{{ world.progress.boss_unlock_progress }}%</strong></div>
+          <div><span>XP банк</span><strong>{{ world.inventory.banked_xp }}</strong></div>
+        </div>
+        <v-progress-linear
+          v-if="world"
+          class="world-progress"
+          :model-value="world.progress.boss_unlock_progress"
+          color="primary"
+          height="12"
+        />
+        <p class="muted world-panel__hint">XP на аккаунт зачисляется после убийства босса, до этого идет только в банк.</p>
       </section>
 
-      <aside class="world-sidebar">
-        <section class="card card--dark world-panel">
-          <h2>Прогресс</h2>
-          <div v-if="world" class="detail-list">
-            <div><span>Слой</span><strong>{{ world.progress.layer_index }}</strong></div>
-            <div><span>Участники</span><strong>{{ world.progress.occupancy }}/{{ world.progress.capacity }}</strong></div>
-            <div><span>Энергия</span><strong>{{ world.progress.energy_flow }}</strong></div>
-            <div><span>Время</span><strong>{{ world.progress.elapsed_hours }} / {{ world.progress.required_hours }} ч</strong></div>
-            <div><span>Цикл босса</span><strong>{{ world.progress.boss_unlock_progress }}%</strong></div>
-            <div><span>XP банк</span><strong>{{ world.inventory.banked_xp }}</strong></div>
+      <section class="card card--dark world-panel">
+        <h2>Состав слоя</h2>
+        <div v-if="activeLayer && activeLayer.members.length" class="world-member-list">
+          <div v-for="member in activeLayer.members" :key="member.id" class="world-member">
+            <strong>{{ member.nickname }}</strong>
+            <span>{{ member.owner ? "Владелец" : "Участник" }}</span>
           </div>
-          <v-progress-linear
-            v-if="world"
-            class="world-progress"
-            :model-value="world.progress.boss_unlock_progress"
-            color="primary"
-            height="12"
-          />
-          <p class="muted world-panel__hint">XP на аккаунт зачисляется после убийства босса, до этого идет только в банк.</p>
-        </section>
+        </div>
+        <p v-else class="muted">Пока никто не вошел в этот слой.</p>
+      </section>
 
-        <section class="card card--dark world-panel">
-          <h2>Состав слоя</h2>
-          <div v-if="activeLayer && activeLayer.members.length" class="world-member-list">
-            <div v-for="member in activeLayer.members" :key="member.id" class="world-member">
-              <strong>{{ member.nickname }}</strong>
-              <span>{{ member.owner ? "Владелец" : "Участник" }}</span>
-            </div>
-          </div>
-          <p v-else class="muted">Пока никто не вошел в этот слой.</p>
-        </section>
+      <section class="card card--dark world-panel">
+        <h2>Босс</h2>
+        <div v-if="world" class="detail-list">
+          <div><span>Имя</span><strong>{{ world.boss.name }}</strong></div>
+          <div><span>HP</span><strong>{{ world.boss.hp }} / {{ world.boss.max_hp }}</strong></div>
+          <div><span>Цель</span><strong>Минимум {{ world.boss.required_participants }} игрока и {{ world.boss.required_hours }} ч, 10 игроков укладывают цикл в 1 ч</strong></div>
+          <div><span>Готов</span><strong>{{ world.boss.ready ? "Да" : "Нет" }}</strong></div>
+        </div>
+        <p v-else class="muted">Босс появится после загрузки мира.</p>
+      </section>
 
-        <section class="card card--dark world-panel">
-          <h2>Босс</h2>
-          <div v-if="world" class="detail-list">
-            <div><span>Имя</span><strong>{{ world.boss.name }}</strong></div>
-            <div><span>HP</span><strong>{{ world.boss.hp }} / {{ world.boss.max_hp }}</strong></div>
-            <div><span>Цель</span><strong>Минимум {{ world.boss.required_participants }} игрока и {{ world.boss.required_hours }} ч, 10 игроков укладывают цикл в 1 ч</strong></div>
-            <div><span>Готов</span><strong>{{ world.boss.ready ? "Да" : "Нет" }}</strong></div>
-          </div>
-          <p v-else class="muted">Босс появится после загрузки мира.</p>
-        </section>
-
-        <section class="card card--dark world-panel">
-          <h2>Инвентарь</h2>
-          <div v-if="world" class="detail-list">
-            <div><span>Лут</span><strong>{{ world.inventory.loot }}</strong></div>
-            <div><span>Энергия</span><strong>{{ world.inventory.energy }}</strong></div>
-            <div><span>Лечение</span><strong>{{ world.inventory.healing }}</strong></div>
-            <div><span>Руда</span><strong>{{ world.inventory.shard_ore }}</strong></div>
-            <div><span>Банк XP</span><strong>{{ world.inventory.pending_xp }}</strong></div>
-          </div>
-        </section>
-      </aside>
+      <section class="card card--dark world-panel">
+        <h2>Инвентарь</h2>
+        <div v-if="world" class="detail-list">
+          <div><span>Лут</span><strong>{{ world.inventory.loot }}</strong></div>
+          <div><span>Энергия</span><strong>{{ world.inventory.energy }}</strong></div>
+          <div><span>Лечение</span><strong>{{ world.inventory.healing }}</strong></div>
+          <div><span>Руда</span><strong>{{ world.inventory.shard_ore }}</strong></div>
+          <div><span>Банк XP</span><strong>{{ world.inventory.pending_xp }}</strong></div>
+        </div>
+      </section>
     </section>
 
     <p v-if="error" class="news-error">{{ error }}</p>
@@ -522,9 +572,14 @@ onBeforeUnmount(() => {
 
 .world-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
   gap: var(--space-l);
   align-items: start;
+}
+
+.world-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-l);
 }
 
 .world-canvas-card,
@@ -563,7 +618,7 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: 2;
   width: 100%;
-  aspect-ratio: 28 / 16;
+  aspect-ratio: 36 / 20;
   min-height: 20rem;
   max-width: 100%;
   border-radius: var(--radius-l);
@@ -636,6 +691,7 @@ onBeforeUnmount(() => {
   gap: var(--space-xs);
   align-items: center;
   justify-content: space-between;
+  max-width: 100%;
 }
 
 .world-scene-hud--top {
@@ -652,6 +708,7 @@ onBeforeUnmount(() => {
 .world-scene-stat {
   display: grid;
   gap: var(--space-3xs);
+  min-width: 120px;
 }
 
 .world-scene-stat span {
@@ -678,6 +735,10 @@ onBeforeUnmount(() => {
   gap: var(--space-xs) var(--space-s);
   color: var(--farmspot-text-on-dark-muted);
   font-size: var(--step--1);
+}
+
+.world-scene-hud--top .world-scene-stat strong {
+  color: var(--farmspot-text-on-dark);
 }
 
 .world-legend span {
@@ -709,12 +770,6 @@ onBeforeUnmount(() => {
   background: #bf4444;
 }
 
-.world-sidebar {
-  display: grid;
-  gap: var(--space-l);
-  align-content: start;
-}
-
 .world-member-list {
   display: grid;
   gap: var(--space-xs);
@@ -738,6 +793,10 @@ onBeforeUnmount(() => {
 
 @media (max-width: 960px) {
   .world-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .world-info-grid {
     grid-template-columns: 1fr;
   }
 }
