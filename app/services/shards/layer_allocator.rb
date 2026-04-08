@@ -30,6 +30,13 @@ module Shards
         membership.joined_at ||= Time.current
         membership.last_seen_at = Time.current
         membership.save!
+
+        if layer.campaign_started_at.blank?
+          layer.update!(
+            campaign_started_at: Time.current,
+            campaign_target_players: [layer.memberships.count, 2].max
+          )
+        end
       end
 
       Result.new(layer:, membership:)

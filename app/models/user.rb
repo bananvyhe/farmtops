@@ -21,6 +21,10 @@ class User < ApplicationRecord
   validates :nickname, presence: true, uniqueness: { case_sensitive: false }, format: { with: NICKNAME_PATTERN }
   validates :hourly_rate_cents, numericality: { greater_than_or_equal_to: 0 }
   validates :balance_cents, numericality: true
+  validates :world_level, numericality: { greater_than_or_equal_to: 1 }
+  validates :world_xp_total, numericality: { greater_than_or_equal_to: 0 }
+  validates :world_xp_bank, numericality: { greater_than_or_equal_to: 0 }
+  validates :world_boss_kills, numericality: { greater_than_or_equal_to: 0 }
   validate :prime_time_zone_must_be_valid
   validate :prime_slots_utc_must_be_valid
   validate :nickname_change_allowed_only_once, if: :nickname_changed?
@@ -71,6 +75,22 @@ class User < ApplicationRecord
 
   def prime_slot_overlap(other_user)
     prime_slots_utc & Array(other_user&.prime_slots_utc)
+  end
+
+  def world_level
+    self[:world_level] || 1
+  end
+
+  def world_xp_total
+    self[:world_xp_total] || 0
+  end
+
+  def world_xp_bank
+    self[:world_xp_bank] || 0
+  end
+
+  def world_boss_kills
+    self[:world_boss_kills] || 0
   end
 
   def self.generate_unique_nickname

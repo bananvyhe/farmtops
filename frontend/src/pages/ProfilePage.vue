@@ -406,6 +406,10 @@ watch(nicknameDraft, (nextValue) => {
           <div><span>Тариф</span><strong>{{ sessionState.user.tariff_name }}</strong></div>
           <div><span>Баланс</span><strong>{{ formatCurrency(sessionState.user.balance_cents) }}</strong></div>
           <div><span>Списание в час</span><strong>{{ formatCurrency(sessionState.user.hourly_rate_cents) }}</strong></div>
+          <div><span>Уровень мира</span><strong>{{ sessionState.user.world_level }}</strong></div>
+          <div><span>XP аккаунта</span><strong>{{ sessionState.user.world_xp_total }}</strong></div>
+          <div><span>XP банк</span><strong>{{ sessionState.user.world_xp_bank }}</strong></div>
+          <div><span>Убийств босса</span><strong>{{ sessionState.user.world_boss_kills }}</strong></div>
         </div>
         <div class="nickname-editor">
           <label>

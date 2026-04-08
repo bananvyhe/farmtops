@@ -23,6 +23,8 @@
 
 - [worldgen/overview.md](/Users/rufus/workspace/projects/farmspot/docs/worldgen/overview.md)
   Процедурная генерация шардов, карты, спавнов игроков, мобов, босса, ресурсов и pixel-art ассетов.
+- [worldgen/asset_prompts.md](/Users/rufus/workspace/projects/farmspot/docs/worldgen/asset_prompts.md)
+  Список того, что нужно генерировать, и шаблоны промтов для нейросетевого пайплайна по спрайтам, тайлам и UI-ассетам.
 - [gameplay/combat.md](/Users/rufus/workspace/projects/farmspot/docs/gameplay/combat.md)
   Боевая модель, scaling по числу игроков, XP-кривая, бот-симуляция и условия победы в шарде.
 - [gameplay/resources.md](/Users/rufus/workspace/projects/farmspot/docs/gameplay/resources.md)

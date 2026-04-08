@@ -22,7 +22,7 @@
 - позиции игроков и bot avatars;
 - состояние мобов и босса;
 - resource nodes и pickups;
-- XP, HP, энергия и ключевые статусы.
+- XP bank, HP, энергия и ключевые статусы.
 
 ## Prime grid и matchmaking
 

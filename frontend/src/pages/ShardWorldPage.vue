@@ -1,4 +1,5 @@
 <script setup>
+import { Application, Container, Graphics } from "pixi.js"
 import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 import { useRoute, RouterLink } from "vue-router"
 import { api } from "../api"
@@ -9,9 +10,12 @@ const refreshing = ref(false)
 const error = ref("")
 const worldResponse = ref(null)
 const selectedLayerId = ref(null)
-const canvasRef = ref(null)
+const pixiHostRef = ref(null)
+const sceneSummary = ref("")
 let frameHandle = null
 let refreshHandle = null
+let app = null
+let stageContainer = null
 
 const shard = computed(() => worldResponse.value?.shard || null)
 const layers = computed(() => worldResponse.value?.layers || [])
@@ -30,6 +34,49 @@ function formatLayerLabel(layer) {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value))
+}
+
+function hexColor(value) {
+  return Number.parseInt(String(value).replace("#", ""), 16)
+}
+
+function lerp(from, to, progress) {
+  return from + (to - from) * progress
+}
+
+function routeProgressFromTimestamp(player, timestamp) {
+  const cycleSeconds = Number(player.route_cycle_seconds || 48)
+  const routeOffset = Number(player.route_offset_seconds || 0)
+  const clock = timestamp / 1000 + routeOffset
+  return ((clock % cycleSeconds) + cycleSeconds) % cycleSeconds / cycleSeconds
+}
+
+function routePositionAtTimestamp(player, timestamp) {
+  const path = Array.isArray(player.path) ? player.path : []
+  if (path.length < 2) {
+    return {
+      x: Number(player.x || 0),
+      y: Number(player.y || 0),
+      phase: 0,
+      action: player.action || "idle"
+    }
+  }
+
+  const phase = routeProgressFromTimestamp(player, timestamp)
+  const segmentCount = path.length - 1
+  const segmentFloat = phase * segmentCount
+  const segmentIndex = Math.min(segmentCount - 1, Math.floor(segmentFloat))
+  const localPhase = segmentFloat - segmentIndex
+  const from = path[segmentIndex]
+  const to = path[segmentIndex + 1]
+  const action = player.action || (segmentIndex === 0 ? "gather" : segmentIndex === 1 ? "fight" : "return")
+
+  return {
+    x: lerp(Number(from.x || 0), Number(to.x || 0), localPhase),
+    y: lerp(Number(from.y || 0), Number(to.y || 0), localPhase),
+    phase,
+    action
+  }
 }
 
 async function enterLayer(layerId = null) {
@@ -84,113 +131,163 @@ async function chooseLayer(layerId) {
   await enterLayer(layerId)
 }
 
-function drawWorld(timestamp) {
-  const canvas = canvasRef.value
-  const ctx = canvas?.getContext("2d")
-  if (!canvas || !ctx || !world.value) return
-
-  const dpr = window.devicePixelRatio || 1
-  const cssWidth = canvas.clientWidth || 960
-  const cssHeight = canvas.clientHeight || 560
-  if (canvas.width !== Math.floor(cssWidth * dpr) || canvas.height !== Math.floor(cssHeight * dpr)) {
-    canvas.width = Math.floor(cssWidth * dpr)
-    canvas.height = Math.floor(cssHeight * dpr)
-  }
-
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-  ctx.clearRect(0, 0, cssWidth, cssHeight)
-
-  const grid = world.value.map
-  const gridWidth = Number(grid.width || 28)
-  const gridHeight = Number(grid.height || 16)
-  const tiles = Array.isArray(grid.tiles) ? grid.tiles : []
-  const tileSize = Math.max(12, Math.floor(Math.min(cssWidth / gridWidth, (cssHeight - 24) / gridHeight)))
+function getWorldMetrics() {
+  const grid = world.value?.map
+  const gridWidth = Number(grid?.width || 28)
+  const gridHeight = Number(grid?.height || 16)
+  const tiles = Array.isArray(grid?.tiles) ? grid.tiles : []
+  const width = app?.renderer?.width || pixiHostRef.value?.clientWidth || 960
+  const height = app?.renderer?.height || pixiHostRef.value?.clientHeight || 560
+  const tileSize = Math.max(12, Math.floor(Math.min(width / gridWidth, (height - 24) / gridHeight)))
   const mapWidth = gridWidth * tileSize
   const mapHeight = gridHeight * tileSize
-  const offsetX = Math.floor((cssWidth - mapWidth) / 2)
-  const offsetY = Math.floor((cssHeight - mapHeight) / 2)
-  const pulse = Math.sin(timestamp / 500)
+  const offsetX = Math.floor((width - mapWidth) / 2)
+  const offsetY = Math.floor((height - mapHeight) / 2)
 
-  const bg = ctx.createLinearGradient(0, 0, cssWidth, cssHeight)
-  bg.addColorStop(0, "#0a0d14")
-  bg.addColorStop(1, "#141923")
-  ctx.fillStyle = bg
-  ctx.fillRect(0, 0, cssWidth, cssHeight)
+  return {
+    gridWidth,
+    gridHeight,
+    tiles,
+    width,
+    height,
+    tileSize,
+    mapWidth,
+    mapHeight,
+    offsetX,
+    offsetY
+  }
+}
 
+function drawWorld(timestamp) {
+  if (!app || !stageContainer || !world.value) return
+
+  const metrics = getWorldMetrics()
+  const { gridWidth, gridHeight, tiles, width, height, tileSize, offsetX, offsetY, mapWidth, mapHeight } = metrics
+  const progress = Number(world.value.progress?.boss_unlock_progress || world.value.progress?.group_progress || 0)
+  const stage = stageContainer
+
+  stage.removeChildren()
+
+  const background = new Graphics()
+  background.rect(0, 0, width, height).fill(hexColor("#0a0d14"))
+  stage.addChild(background)
+
+  const aura = new Graphics()
+  aura.circle(width / 2, height / 2, Math.min(width, height) * 0.38).fill({ color: hexColor("#121826"), alpha: 0.8 })
+  stage.addChild(aura)
+
+  const gridGfx = new Graphics()
   tiles.forEach((row, y) => {
     row.forEach((tile, x) => {
       const px = offsetX + x * tileSize
       const py = offsetY + y * tileSize
-
-      switch (tile) {
-        case "water":
-          ctx.fillStyle = "#123d5c"
-          break
-        case "stone":
-          ctx.fillStyle = "#525965"
-          break
-        case "dirt":
-          ctx.fillStyle = "#6d4b2f"
-          break
-        case "boss":
-          ctx.fillStyle = "#6d1f1f"
-          break
-        default:
-          ctx.fillStyle = "#20331f"
-          break
-      }
-
-      ctx.fillRect(px, py, tileSize, tileSize)
-      ctx.strokeStyle = "rgba(255,255,255,0.03)"
-      ctx.strokeRect(px, py, tileSize, tileSize)
+      const color =
+        tile === "water"
+          ? "#123d5c"
+          : tile === "stone"
+            ? "#525965"
+            : tile === "dirt"
+              ? "#6d4b2f"
+              : tile === "boss"
+                ? "#6d1f1f"
+                : "#20331f"
+      gridGfx.rect(px, py, tileSize, tileSize).fill({ color: hexColor(color), alpha: 1 })
+      gridGfx.rect(px, py, tileSize, tileSize).stroke({ width: 1, color: hexColor("#ffffff"), alpha: 0.04 })
     })
   })
+  stage.addChild(gridGfx)
 
-  const drawOrb = (entity, fill, radius, alpha = 1) => {
-    const wobble = Math.sin(timestamp / 300 + entity.x + entity.y)
-    const cx = offsetX + entity.x * tileSize + tileSize / 2
-    const cy = offsetY + entity.y * tileSize + tileSize / 2
-    ctx.globalAlpha = alpha
-    ctx.beginPath()
-    ctx.fillStyle = fill
-    ctx.arc(cx, cy + wobble * 2, radius, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.globalAlpha = 1
-  }
+  const routeGfx = new Graphics()
+  world.value.players.forEach((player) => {
+    if (!Array.isArray(player.path) || player.path.length < 2) return
+    const points = player.path.map((point) => ({
+      x: offsetX + point.x * tileSize + tileSize / 2,
+      y: offsetY + point.y * tileSize + tileSize / 2
+    }))
+    routeGfx.moveTo(points[0].x, points[0].y)
+    points.slice(1).forEach((point) => routeGfx.lineTo(point.x, point.y))
+    routeGfx.stroke({ width: 2, color: hexColor("#7dd3fc"), alpha: 0.2 })
+  })
+  stage.addChild(routeGfx)
+
+  const entities = new Graphics()
 
   world.value.resources.forEach((resource) => {
-    const radius = resource.kind === "shard_ore" ? 7 : 5
-    const fill = resource.kind === "energy_crystal" ? "#83d8ff" : resource.kind === "heal_herb" ? "#96ef9a" : "#d9b065"
-    drawOrb(resource, fill, radius, 0.96)
+    const radius = resource.kind === "shard_ore" ? 8 : 6
+    const fill =
+      resource.kind === "energy_crystal"
+        ? "#83d8ff"
+        : resource.kind === "heal_herb"
+          ? "#96ef9a"
+          : "#d9b065"
+    const cx = offsetX + resource.x * tileSize + tileSize / 2
+    const cy = offsetY + resource.y * tileSize + tileSize / 2
+    entities.circle(cx, cy, radius).fill({ color: hexColor(fill), alpha: 0.98 })
+  })
+
+  world.value.drops?.forEach((drop) => {
+    const cx = offsetX + drop.x * tileSize + tileSize / 2
+    const cy = offsetY + drop.y * tileSize + tileSize / 2
+    const fill = drop.rarity === "rare" ? "#f7c86b" : "#c8d0da"
+    entities.roundRect(cx - 4, cy - 4, 8, 8, 2).fill({ color: hexColor(fill), alpha: 0.8 })
   })
 
   world.value.mobs.forEach((mob, index) => {
-    const jitterX = Math.sin(timestamp / 1000 + index) * 0.6
-    const jitterY = Math.cos(timestamp / 900 + index) * 0.6
-    const entity = { ...mob, x: mob.x + jitterX, y: mob.y + jitterY }
-    drawOrb(entity, "#ff8858", 7 + (mob.level % 2), 0.88)
+    const wobble = Math.sin(timestamp / 1000 + index) * 0.4
+    const cx = offsetX + mob.x * tileSize + tileSize / 2 + wobble
+    const cy = offsetY + mob.y * tileSize + tileSize / 2
+    entities.circle(cx, cy, 7 + (mob.level % 2)).fill({ color: hexColor("#ff8858"), alpha: 0.9 })
   })
 
   world.value.players.forEach((player, index) => {
-    const jitter = Math.sin(timestamp / 700 + index) * 0.45
-    const entity = {
-      ...player,
-      x: clamp(player.x + jitter, 0, gridWidth - 1),
-      y: clamp(player.y + jitter, 0, gridHeight - 1)
-    }
-    drawOrb(entity, index === 0 ? "#ffd18a" : "#7dd3fc", 9, 1)
+    const routePoint = routePositionAtTimestamp(player, timestamp)
+    const px = routePoint.x
+    const py = routePoint.y
+    const cx = offsetX + px * tileSize + tileSize / 2
+    const cy = offsetY + py * tileSize + tileSize / 2
+    const color =
+      routePoint.action === "fight"
+        ? "#7dd3fc"
+        : routePoint.action === "return"
+          ? "#c7d2fe"
+          : "#ffd18a"
+    entities.circle(cx, cy, 10).fill({ color: hexColor(color), alpha: 1 })
+    entities.circle(cx, cy, 14).stroke({ width: 1, color: hexColor(color), alpha: 0.24 })
+    entities.roundRect(cx - 12, cy - 22, 24, 10, 4).fill({ color: hexColor("#101826"), alpha: 0.9 })
+    entities.roundRect(cx - 12, cy - 22, 24 * Math.max(0.15, routePoint.phase), 10, 4).fill({ color: hexColor(color), alpha: 0.95 })
   })
 
   const boss = world.value.boss
   const bossCx = offsetX + boss.x * tileSize + tileSize / 2
-  const bossCy = offsetY + boss.y * tileSize + tileSize / 2 + Math.sin(timestamp / 400) * 3
-  ctx.beginPath()
-  ctx.fillStyle = "#b93b3b"
-  ctx.arc(bossCx, bossCy, 14 + Math.sin(pulse) * 2, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.strokeStyle = "rgba(255, 210, 210, 0.45)"
-  ctx.lineWidth = 2
-  ctx.stroke()
+  const bossCy = offsetY + boss.y * tileSize + tileSize / 2 + Math.sin(timestamp / 400) * 2
+  entities.circle(bossCx, bossCy, 16 + Math.sin(timestamp / 500) * 2).fill({ color: hexColor("#b93b3b"), alpha: 1 })
+  entities.circle(bossCx, bossCy, 22).stroke({ width: 2, color: hexColor("#ffd2d2"), alpha: 0.45 })
+  stage.addChild(entities)
+
+  const ui = new Container()
+  ui.zIndex = 10
+  const progressBarWidth = Math.min(420, width - 32)
+  const progressBar = new Graphics()
+  progressBar.roundRect(16, 16, progressBarWidth, 16, 8).fill({ color: hexColor("#1c2433"), alpha: 0.9 })
+  progressBar.roundRect(16, 16, (progressBarWidth * progress) / 100, 16, 8).fill({ color: hexColor("#c75923"), alpha: 1 })
+  ui.addChild(progressBar)
+
+  const meter = new Graphics()
+  meter.roundRect(16, 40, Math.min(520, width - 32), 70, 14).fill({ color: hexColor("#111722"), alpha: 0.82 })
+  meter.roundRect(16, 40, Math.min(520, width - 32), 70, 14).stroke({ width: 1, color: hexColor("#ffffff"), alpha: 0.08 })
+  ui.addChild(meter)
+
+  stage.addChild(ui)
+
+  sceneSummary.value = `boss:${progress}% bank:${world.value.inventory?.banked_xp || 0} pending:${world.value.inventory?.pending_xp || 0}`
+  world.value.players.forEach((player) => {
+    const routePoint = routePositionAtTimestamp(player, timestamp)
+    const cx = offsetX + routePoint.x * tileSize + tileSize / 2
+    const cy = offsetY + routePoint.y * tileSize + tileSize / 2
+    const marker = new Graphics()
+    marker.circle(cx - 12, cy - 12, 2).fill({ color: hexColor("#ffffff"), alpha: 0.65 })
+    stage.addChild(marker)
+  })
 }
 
 function animationLoop(timestamp) {
@@ -199,6 +296,18 @@ function animationLoop(timestamp) {
 }
 
 onMounted(async () => {
+  app = new Application()
+  await app.init({
+    background: "#0a0d14",
+    resizeTo: pixiHostRef.value,
+    antialias: false,
+    autoDensity: true,
+    resolution: window.devicePixelRatio || 1
+  })
+  stageContainer = new Container()
+  stageContainer.sortableChildren = true
+  app.stage.addChild(stageContainer)
+  pixiHostRef.value.appendChild(app.canvas)
   await loadWorld()
   await enterLayer(selectedLayerId.value)
   frameHandle = window.requestAnimationFrame(animationLoop)
@@ -208,6 +317,9 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (frameHandle) window.cancelAnimationFrame(frameHandle)
   if (refreshHandle) window.clearInterval(refreshHandle)
+  app?.destroy(true, { children: true, texture: true, context: true })
+  app = null
+  stageContainer = null
 })
 </script>
 
@@ -260,6 +372,7 @@ onBeforeUnmount(() => {
           <div>
             <h2>Сцена</h2>
             <p class="muted">Заглушки вместо ассетов, но уже с живой картой, мобами, ресурсами и боссом.</p>
+            <p class="muted world-canvas-card__summary">{{ sceneSummary }}</p>
           </div>
           <button class="ghost" type="button" :disabled="refreshing" @click="refreshWorld">
             {{ refreshing ? "Обновляем..." : "Обновить" }}
@@ -271,7 +384,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div v-else class="world-canvas-shell">
-          <canvas ref="canvasRef" class="world-canvas" />
+          <div ref="pixiHostRef" class="world-canvas"></div>
           <div class="world-legend">
             <span><i class="legend-dot legend-dot--player"></i> Игроки и боты</span>
             <span><i class="legend-dot legend-dot--mob"></i> Мобы</span>
@@ -288,15 +401,18 @@ onBeforeUnmount(() => {
             <div><span>Слой</span><strong>{{ world.progress.layer_index }}</strong></div>
             <div><span>Участники</span><strong>{{ world.progress.occupancy }}/{{ world.progress.capacity }}</strong></div>
             <div><span>Энергия</span><strong>{{ world.progress.energy_flow }}</strong></div>
-            <div><span>Групповой прогресс</span><strong>{{ world.progress.group_progress }}%</strong></div>
+            <div><span>Время</span><strong>{{ world.progress.elapsed_hours }} / {{ world.progress.required_hours }} ч</strong></div>
+            <div><span>Цикл босса</span><strong>{{ world.progress.boss_unlock_progress }}%</strong></div>
+            <div><span>XP банк</span><strong>{{ world.inventory.banked_xp }}</strong></div>
           </div>
           <v-progress-linear
             v-if="world"
             class="world-progress"
-            :model-value="world.progress.group_progress"
+            :model-value="world.progress.boss_unlock_progress"
             color="primary"
             height="12"
           />
+          <p class="muted world-panel__hint">XP на аккаунт зачисляется после убийства босса, до этого идет только в банк.</p>
         </section>
 
         <section class="card card--dark world-panel">
@@ -315,9 +431,21 @@ onBeforeUnmount(() => {
           <div v-if="world" class="detail-list">
             <div><span>Имя</span><strong>{{ world.boss.name }}</strong></div>
             <div><span>HP</span><strong>{{ world.boss.hp }} / {{ world.boss.max_hp }}</strong></div>
-            <div><span>Цель</span><strong>Удержать прогресс группы и подготовить шард к дальнейшему фарму</strong></div>
+            <div><span>Цель</span><strong>Минимум {{ world.boss.required_participants }} игрока и {{ world.boss.required_hours }} ч, 10 игроков укладывают цикл в 1 ч</strong></div>
+            <div><span>Готов</span><strong>{{ world.boss.ready ? "Да" : "Нет" }}</strong></div>
           </div>
           <p v-else class="muted">Босс появится после загрузки мира.</p>
+        </section>
+
+        <section class="card card--dark world-panel">
+          <h2>Инвентарь</h2>
+          <div v-if="world" class="detail-list">
+            <div><span>Лут</span><strong>{{ world.inventory.loot }}</strong></div>
+            <div><span>Энергия</span><strong>{{ world.inventory.energy }}</strong></div>
+            <div><span>Лечение</span><strong>{{ world.inventory.healing }}</strong></div>
+            <div><span>Руда</span><strong>{{ world.inventory.shard_ore }}</strong></div>
+            <div><span>Банк XP</span><strong>{{ world.inventory.pending_xp }}</strong></div>
+          </div>
         </section>
       </aside>
     </section>
@@ -363,6 +491,10 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: var(--space-s);
   align-items: flex-start;
+}
+
+.world-canvas-card__summary {
+  margin-top: var(--space-2xs);
 }
 
 .world-canvas-shell {
@@ -437,6 +569,10 @@ onBeforeUnmount(() => {
 
 .world-progress {
   margin-top: var(--space-xs);
+}
+
+.world-panel__hint {
+  margin: 0;
 }
 
 .world-loading {

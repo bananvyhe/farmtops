@@ -7,6 +7,7 @@ class ShardLayer < ApplicationRecord
 
   validates :layer_index, presence: true, numericality: { only_integer: true, greater_than: 0 }
   validates :layer_index, uniqueness: { scope: :shard_id }
+  validates :campaign_target_players, numericality: { greater_than_or_equal_to: 2 }
 
   def occupancy
     memberships.count
@@ -22,5 +23,9 @@ class ShardLayer < ApplicationRecord
 
   def available_capacity
     [capacity - occupancy, 0].max
+  end
+
+  def campaign_started?
+    campaign_started_at.present?
   end
 end
