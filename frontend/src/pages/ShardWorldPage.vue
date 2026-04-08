@@ -1,5 +1,5 @@
 <script setup>
-import { Application, Container, Graphics } from "pixi.js"
+import { Application, Container, Graphics, Text } from "pixi.js"
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue"
 import { useRoute, RouterLink } from "vue-router"
 import { api } from "../api"
@@ -296,7 +296,11 @@ function drawWorld(timestamp) {
   stage.addChild(routeGfx)
   stage.addChild(routeNodesGfx)
 
-  const entities = new Graphics()
+  const entities = new Container()
+  const shapes = new Graphics()
+  const labels = new Container()
+  entities.addChild(shapes)
+  entities.addChild(labels)
 
   world.value.resources.forEach((resource) => {
     const radius = resource.kind === "shard_ore" ? 8 : 6
@@ -310,19 +314,20 @@ function drawWorld(timestamp) {
     const cy = offsetY + resource.y * tileSize + tileSize / 2
     const pulsePhase = Number(resource.pulse_phase || 0) + timestamp / (900 / Number(resource.pulse_speed || 1))
     const pulse = 0.5 + Math.sin(pulsePhase) * 0.5
-    entities.circle(cx, cy, radius + 4 + pulse * 2).fill({ color: hexColor(fill), alpha: 0.08 + pulse * 0.06 })
-    entities.circle(cx, cy, radius + pulse * 0.8).stroke({ width: 1.2, color: hexColor(fill), alpha: 0.24 + pulse * 0.2 })
-    entities.circle(cx, cy, radius).fill({ color: hexColor(fill), alpha: 0.92 })
+    shapes.circle(cx, cy, radius + 4 + pulse * 2).fill({ color: hexColor(fill), alpha: 0.08 + pulse * 0.06 })
+    shapes.circle(cx, cy, radius + pulse * 0.8).stroke({ width: 1.2, color: hexColor(fill), alpha: 0.24 + pulse * 0.2 })
+    shapes.circle(cx, cy, radius).fill({ color: hexColor(fill), alpha: 0.92 })
   })
 
   world.value.drops?.forEach((drop) => {
     const cx = offsetX + drop.x * tileSize + tileSize / 2
     const cy = offsetY + drop.y * tileSize + tileSize / 2
     const fill = drop.rarity === "rare" ? "#f7c86b" : "#c8d0da"
-    entities.roundRect(cx - 4, cy - 4, 8, 8, 2).fill({ color: hexColor(fill), alpha: 0.8 })
+    shapes.roundRect(cx - 4, cy - 4, 8, 8, 2).fill({ color: hexColor(fill), alpha: 0.8 })
   })
 
   world.value.mobs.forEach((mob, index) => {
+    if (mob.alive === false) return
     const anchorX = Number(mob.anchor_x ?? mob.x ?? 0)
     const anchorY = Number(mob.anchor_y ?? mob.y ?? 0)
     const patrolRadius = Number(mob.patrol_radius || 0.9)
@@ -332,8 +337,8 @@ function drawWorld(timestamp) {
     const driftY = Math.cos(timestamp / (1300 / patrolSpeed) + patrolPhase + index * 0.3) * (patrolRadius * 0.7)
     const cx = offsetX + (anchorX + driftX) * tileSize + tileSize / 2
     const cy = offsetY + (anchorY + driftY) * tileSize + tileSize / 2
-    entities.circle(cx, cy, 7 + (mob.level % 2)).fill({ color: hexColor("#ff8858"), alpha: 0.82 })
-    entities.circle(cx, cy, 11).stroke({ width: 1, color: hexColor("#ff8858"), alpha: 0.1 })
+    shapes.circle(cx, cy, 7 + (mob.level % 2)).fill({ color: hexColor("#ff8858"), alpha: 0.82 })
+    shapes.circle(cx, cy, 11).stroke({ width: 1, color: hexColor("#ff8858"), alpha: 0.1 })
   })
 
   world.value.players.forEach((player, index) => {
@@ -348,16 +353,32 @@ function drawWorld(timestamp) {
         : routePoint.action === "return"
           ? "#c7d2fe"
           : "#ffd18a"
-    entities.circle(cx, cy, 10).fill({ color: hexColor(color), alpha: 1 })
-    entities.circle(cx, cy, 14).stroke({ width: 1, color: hexColor(color), alpha: 0.24 })
-    entities.circle(cx + 11, cy + 11, 2.2).fill({ color: hexColor(color), alpha: 0.72 })
+    shapes.circle(cx, cy, 10).fill({ color: hexColor(color), alpha: 1 })
+    shapes.circle(cx, cy, 14).stroke({ width: 1, color: hexColor(color), alpha: 0.24 })
+    shapes.circle(cx + 11, cy + 11, 2.2).fill({ color: hexColor(color), alpha: 0.72 })
+
+    const label = new Text({
+      text: player.nickname,
+      style: {
+        fontFamily: "Arial",
+        fontSize: 12,
+        fill: 0xf3f5f8,
+        stroke: { color: 0x0a0d14, width: 4 },
+        align: "center"
+      }
+    })
+    label.anchor.set(0.5, 1)
+    label.x = cx
+    label.y = cy - 13
+    label.alpha = 0.92
+    labels.addChild(label)
   })
 
   const boss = world.value.boss
   const bossCx = offsetX + boss.x * tileSize + tileSize / 2
   const bossCy = offsetY + boss.y * tileSize + tileSize / 2 + Math.sin(timestamp / 400) * 2
-  entities.circle(bossCx, bossCy, 16 + Math.sin(timestamp / 500) * 2).fill({ color: hexColor("#b93b3b"), alpha: 1 })
-  entities.circle(bossCx, bossCy, 22).stroke({ width: 2, color: hexColor("#ffd2d2"), alpha: 0.45 })
+  shapes.circle(bossCx, bossCy, 16 + Math.sin(timestamp / 500) * 2).fill({ color: hexColor("#b93b3b"), alpha: 1 })
+  shapes.circle(bossCx, bossCy, 22).stroke({ width: 2, color: hexColor("#ffd2d2"), alpha: 0.45 })
   stage.addChild(entities)
 
   sceneSummary.value = `boss:${progress}% bank:${world.value.inventory?.banked_xp || 0} pending:${world.value.inventory?.pending_xp || 0}`
@@ -410,6 +431,7 @@ onBeforeUnmount(() => {
         <span class="profile-pill">Seed: {{ shard ? shard.world_seed : "—" }}</span>
         <span class="profile-pill">Создан: {{ shard ? formatDate(shard.created_at) : "—" }}</span>
         <span class="profile-pill">Лайер: {{ activeLayer ? formatLayerLabel(activeLayer) : "—" }}</span>
+        <span class="profile-pill">Режим: {{ world?.mode || "—" }}</span>
       </div>
     </section>
 
@@ -431,7 +453,7 @@ onBeforeUnmount(() => {
         show-arrows
       >
         <v-tab v-for="layer in layers" :key="layer.id" :value="String(layer.id)">
-          {{ formatLayerLabel(layer) }} · {{ layer.occupancy }}/{{ layer.capacity }}
+          {{ formatLayerLabel(layer) }} · {{ layer.active_occupancy ?? layer.occupancy }}/{{ layer.capacity }}
         </v-tab>
       </v-tabs>
 
@@ -463,8 +485,16 @@ onBeforeUnmount(() => {
           <strong>{{ world.progress.occupancy }}/{{ world.progress.capacity }}</strong>
         </div>
         <div class="world-scene-stat">
+          <span>Активны</span>
+          <strong>{{ world.active_players_count }}</strong>
+        </div>
+        <div class="world-scene-stat">
           <span>XP банк</span>
           <strong>{{ world.inventory.banked_xp }}</strong>
+        </div>
+        <div class="world-scene-stat">
+          <span>UTC слот</span>
+          <strong>{{ world.current_week_slot_utc }}</strong>
         </div>
       </div>
 
@@ -518,7 +548,7 @@ onBeforeUnmount(() => {
         <div v-if="activeLayer && activeLayer.members.length" class="world-member-list">
           <div v-for="member in activeLayer.members" :key="member.id" class="world-member">
             <strong>{{ member.nickname }}</strong>
-            <span>{{ member.owner ? "Владелец" : "Участник" }}</span>
+            <span>{{ member.owner ? "Владелец" : "Участник" }} · {{ member.active_now ? "Активен" : "Вне прайма" }}</span>
           </div>
         </div>
         <p v-else class="muted">Пока никто не вошел в этот слой.</p>
@@ -544,6 +574,17 @@ onBeforeUnmount(() => {
           <div><span>Руда</span><strong>{{ world.inventory.shard_ore }}</strong></div>
           <div><span>Банк XP</span><strong>{{ world.inventory.pending_xp }}</strong></div>
         </div>
+      </section>
+
+      <section class="card card--dark world-panel world-panel--wide">
+        <h2>Фарм-лог</h2>
+        <div v-if="world && world.farm_log?.length" class="world-log-list">
+          <div v-for="entry in world.farm_log" :key="entry.players.join('-')" class="world-log-item">
+            <strong>{{ entry.players.join(" + ") }}</strong>
+            <span>{{ entry.shared_prime_hours }} ч совпадения · {{ entry.together_minutes }} мин вместе</span>
+          </div>
+        </div>
+        <p v-else class="muted">Сейчас нет совпавших праймов, поэтому фарм-лог пуст.</p>
       </section>
     </section>
 
@@ -789,6 +830,31 @@ onBeforeUnmount(() => {
 
 .world-panel__hint {
   margin: 0;
+}
+
+.world-panel--wide {
+  grid-column: 1 / -1;
+}
+
+.world-log-list {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.world-log-item {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-s);
+  padding: var(--space-2xs) 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.world-log-item strong {
+  color: var(--farmspot-text-on-dark);
+}
+
+.world-log-item span {
+  color: var(--farmspot-text-on-dark-muted);
 }
 
 @media (max-width: 960px) {

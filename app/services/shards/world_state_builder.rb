@@ -45,21 +45,26 @@ module Shards
     end
 
     def layer_payloads
+      current_slot_utc = current_week_slot_utc
       @shard.layers.includes(memberships: :user).order(:layer_index).map do |layer|
+        memberships = layer.memberships.includes(:user).order(:joined_at).to_a
+        active_members_count = memberships.count { |membership| membership.user.prime_slots_utc.include?(current_slot_utc) }
         {
           id: layer.id,
           layer_index: layer.layer_index,
           status: layer.status,
           capacity: layer.capacity,
           occupancy: layer.occupancy,
+          active_occupancy: active_members_count,
           available_capacity: layer.available_capacity,
-          members: layer.memberships.includes(:user).order(:joined_at).map do |membership|
+          members: memberships.map do |membership|
             {
               id: membership.user_id,
               nickname: membership.user.nickname,
               joined_at: membership.joined_at,
               last_seen_at: membership.last_seen_at,
-              owner: membership.user_id == @shard.user_id
+              owner: membership.user_id == @shard.user_id,
+              active_now: membership.user.prime_slots_utc.include?(current_slot_utc)
             }
           end
         }
@@ -71,27 +76,39 @@ module Shards
       seed = seed_value(layer)
       rng = Random.new(seed)
       members = layer.memberships.includes(:user).order(:joined_at).to_a
-      occupancy = [members.size, 1].max
+      current_slot_utc = current_week_slot_utc
+      active_members = members.select { |membership| membership.user.prime_slots_utc.include?(current_slot_utc) }
+      active_count = active_members.size
       campaign_started_at = layer.campaign_started_at || layer.created_at
       elapsed_seconds = [Time.current - campaign_started_at, 0].max
-      elapsed_hours = (elapsed_seconds / 3600.0)
-      target_players = [layer.campaign_target_players || occupancy, MIN_BOSS_PARTICIPANTS].max
-      required_hours = [10.0 / target_players, 1.0].max
-      group_progress = [[(elapsed_hours / required_hours) * 100.0, 100.0].min.round, 0].max
-      boss_ready = occupancy >= MIN_BOSS_PARTICIPANTS && group_progress >= 100
-      boss_hp = 4_000 + occupancy * 1_200 + layer.layer_index * 500
-      inventory = inventory_payload(elapsed_hours, occupancy, members)
+      elapsed_hours = active_count.positive? ? (elapsed_seconds / 3600.0) : 0.0
+      target_players = [layer.campaign_target_players || active_count, MIN_BOSS_PARTICIPANTS].max
+      required_hours = active_count.positive? ? [10.0 / target_players, 1.0].max : 0.0
+      group_progress = if active_count.positive?
+        [[(elapsed_hours / required_hours) * 100.0, 100.0].min.round, 0].max
+      else
+        0
+      end
+      boss_ready = active_count >= MIN_BOSS_PARTICIPANTS && group_progress >= 100
+      boss_hp = 4_000 + active_count * 1_200 + layer.layer_index * 500
+      inventory = inventory_payload(elapsed_hours, active_count, active_members)
       resources = resource_payloads(rng)
+      farm_log = farm_log_payload(active_members, elapsed_seconds, current_slot_utc)
 
       {
         tick: Time.current.to_i / 2,
         seed: "#{@shard.world_seed}:#{layer.layer_index}",
         map: map_payload(rng),
-        players: player_payloads(members, resources, group_progress, inventory, rng, elapsed_seconds),
-        mobs: mob_payloads(rng, occupancy, group_progress, elapsed_seconds),
+        players: player_payloads(active_members, resources, group_progress, inventory, rng, elapsed_seconds),
+        mobs: mob_payloads(rng, active_count, group_progress, elapsed_seconds),
         resources: resources,
-        drops: drop_payloads(rng, occupancy, group_progress, elapsed_seconds),
+        drops: drop_payloads(rng, active_count, group_progress, elapsed_seconds),
         inventory: inventory,
+        farm_log: farm_log,
+        current_week_slot_utc: current_slot_utc,
+        active_players_count: active_count,
+        active_players_required: MIN_BOSS_PARTICIPANTS,
+        mode: active_count.positive? ? "active" : "idle",
         boss: {
           id: "boss-#{layer.id}",
           name: boss_name(seed),
@@ -107,16 +124,19 @@ module Shards
         },
         progress: {
           layer_index: layer.layer_index,
-          occupancy: members.size,
+          occupancy: active_count,
+          members_count: members.size,
           capacity: layer.capacity,
-          energy_flow: 40 + members.size * 7,
+          energy_flow: active_count.positive? ? 40 + active_count * 7 : 0,
           elapsed_hours: elapsed_hours.round(2),
           required_hours: required_hours.round(2),
           boss_unlock_progress: group_progress,
           session_progress: group_progress,
           group_goal: 100,
           group_progress: group_progress,
-          boss_unlock_minutes: (required_hours * 60).round
+          boss_unlock_minutes: (required_hours * 60).round,
+          active_players_count: active_count,
+          current_week_slot_utc: current_slot_utc
         }
       }
     end
@@ -202,6 +222,7 @@ module Shards
           route_speed_factor: route_speed_factor.round(2),
           resource_stop_phase: resource_stop_phase.round(2),
           resource_stop_window: resource_stop_window.round(2),
+          active_now: true,
           bot: true,
           role: index.zero? ? "leader" : "support",
           action: activity,
@@ -259,6 +280,10 @@ module Shards
       Array.new(total) do |index|
         anchor_x = rng.rand(3..MAP_WIDTH - 4)
         anchor_y = rng.rand(3..MAP_HEIGHT - 4)
+        life_cycle_seconds = 180 + (index % 5) * 34
+        alive_window_seconds = 96 + (index % 4) * 10
+        life_phase = (elapsed_seconds + index * 13) % life_cycle_seconds
+        alive = players_count.zero? ? true : life_phase < alive_window_seconds
         {
           id: "mob-#{index}",
           name: ["Slime", "Scout", "Watcher", "Guard"].sample(random: rng),
@@ -269,13 +294,21 @@ module Shards
           patrol_radius: 0.4 + rng.rand * 0.9,
           patrol_speed: 0.08 + rng.rand * 0.07,
           patrol_phase: rng.rand * Math::PI * 2,
-          hp: 45 + players_count * 10,
+          hp: alive ? 45 + players_count * 10 : 0,
           max_hp: 45 + players_count * 10,
           level: 1 + index / 3,
           asset_key: ["slime", "beast", "hunter"].sample(random: rng),
           hostile: true,
           pressure: progress_pct,
-          state: elapsed_seconds > 0 ? "patrol" : "spawn"
+          alive: alive,
+          state: if players_count.zero?
+            "idle"
+          elsif alive
+            elapsed_seconds > 0 ? "patrol" : "spawn"
+          else
+            "dead"
+          end,
+          respawn_in_seconds: alive ? 0 : (life_cycle_seconds - life_phase).round
         }
       end
     end
@@ -304,6 +337,8 @@ module Shards
     end
 
     def drop_payloads(rng, players_count, progress_pct, elapsed_seconds)
+      return [] if players_count.zero?
+
       total = [3 + players_count, 12].min
       Array.new(total) do |index|
         kind = index.even? ? "loot_coin" : "loot_bundle"
@@ -333,6 +368,25 @@ module Shards
       }
     end
 
+    def farm_log_payload(active_members, elapsed_seconds, current_week_slot_utc)
+      active_members.each_with_index.flat_map do |left, index|
+        active_members[(index + 1)..].to_a.map do |right|
+          overlap = left.user.prime_slot_overlap(right.user)
+          next if overlap.empty?
+
+          shared_hours = overlap.size
+          together_minutes = [elapsed_seconds / 60.0, shared_hours * 60.0].min.round
+          {
+            players: [left.user.nickname, right.user.nickname],
+            shared_prime_hours: shared_hours,
+            together_minutes: together_minutes,
+            current_week_slot_utc: current_week_slot_utc,
+            slots: overlap
+          }
+        end
+      end.compact
+    end
+
     def boss_name(seed)
       suffix = seed.to_s.last(4).upcase
       "Shard Warden #{suffix}"
@@ -340,6 +394,10 @@ module Shards
 
     def seed_value(layer)
       Digest::SHA256.hexdigest("#{@shard.world_seed}:#{layer.layer_index}").slice(0, 16).to_i(16)
+    end
+
+    def current_week_slot_utc
+      Time.current.utc.wday * 24 + Time.current.utc.hour
     end
 
     def lerp(from, to, progress)
