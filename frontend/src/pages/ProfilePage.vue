@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
-import { RouterLink, useRoute } from "vue-router"
+import { RouterLink, useRoute, useRouter } from "vue-router"
 import { api } from "../api"
 import { sessionState } from "../useSession"
 
@@ -31,6 +31,7 @@ const activeShardId = ref(null)
 let autoSaveTimer = null
 let nicknameCheckTimer = null
 const route = useRoute()
+const router = useRouter()
 
 function detectTimeZone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
@@ -264,6 +265,11 @@ function shardSeedShort(seed) {
   return String(seed || "").slice(0, 8)
 }
 
+function openShardWorld(shardId) {
+  if (!shardId) return
+  router.push(`/world/${shardId}`)
+}
+
 onMounted(() => {
   window.addEventListener("pointerup", stopDragSelection)
   Promise.resolve()
@@ -389,15 +395,23 @@ watch(nicknameDraft, (nextValue) => {
       <div v-if="activeShard" class="profile-shard-card profile-shard-card--summary">
         <h3>Активный шард</h3>
         <div class="detail-list">
-          <div><span>Игра</span><strong>{{ activeShard.game_name }}</strong></div>
+          <div>
+            <span>Игра</span>
+            <strong><RouterLink :to="`/world/${activeShard.id}`" class="inline-link">{{ activeShard.game_name }}</RouterLink></strong>
+          </div>
+          <div>
+            <span>Ник</span>
+            <strong><RouterLink to="/profile#account" class="inline-link">{{ sessionState.user.nickname }}</RouterLink></strong>
+          </div>
           <div><span>Статус</span><strong>{{ shardStatusLabel(activeShard.status) }}</strong></div>
           <div><span>Seed</span><strong>{{ shardSeedShort(activeShard.world_seed) }}</strong></div>
         </div>
+        <button type="button" class="ghost" @click="openShardWorld(activeShard.id)">Открыть мир</button>
       </div>
     </section>
 
     <section class="profile-columns" v-if="!loading">
-      <section class="card">
+      <section id="account" class="card">
         <h2>Аккаунт</h2>
         <div class="detail-list">
           <div><span>Ник</span><strong>{{ sessionState.user.nickname }}</strong></div>

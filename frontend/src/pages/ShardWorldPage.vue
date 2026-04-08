@@ -1,6 +1,6 @@
 <script setup>
 import { Application, Container, Graphics } from "pixi.js"
-import { computed, onBeforeUnmount, onMounted, ref } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue"
 import { useRoute, RouterLink } from "vue-router"
 import { api } from "../api"
 
@@ -16,6 +16,7 @@ let frameHandle = null
 let refreshHandle = null
 let app = null
 let stageContainer = null
+let pixiMounted = false
 
 const shard = computed(() => worldResponse.value?.shard || null)
 const layers = computed(() => worldResponse.value?.layers || [])
@@ -131,6 +132,30 @@ async function chooseLayer(layerId) {
   await enterLayer(layerId)
 }
 
+async function mountPixiScene() {
+  if (pixiMounted || !pixiHostRef.value) return
+
+  app = new Application()
+  const hostWidth = pixiHostRef.value.clientWidth || 960
+  const hostHeight = pixiHostRef.value.clientHeight || 560
+  await app.init({
+    background: "#0a0d14",
+    width: hostWidth,
+    height: hostHeight,
+    antialias: false,
+    autoDensity: true,
+    resolution: window.devicePixelRatio || 1
+  })
+
+  stageContainer = new Container()
+  stageContainer.sortableChildren = true
+  app.stage.addChild(stageContainer)
+  app.canvas.style.width = "100%"
+  app.canvas.style.height = "100%"
+  pixiHostRef.value.appendChild(app.canvas)
+  pixiMounted = true
+}
+
 function getWorldMetrics() {
   const grid = world.value?.map
   const gridWidth = Number(grid?.width || 28)
@@ -159,11 +184,12 @@ function getWorldMetrics() {
 }
 
 function drawWorld(timestamp) {
-  if (!app || !stageContainer || !world.value) return
+  if (!app || !stageContainer) return
 
   const metrics = getWorldMetrics()
   const { gridWidth, gridHeight, tiles, width, height, tileSize, offsetX, offsetY, mapWidth, mapHeight } = metrics
-  const progress = Number(world.value.progress?.boss_unlock_progress || world.value.progress?.group_progress || 0)
+  const hasWorld = Boolean(world.value)
+  const progress = Number(world.value?.progress?.boss_unlock_progress || world.value?.progress?.group_progress || 0)
   const stage = stageContainer
 
   stage.removeChildren()
@@ -177,6 +203,24 @@ function drawWorld(timestamp) {
   stage.addChild(aura)
 
   const gridGfx = new Graphics()
+  if (!hasWorld) {
+    const panel = new Graphics()
+    panel.roundRect(offsetX, offsetY, mapWidth, mapHeight, 20).fill({ color: hexColor("#111722"), alpha: 0.88 })
+    panel.roundRect(offsetX, offsetY, mapWidth, mapHeight, 20).stroke({ width: 1, color: hexColor("#ffffff"), alpha: 0.08 })
+    const placeholder = new Graphics()
+    placeholder.circle(width / 2, height / 2, Math.min(width, height) * 0.12).stroke({ width: 3, color: hexColor("#c75923"), alpha: 0.7 })
+    placeholder.circle(width / 2, height / 2, Math.min(width, height) * 0.075).fill({ color: hexColor("#c75923"), alpha: 0.18 })
+    stage.addChild(panel)
+    stage.addChild(placeholder)
+    stage.addChild(gridGfx)
+
+    const loadingHint = new Graphics()
+    loadingHint.roundRect(width / 2 - 120, height / 2 + 38, 240, 26, 13).fill({ color: hexColor("#1c2433"), alpha: 0.92 })
+    loadingHint.roundRect(width / 2 - 120, height / 2 + 38, 120, 26, 13).fill({ color: hexColor("#7dd3fc"), alpha: 0.72 })
+    stage.addChild(loadingHint)
+    return
+  }
+
   tiles.forEach((row, y) => {
     row.forEach((tile, x) => {
       const px = offsetX + x * tileSize
@@ -264,21 +308,6 @@ function drawWorld(timestamp) {
   entities.circle(bossCx, bossCy, 22).stroke({ width: 2, color: hexColor("#ffd2d2"), alpha: 0.45 })
   stage.addChild(entities)
 
-  const ui = new Container()
-  ui.zIndex = 10
-  const progressBarWidth = Math.min(420, width - 32)
-  const progressBar = new Graphics()
-  progressBar.roundRect(16, 16, progressBarWidth, 16, 8).fill({ color: hexColor("#1c2433"), alpha: 0.9 })
-  progressBar.roundRect(16, 16, (progressBarWidth * progress) / 100, 16, 8).fill({ color: hexColor("#c75923"), alpha: 1 })
-  ui.addChild(progressBar)
-
-  const meter = new Graphics()
-  meter.roundRect(16, 40, Math.min(520, width - 32), 70, 14).fill({ color: hexColor("#111722"), alpha: 0.82 })
-  meter.roundRect(16, 40, Math.min(520, width - 32), 70, 14).stroke({ width: 1, color: hexColor("#ffffff"), alpha: 0.08 })
-  ui.addChild(meter)
-
-  stage.addChild(ui)
-
   sceneSummary.value = `boss:${progress}% bank:${world.value.inventory?.banked_xp || 0} pending:${world.value.inventory?.pending_xp || 0}`
   world.value.players.forEach((player) => {
     const routePoint = routePositionAtTimestamp(player, timestamp)
@@ -296,21 +325,11 @@ function animationLoop(timestamp) {
 }
 
 onMounted(async () => {
-  app = new Application()
-  await app.init({
-    background: "#0a0d14",
-    resizeTo: pixiHostRef.value,
-    antialias: false,
-    autoDensity: true,
-    resolution: window.devicePixelRatio || 1
-  })
-  stageContainer = new Container()
-  stageContainer.sortableChildren = true
-  app.stage.addChild(stageContainer)
-  pixiHostRef.value.appendChild(app.canvas)
+  await nextTick()
+  await mountPixiScene()
+  frameHandle = window.requestAnimationFrame(animationLoop)
   await loadWorld()
   await enterLayer(selectedLayerId.value)
-  frameHandle = window.requestAnimationFrame(animationLoop)
   refreshHandle = window.setInterval(refreshWorld, 4000)
 })
 
@@ -320,6 +339,7 @@ onBeforeUnmount(() => {
   app?.destroy(true, { children: true, texture: true, context: true })
   app = null
   stageContainer = null
+  pixiMounted = false
 })
 </script>
 
@@ -372,24 +392,51 @@ onBeforeUnmount(() => {
           <div>
             <h2>Сцена</h2>
             <p class="muted">Заглушки вместо ассетов, но уже с живой картой, мобами, ресурсами и боссом.</p>
-            <p class="muted world-canvas-card__summary">{{ sceneSummary }}</p>
           </div>
           <button class="ghost" type="button" :disabled="refreshing" @click="refreshWorld">
             {{ refreshing ? "Обновляем..." : "Обновить" }}
           </button>
         </div>
 
-        <div v-if="loading" class="world-loading">
-          <v-skeleton-loader type="image, article" />
+        <div class="world-scene-hud world-scene-hud--top" v-if="world">
+          <div class="world-scene-stat">
+            <span>Цикл босса</span>
+            <strong>{{ world.progress.boss_unlock_progress }}%</strong>
+          </div>
+          <div class="world-scene-stat">
+            <span>Время</span>
+            <strong>{{ world.progress.elapsed_hours }} / {{ world.progress.required_hours }} ч</strong>
+          </div>
+          <div class="world-scene-stat">
+            <span>Участники</span>
+            <strong>{{ world.progress.occupancy }}/{{ world.progress.capacity }}</strong>
+          </div>
+          <div class="world-scene-stat">
+            <span>XP банк</span>
+            <strong>{{ world.inventory.banked_xp }}</strong>
+          </div>
         </div>
 
-        <div v-else class="world-canvas-shell">
-          <div ref="pixiHostRef" class="world-canvas"></div>
-          <div class="world-legend">
-            <span><i class="legend-dot legend-dot--player"></i> Игроки и боты</span>
-            <span><i class="legend-dot legend-dot--mob"></i> Мобы</span>
-            <span><i class="legend-dot legend-dot--resource"></i> Ресурсы</span>
-            <span><i class="legend-dot legend-dot--boss"></i> Босс</span>
+        <div class="world-canvas-shell">
+          <div class="world-canvas-frame">
+            <div ref="pixiHostRef" class="world-canvas"></div>
+            <div class="world-fallback">
+              <div class="world-fallback__grid"></div>
+              <div class="world-fallback__core"></div>
+              <div class="world-fallback__label">Loading shard scene</div>
+            </div>
+            <div v-if="loading" class="world-loading">
+              <v-skeleton-loader type="image, article" />
+            </div>
+          </div>
+          <div class="world-scene-hud world-scene-hud--bottom">
+            <div class="world-legend">
+              <span><i class="legend-dot legend-dot--player"></i> Игроки и боты</span>
+              <span><i class="legend-dot legend-dot--mob"></i> Мобы</span>
+              <span><i class="legend-dot legend-dot--resource"></i> Ресурсы</span>
+              <span><i class="legend-dot legend-dot--boss"></i> Босс</span>
+            </div>
+            <p class="world-scene-caption">{{ sceneSummary }}</p>
           </div>
         </div>
       </section>
@@ -475,14 +522,21 @@ onBeforeUnmount(() => {
 
 .world-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
   gap: var(--space-l);
+  align-items: start;
 }
 
 .world-canvas-card,
 .world-panel {
   display: grid;
   gap: var(--space-s);
+}
+
+.world-canvas-card {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .world-canvas-card__header,
@@ -493,22 +547,129 @@ onBeforeUnmount(() => {
   align-items: flex-start;
 }
 
-.world-canvas-card__summary {
-  margin-top: var(--space-2xs);
-}
-
 .world-canvas-shell {
   display: grid;
   gap: var(--space-s);
+  max-width: 100%;
+}
+
+.world-canvas-frame {
+  position: relative;
+  width: 100%;
+  min-width: 0;
 }
 
 .world-canvas {
+  position: relative;
+  z-index: 2;
   width: 100%;
   aspect-ratio: 28 / 16;
+  min-height: 20rem;
+  max-width: 100%;
   border-radius: var(--radius-l);
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: linear-gradient(180deg, rgba(10, 13, 20, 0.95), rgba(20, 25, 35, 0.95));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.world-fallback {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: var(--radius-l);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at center, rgba(199, 89, 35, 0.16), transparent 24%),
+    linear-gradient(180deg, rgba(12, 16, 24, 0.72), rgba(7, 10, 16, 0.92));
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  pointer-events: none;
+}
+
+.world-fallback__grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 56px 56px;
+  opacity: 0.25;
+}
+
+.world-fallback__core {
+  position: absolute;
+  inset: 30% 34%;
+  border-radius: 999px;
+  border: 2px solid rgba(125, 211, 252, 0.45);
+  background: radial-gradient(circle, rgba(199, 89, 35, 0.2), rgba(199, 89, 35, 0.04) 60%, transparent 70%);
+  box-shadow: 0 0 0 24px rgba(125, 211, 252, 0.04);
+}
+
+.world-fallback__label {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(10, 13, 20, 0.82);
+  color: var(--farmspot-text-on-dark);
+  font-size: var(--step--1);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.world-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  align-content: center;
+  padding: var(--space-m);
+  background: rgba(10, 13, 20, 0.72);
+  border-radius: var(--radius-l);
+  pointer-events: none;
+}
+
+.world-scene-hud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.world-scene-hud--top {
+  padding: var(--space-2xs) var(--space-xs);
+  border-radius: var(--radius-l);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.world-scene-hud--bottom {
+  padding-top: var(--space-2xs);
+}
+
+.world-scene-stat {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+.world-scene-stat span {
+  color: var(--farmspot-text-on-dark-muted);
+  font-size: var(--step--2);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.world-scene-stat strong {
+  color: var(--farmspot-text-on-dark);
+  font-size: var(--step-0);
+}
+
+.world-scene-caption {
+  color: var(--farmspot-text-on-dark-muted);
+  font-size: var(--step--1);
+  margin: 0;
 }
 
 .world-legend {
@@ -573,10 +734,6 @@ onBeforeUnmount(() => {
 
 .world-panel__hint {
   margin: 0;
-}
-
-.world-loading {
-  min-height: 20rem;
 }
 
 @media (max-width: 960px) {
