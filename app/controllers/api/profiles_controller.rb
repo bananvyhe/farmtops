@@ -6,6 +6,16 @@ module Api
       render json: { user: user_payload(current_user) }
     end
 
+    def nickname_check
+      nickname = normalized_nickname_param
+
+      return render json: { available: false, normalized: nickname, errors: ["Nickname is too short"] } if nickname.blank?
+      return render json: { available: false, normalized: nickname, errors: ["Nickname has invalid format"] } unless nickname.match?(User::NICKNAME_PATTERN)
+
+      taken = User.where.not(id: current_user.id).exists?(nickname: nickname)
+      render json: { available: !taken, normalized: nickname }
+    end
+
     def update
       current_user.assign_attributes(profile_params)
 
@@ -19,10 +29,15 @@ module Api
     private
 
     def profile_params
-      {
-        prime_time_zone: params[:prime_time_zone],
-        prime_slots_utc: Array(params[:prime_slots_utc])
-      }
+      attrs = {}
+      attrs[:nickname] = params[:nickname] if params.key?(:nickname)
+      attrs[:prime_time_zone] = params[:prime_time_zone] if params.key?(:prime_time_zone)
+      attrs[:prime_slots_utc] = Array(params[:prime_slots_utc]) if params.key?(:prime_slots_utc)
+      attrs
+    end
+
+    def normalized_nickname_param
+      params[:nickname].to_s.strip.downcase
     end
   end
 end

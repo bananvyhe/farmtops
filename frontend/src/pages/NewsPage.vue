@@ -30,6 +30,12 @@ const route = useRoute()
 const router = useRouter()
 const newsUi = useNewsUiStore()
 const { y: scrollY } = useWindowScroll()
+const handleSessionChanged = () => {
+  if (!hydrated.value) return
+
+  newsUi.clearFeedSnapshot()
+  loadFeed()
+}
 
 function parseQueryId(value) {
   if (Array.isArray(value)) value = value[0]
@@ -417,6 +423,8 @@ useIntersectionObserver(
 )
 
 onMounted(async () => {
+  window.addEventListener("farmspot:session-changed", handleSessionChanged)
+
   if (typeof IntersectionObserver === "function") {
     readObserver = new IntersectionObserver(
       (entries) => {
@@ -452,6 +460,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener("farmspot:session-changed", handleSessionChanged)
   resetReadTracking()
   readObserver?.disconnect()
   saveFeedSnapshot()

@@ -1,19 +1,36 @@
 <script setup>
-import { computed, onMounted, onUnmounted } from "vue"
+import { computed, onMounted, onUnmounted, watch } from "vue"
 import { useRouter } from "vue-router"
 import { clearSession, loadSession, logout, sessionState } from "./useSession"
+import { useNewsUiStore } from "./stores/newsUi"
 
 const router = useRouter()
+const newsUi = useNewsUiStore()
 const publicPaths = new Set(["/login", "/news"])
 const currentPath = computed(() => router.currentRoute.value.path)
 const isPublicNewsRoute = computed(() => currentPath.value === "/news" || currentPath.value.startsWith("/news/"))
 
 async function handleUnauthorized() {
   clearSession()
+  newsUi.clearFeedSnapshot()
   if (!publicPaths.has(currentPath.value)) {
     await router.replace("/login")
   }
 }
+
+watch(
+  () => sessionState.authenticated,
+  (nextValue, prevValue) => {
+    if (nextValue === prevValue) return
+
+    newsUi.clearFeedSnapshot()
+    window.dispatchEvent(
+      new CustomEvent("farmspot:session-changed", {
+        detail: { authenticated: nextValue }
+      })
+    )
+  }
+)
 
 onMounted(async () => {
   window.addEventListener("farmspot:unauthorized", handleUnauthorized)

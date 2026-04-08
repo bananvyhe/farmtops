@@ -19,7 +19,14 @@ const dragPaintValue = ref(true)
 const browserTimeZone = ref(detectTimeZone())
 const profileHydrated = ref(false)
 const lastSavedSignature = ref("")
+const nicknameDraft = ref("")
+const nicknameAvailable = ref(true)
+const nicknameChecking = ref(false)
+const nicknameStatus = ref("")
+const nicknameStatusKind = ref("muted")
+const nicknameSaving = ref(false)
 let autoSaveTimer = null
+let nicknameCheckTimer = null
 
 function detectTimeZone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
@@ -95,6 +102,10 @@ async function loadProfile() {
     const data = await api.profile()
     sessionState.user = data.user
     browserTimeZone.value = detectTimeZone()
+    nicknameDraft.value = data.user.nickname || ""
+    nicknameAvailable.value = true
+    nicknameStatus.value = data.user.can_change_nickname ? "Ник можно изменить один раз." : "Ник уже менялся."
+    nicknameStatusKind.value = data.user.can_change_nickname ? "muted" : "error"
     setSelectionFromUtcSlots(data.user.prime_slots_utc || [])
     lastSavedSignature.value = scheduleSignature.value
     profileHydrated.value = true
@@ -102,6 +113,71 @@ async function loadProfile() {
     error.value = err.message
   } finally {
     loading.value = false
+  }
+}
+
+async function checkNicknameAvailability(value) {
+  const nickname = value.trim().toLowerCase()
+
+  if (!sessionState.user?.can_change_nickname) {
+    nicknameAvailable.value = false
+    nicknameStatus.value = "Ник уже нельзя менять."
+    nicknameStatusKind.value = "error"
+    return
+  }
+
+  if (!nickname) {
+    nicknameAvailable.value = false
+    nicknameStatus.value = "Введите ник."
+    nicknameStatusKind.value = "muted"
+    return
+  }
+
+  if (nickname === sessionState.user?.nickname) {
+    nicknameAvailable.value = true
+    nicknameStatus.value = "Это текущий ник."
+    nicknameStatusKind.value = "muted"
+    return
+  }
+
+  nicknameChecking.value = true
+  nicknameStatus.value = "Проверяем ник..."
+  nicknameStatusKind.value = "muted"
+
+  try {
+    const data = await api.checkProfileNickname(nickname)
+    nicknameAvailable.value = Boolean(data.available)
+    nicknameStatus.value = data.available ? "Ник свободен." : "Ник уже занят."
+    nicknameStatusKind.value = data.available ? "success" : "error"
+  } catch (err) {
+    nicknameAvailable.value = false
+    nicknameStatus.value = err.message
+    nicknameStatusKind.value = "error"
+  } finally {
+    nicknameChecking.value = false
+  }
+}
+
+async function saveNickname() {
+  if (!sessionState.user?.can_change_nickname) return
+  const nickname = nicknameDraft.value.trim().toLowerCase()
+  if (!nickname || !nicknameAvailable.value || nickname === sessionState.user?.nickname) return
+
+  nicknameSaving.value = true
+  error.value = ""
+  success.value = ""
+
+  try {
+    const data = await api.updateProfile({ nickname })
+    sessionState.user = data.user
+    nicknameDraft.value = data.user.nickname || nickname
+    nicknameAvailable.value = true
+    nicknameStatus.value = data.user.can_change_nickname ? "Ник сохранен." : "Ник сохранен. Изменить его больше нельзя."
+    nicknameStatusKind.value = data.user.can_change_nickname ? "success" : "error"
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    nicknameSaving.value = false
   }
 }
 
@@ -157,6 +233,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("pointerup", stopDragSelection)
   if (autoSaveTimer) window.clearTimeout(autoSaveTimer)
+  if (nicknameCheckTimer) window.clearTimeout(nicknameCheckTimer)
 })
 
 watch(scheduleSignature, (nextValue) => {
@@ -169,6 +246,14 @@ watch(scheduleSignature, (nextValue) => {
   autoSaveTimer = window.setTimeout(() => {
     saveProfile({ silent: true })
   }, 350)
+})
+
+watch(nicknameDraft, (nextValue) => {
+  if (!profileHydrated.value) return
+  if (nicknameCheckTimer) window.clearTimeout(nicknameCheckTimer)
+  nicknameCheckTimer = window.setTimeout(() => {
+    checkNicknameAvailability(nextValue)
+  }, 250)
 })
 </script>
 
@@ -195,10 +280,7 @@ watch(scheduleSignature, (nextValue) => {
           <h2>Почасовая сетка</h2>
           <p class="muted">Клик переключает час, зажатие мыши позволяет быстро прокрасить диапазон.</p>
         </div>
-        <div class="profile-grid-card__actions">
-          <button class="ghost" type="button" @click="selectedSlotsLocal = new Set()">Очистить</button>
-          <button type="button" :disabled="saving" @click="saveProfile">{{ saving ? "Сохраняем..." : "Сохранить" }}</button>
-        </div>
+        <button class="ghost" type="button" @click="selectedSlotsLocal = new Set()">Очистить</button>
       </div>
 
       <div class="prime-grid-wrapper">
@@ -231,11 +313,37 @@ watch(scheduleSignature, (nextValue) => {
       <section class="card">
         <h2>Аккаунт</h2>
         <div class="detail-list">
+          <div><span>Ник</span><strong>{{ sessionState.user.nickname }}</strong></div>
           <div><span>E-mail</span><strong>{{ sessionState.user.email }}</strong></div>
           <div><span>Роль</span><strong>{{ sessionState.user.role }}</strong></div>
           <div><span>Тариф</span><strong>{{ sessionState.user.tariff_name }}</strong></div>
           <div><span>Баланс</span><strong>{{ formatCurrency(sessionState.user.balance_cents) }}</strong></div>
           <div><span>Списание в час</span><strong>{{ formatCurrency(sessionState.user.hourly_rate_cents) }}</strong></div>
+        </div>
+        <div class="nickname-editor">
+          <label>
+            Никнейм
+            <input
+              v-model="nicknameDraft"
+              type="text"
+              maxlength="20"
+              :disabled="!sessionState.user.can_change_nickname || nicknameSaving"
+              placeholder="u_example123"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+          <div class="nickname-editor__meta">
+            <span :class="`nickname-status nickname-status--${nicknameStatusKind}`">{{ nicknameChecking ? "Проверяем..." : nicknameStatus }}</span>
+            <button
+              type="button"
+              :disabled="nicknameSaving || nicknameChecking || !sessionState.user.can_change_nickname || !nicknameAvailable || nicknameDraft.trim().toLowerCase() === sessionState.user.nickname"
+              @click="saveNickname"
+            >
+              {{ nicknameSaving ? "Сохраняем..." : "Сохранить ник" }}
+            </button>
+          </div>
+          <p class="muted">Ник можно поменять только один раз. Доступность проверяется по мере ввода.</p>
         </div>
         <RouterLink to="/dashboard" class="ghost profile-dashboard-link">Платежи и история списаний</RouterLink>
       </section>

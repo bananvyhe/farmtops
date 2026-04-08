@@ -21,7 +21,9 @@ Rails.application.routes.draw do
   namespace :api do
     resource :session, only: %i[show create destroy]
     resource :registration, only: :create
-    resource :profile, only: %i[show update]
+    resource :profile, only: %i[show update] do
+      get :nickname_check, on: :collection
+    end
     resource :dashboard, only: :show, controller: :dashboard
     resources :payment_transactions, path: "payments", only: %i[create show]
     resources :news, only: %i[index show] do

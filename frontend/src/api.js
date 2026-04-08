@@ -53,6 +53,7 @@ export const api = {
   logout: () => request("/api/session", { method: "DELETE" }),
   profile: () => request("/api/profile"),
   updateProfile: (payload) => request("/api/profile", { method: "PATCH", body: JSON.stringify(payload) }),
+  checkProfileNickname: (nickname) => request(withQuery("/api/profile/nickname_check", { nickname })),
   dashboard: () => request("/api/dashboard"),
   createPayment: (payload) => request("/api/payments", { method: "POST", body: JSON.stringify(payload) }),
   getPayment: (id) => request(`/api/payments/${id}`),

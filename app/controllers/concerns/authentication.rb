@@ -51,6 +51,7 @@ module Authentication
   def sign_out!
     Auth::JwtCookieSession.flush(cookies[JWTSessions.refresh_cookie])
     clear_auth_cookies
+    clear_news_visitor_identity
     Current.reset
   end
 
@@ -75,6 +76,15 @@ module Authentication
     cookies.delete(JWTSessions.access_cookie)
     cookies.delete(JWTSessions.refresh_cookie)
     cookies.delete(:farmspot_csrf)
+  end
+
+  def clear_news_visitor_identity
+    visitor_uuid = cookies.signed[:farmspot_visitor_id].presence
+    return if visitor_uuid.blank?
+
+    NewsArticleRead.for_visitor(visitor_uuid).delete_all
+    NewsGameBookmark.for_visitor(visitor_uuid).delete_all
+    cookies.delete(:farmspot_visitor_id)
   end
 
   def set_current_request_details

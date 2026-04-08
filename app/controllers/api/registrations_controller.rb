@@ -16,6 +16,7 @@ module Api
         sign_in!(user)
         merge_news_reads_to_user!(user, visitor_uuid)
         merge_news_game_bookmarks_to_user!(user, visitor_uuid)
+        clear_news_visitor_identity
         render json: {
           authenticated: true,
           csrf_token: cookies[:farmspot_csrf],
