@@ -10,6 +10,7 @@ import NewsArticlePage from "./pages/NewsArticlePage.vue"
 import ShardWorldPage from "./pages/ShardWorldPage.vue"
 import { createPinia } from "pinia"
 import vuetify from "./plugins/vuetify"
+import { setSeo } from "./seo"
 import "./styles.css"
 
 if (import.meta.env.PROD) {
@@ -29,13 +30,67 @@ if (import.meta.env.PROD) {
 
 const routes = [
   { path: "/", redirect: "/news" },
-  { path: "/login", component: LoginPage },
-  { path: "/news", component: NewsPage },
-  { path: "/news/:id", component: NewsArticlePage },
-  { path: "/profile", component: ProfilePage },
-  { path: "/world/:id", component: ShardWorldPage },
-  { path: "/dashboard", component: DashboardPage },
-  { path: "/admin", component: AdminPage }
+  {
+    path: "/login",
+    component: LoginPage,
+    meta: {
+      title: "Вход",
+      description: "Войдите в Farmspot, чтобы открыть личный кабинет и дополнительные функции.",
+      robots: "noindex, nofollow"
+    }
+  },
+  {
+    path: "/news",
+    component: NewsPage,
+    meta: {
+      title: "Новости",
+      description: "Свежие новости Farmspot и связанные игровые материалы."
+    }
+  },
+  {
+    path: "/news/:id",
+    component: NewsArticlePage,
+    meta: {
+      title: "Новость",
+      description: "Открыть полную версию новости Farmspot."
+    }
+  },
+  {
+    path: "/profile",
+    component: ProfilePage,
+    meta: {
+      title: "Профиль",
+      description: "Личный профиль пользователя Farmspot.",
+      robots: "noindex, nofollow"
+    }
+  },
+  {
+    path: "/world/:id",
+    component: ShardWorldPage,
+    meta: {
+      title: "Мир",
+      description: "Публичная страница мира Farmspot.",
+      robots: "noindex, nofollow"
+    }
+  },
+  {
+    path: "/dashboard",
+    component: DashboardPage,
+    meta: {
+      title: "Кабинет",
+      description: "Панель управления балансом и платежами Farmspot.",
+      robots: "noindex, nofollow"
+    }
+  },
+  {
+    path: "/admin",
+    component: AdminPage,
+    meta: {
+      title: "Админка",
+      description: "Административная панель Farmspot.",
+      robots: "noindex, nofollow"
+    }
+  }
 ]
 
 const router = createRouter({
@@ -47,8 +102,25 @@ const router = createRouter({
 })
 const pinia = createPinia()
 
+function updateSeoForRoute(route) {
+  setSeo({
+    title: route.meta.title,
+    description: route.meta.description,
+    robots: route.meta.robots,
+    canonicalPath: route.path
+  })
+}
+
+router.afterEach((to) => {
+  updateSeoForRoute(to)
+})
+
 if (typeof window !== "undefined" && "scrollRestoration" in window.history) {
   window.history.scrollRestoration = "manual"
 }
+
+router.isReady().then(() => {
+  updateSeoForRoute(router.currentRoute.value)
+})
 
 createApp(App).use(pinia).use(router).use(vuetify).mount("#app")

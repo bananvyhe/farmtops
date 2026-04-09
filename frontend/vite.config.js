@@ -12,6 +12,14 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": "http://127.0.0.1:3000",
+      "/robots.txt": {
+        target: "http://127.0.0.1:3000",
+        changeOrigin: true
+      },
+      "/sitemap.xml": {
+        target: "http://127.0.0.1:3000",
+        changeOrigin: true
+      },
       "/admin": {
         target: "http://127.0.0.1:3000",
         changeOrigin: true

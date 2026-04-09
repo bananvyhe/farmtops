@@ -15,6 +15,9 @@ Rails.application.routes.draw do
     run Sidekiq::Web
   end
 
+  get "robots.txt", to: "public_assets#robots", defaults: { format: :txt }
+  get "sitemap.xml", to: "public_assets#sitemap", defaults: { format: :xml }
+
   get "up" => "rails/health#show", as: :rails_health_check
   mount protected_sidekiq_web, at: "/sidekiq"
 

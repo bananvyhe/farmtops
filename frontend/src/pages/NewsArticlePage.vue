@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { api } from "../api"
 import { useNewsUiStore } from "../stores/newsUi"
+import { setSeo } from "../seo"
 
 const route = useRoute()
 const router = useRouter()
@@ -43,6 +44,38 @@ const bodyHtml = computed(() => {
   }
   return richHtml
 })
+
+const articleDescription = computed(() => {
+  if (!article.value) return "Открыть новость Farmspot."
+
+  const text = article.value.preview_text || article.value.body_text || article.value.title || ""
+  return text.replace(/\s+/g, " ").trim()
+})
+
+watch(
+  () => article.value,
+  (nextArticle) => {
+    if (!nextArticle) {
+      setSeo({
+        title: "Новость",
+        description: "Открыть новость Farmspot.",
+        canonicalPath: `/news/${route.params.id}`,
+        robots: "index, follow"
+      })
+      return
+    }
+
+    setSeo({
+      title: nextArticle.title,
+      description: articleDescription.value,
+      canonicalPath: `/news/${nextArticle.id}`,
+      type: "article",
+      image: nextArticle.image_url || nextArticle.preview_image_url,
+      publishedTime: nextArticle.published_at || nextArticle.fetched_at
+    })
+  },
+  { immediate: true }
+)
 
 function syncGameBookmarkInArticle(bookmarked, bookmarksCount) {
   if (!article.value?.game) return
