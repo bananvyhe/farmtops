@@ -9,7 +9,7 @@ JWTSessions.signing_key =
 JWTSessions.access_cookie = "farmspot_access"
 JWTSessions.refresh_cookie = "farmspot_refresh"
 JWTSessions.csrf_header = "X-CSRF-Token"
-JWTSessions.access_exp_time = 30.minutes.to_i
+JWTSessions.access_exp_time = 30.days.to_i
 JWTSessions.refresh_exp_time = 30.days.to_i
 JWTSessions.token_store =
   if Rails.env.production? || ENV["REDIS_URL"].present?
