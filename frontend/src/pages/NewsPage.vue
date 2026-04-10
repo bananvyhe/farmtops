@@ -579,7 +579,7 @@ onBeforeUnmount(() => {
             </v-chip>
             <v-tooltip :text="shardTooltip(article)" location="top">
               <template #activator="{ props }">
-                <span v-bind="props" class="news-card__world-button-wrap">
+                <span v-bind="props" class="news-card__world-button-wrap" v-if="article.game">
                   <button
                     v-if="article.game?.can_create_shard"
                     class="news-card__world-button"
@@ -647,9 +647,9 @@ onBeforeUnmount(() => {
 }
 
 .news-hero__eyebrow {
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.6rem;
   text-transform: uppercase;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
   font-size: var(--step--2);
   line-height: var(--leading-body);
   color: var(--farmspot-text-on-dark-muted);
