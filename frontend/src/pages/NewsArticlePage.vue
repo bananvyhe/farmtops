@@ -126,6 +126,11 @@ async function loadArticle() {
       api.markNewsReads({ article_ids: [data.article.id] }).catch(() => {})
     }
   } catch (err) {
+    if (err.status === 404) {
+      await router.replace({ path: "/404", query: { from: route.fullPath } })
+      return
+    }
+
     error.value = err.message
   } finally {
     loading.value = false

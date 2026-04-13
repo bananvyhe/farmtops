@@ -24,6 +24,8 @@ async function request(url, options = {}) {
   const data = await response.json().catch(() => ({}))
   if (data.csrf_token) setCsrfToken(data.csrf_token)
   if (!response.ok) {
+    const error = new Error(data.error || (data.errors && data.errors.join(", ")) || "Request failed")
+    error.status = response.status
     if (response.status === 401) {
       window.dispatchEvent(
         new CustomEvent("farmspot:unauthorized", {
@@ -31,7 +33,7 @@ async function request(url, options = {}) {
         })
       )
     }
-    throw new Error(data.error || (data.errors && data.errors.join(", ")) || "Request failed")
+    throw error
   }
   return data
 }

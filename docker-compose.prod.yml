@@ -95,6 +95,7 @@ services:
       dockerfile: frontend/Dockerfile.prod
       args:
         VITE_APP_TITLE: Farmspot
+        VITE_SITE_URL: ${APP_BASE_URL:-https://farmspot.ru}
     restart: unless-stopped
     depends_on:
       web:

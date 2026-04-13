@@ -78,7 +78,9 @@ class PublicAssetsController < ActionController::Base
   end
 
   def site_origin
-    request.base_url
+    Rails.application.credentials.dig(:app, :base_url).presence ||
+      ENV["APP_BASE_URL"].presence ||
+      request.base_url
   end
 
   def indent(text, spaces)

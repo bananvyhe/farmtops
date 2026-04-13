@@ -3,6 +3,10 @@ const FALLBACK_ORIGIN = "https://farmspot.ru"
 const DEFAULT_DESCRIPTION = "Farmspot — новости, личный кабинет, миры и админка проекта."
 
 function getSiteOrigin() {
+  if (import.meta.env.PROD) {
+    return import.meta.env.VITE_SITE_URL || FALLBACK_ORIGIN
+  }
+
   if (typeof window !== "undefined" && window.location?.origin) {
     return window.location.origin
   }

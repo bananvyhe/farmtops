@@ -8,6 +8,7 @@ import AdminPage from "./pages/AdminPage.vue"
 import NewsPage from "./pages/NewsPage.vue"
 import NewsArticlePage from "./pages/NewsArticlePage.vue"
 import ShardWorldPage from "./pages/ShardWorldPage.vue"
+import NotFoundPage from "./pages/NotFoundPage.vue"
 import { createPinia } from "pinia"
 import vuetify from "./plugins/vuetify"
 import { setSeo } from "./seo"
@@ -90,6 +91,19 @@ const routes = [
       description: "Административная панель Farmspot.",
       robots: "noindex, nofollow"
     }
+  },
+  {
+    path: "/404",
+    component: NotFoundPage,
+    meta: {
+      title: "Страница не найдена",
+      description: "Запрошенная страница Farmspot не найдена.",
+      robots: "noindex, nofollow"
+    }
+  },
+  {
+    path: "/:pathMatch(.*)*",
+    redirect: "/404"
   }
 ]
 
