@@ -2,6 +2,7 @@ require "uri"
 
 class NewsSource < ApplicationRecord
   BLOCKED_SOURCE_HOSTS = %w[theblock.co].freeze
+  GENERAL_FEED_HIDDEN_SOURCE_HOSTS = %w[playtoearn.com].freeze
 
   has_many :news_sections, dependent: :destroy
   has_many :news_articles, dependent: :destroy
@@ -34,8 +35,19 @@ class NewsSource < ApplicationRecord
     false
   end
 
+  def hidden_from_general_feed?
+    host = normalized_host
+    GENERAL_FEED_HIDDEN_SOURCE_HOSTS.any? { |hidden_host| host == hidden_host || host.end_with?(".#{hidden_host}") }
+  rescue URI::InvalidURIError, URI::Error
+    false
+  end
+
   def self.blocked_source_ids
     where(active: true).to_a.select(&:blocked_source?).map(&:id)
+  end
+
+  def self.general_feed_hidden_source_ids
+    where(active: true).to_a.select(&:hidden_from_general_feed?).map(&:id)
   end
 
   private

@@ -107,7 +107,9 @@ module Api
 
     def filtered_articles
       blocked_source_ids = NewsSource.blocked_source_ids
+      hidden_source_ids = NewsSource.general_feed_hidden_source_ids
       scope = NewsArticle.includes(:news_source, :news_section, news_article_game: :game).where.not(news_source_id: blocked_source_ids).recent
+      scope = scope.where.not(news_source_id: hidden_source_ids) if params[:source_id].blank? && params[:section_id].blank?
       scope = scope.where(news_source_id: params[:source_id]) if params[:source_id].present?
       scope = scope.where(news_section_id: params[:section_id]) if params[:section_id].present?
       scope = apply_cursor(scope) if params[:cursor].present?

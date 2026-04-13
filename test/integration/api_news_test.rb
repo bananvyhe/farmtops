@@ -60,6 +60,49 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
     assert_equal "Example", json_response["sections"].first["source_name"]
   end
 
+  test "hides playtoearn articles from the default feed but keeps source filtering available" do
+    playtoearn_source = NewsSource.create!(
+      name: "PlayToEarn",
+      base_url: "https://playtoearn.com",
+      active: true,
+      config: {}
+    )
+    playtoearn_section = playtoearn_source.news_sections.create!(
+      name: "News",
+      url: "https://playtoearn.com/news",
+      active: true,
+      config: {}
+    )
+    playtoearn_article = playtoearn_section.news_articles.create!(
+      news_source: playtoearn_source,
+      news_section: playtoearn_section,
+      source_article_id: "pte-1",
+      canonical_url: "https://playtoearn.com/news/1",
+      title: "PlayToEarn story",
+      preview_text: "PlayToEarn preview",
+      body_text: "PlayToEarn body",
+      image_url: "https://playtoearn.com/image.jpg",
+      published_at: Time.zone.parse("2026-03-20 12:00:00"),
+      fetched_at: Time.zone.now,
+      content_hash: "pte-hash",
+      raw_payload: {}
+    )
+
+    get "/api/news"
+
+    assert_response :success
+    refute_includes json_response["articles"].map { |article| article["title"] }, "PlayToEarn story"
+    assert_includes json_response["sources"].map { |source| source["name"] }, "PlayToEarn"
+
+    get "/api/news", params: { source_id: playtoearn_source.id }
+
+    assert_response :success
+    assert_equal ["PlayToEarn story"], json_response["articles"].map { |article| article["title"] }
+    assert_includes json_response["sources"].map { |source| source["name"] }, "PlayToEarn"
+    assert_includes json_response["sections"].map { |section| section["name"] }, "News"
+    assert_equal playtoearn_article.id, json_response["articles"].first["id"]
+  end
+
   test "hides blocked sources and their articles" do
     blocked_source = NewsSource.create!(
       name: "The Block",
