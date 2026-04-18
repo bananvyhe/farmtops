@@ -8,7 +8,8 @@ module Api
     skip_before_action :verify_frontend_csrf!, only: %i[reads bookmark_game unbookmark_game]
 
     def index
-      articles = filtered_articles.limit(limit_param + 1)
+      base_scope = base_articles_scope
+      articles = filtered_articles(base_scope).limit(limit_param + 1)
       has_more = articles.size > limit_param
       articles = articles.first(limit_param)
       read_ids = news_article_read_ids_for(articles.map(&:id))
@@ -19,13 +20,14 @@ module Api
         articles: articles.map { |article| news_article_payload(article, read: read_ids.include?(article.id), bookmarked_game_ids:, game_bookmark_counts:) },
         sources: NewsSource.active.where.not(id: blocked_source_ids).includes(:news_sections).map { |source| news_source_payload(source) },
         sections: NewsSection.active.where.not(news_source_id: blocked_source_ids).includes(:news_source).map { |section| news_section_payload(section) },
+        tags: news_tags_payload(base_scope),
         next_cursor: has_more ? news_cursor_for(articles.last) : nil,
         has_more:
       }
     end
 
     def show
-      article = NewsArticle.includes(:news_source, :news_section, news_article_game: :game).find(params[:id])
+      article = NewsArticle.includes(:news_source, :news_section, :news_tags, news_article_game: :game).find(params[:id])
       return render_error("Article not available", status: :not_found) if article.news_source.blocked_source?
 
       bookmarked_game_ids = news_game_bookmark_ids_for([article.news_article_game&.game_id].compact)
@@ -105,15 +107,47 @@ module Api
 
     private
 
-    def filtered_articles
+    def base_articles_scope
       blocked_source_ids = NewsSource.blocked_source_ids
-      hidden_source_ids = NewsSource.general_feed_hidden_source_ids
-      scope = NewsArticle.includes(:news_source, :news_section, news_article_game: :game).where.not(news_source_id: blocked_source_ids).recent
-      scope = scope.where.not(news_source_id: hidden_source_ids) if params[:source_id].blank? && params[:section_id].blank?
+      scope = NewsArticle.includes(:news_source, :news_section, :news_tags, news_article_game: :game).where.not(news_source_id: blocked_source_ids).recent
+      scope = scope.where.not(news_source_id: NewsSource.general_feed_hidden_source_ids) if params[:source_id].blank? && params[:section_id].blank?
       scope = scope.where(news_source_id: params[:source_id]) if params[:source_id].present?
       scope = scope.where(news_section_id: params[:section_id]) if params[:section_id].present?
+      scope
+    end
+
+    def filtered_articles(scope)
+      scope = scope.joins(:news_article_tags).where(news_article_tags: { news_tag_id: selected_tag_ids }) if selected_tag_ids.any?
+      scope = scope.joins(:news_article_game).where(news_article_games: { game_id: selected_game_id }) if selected_game_id.present?
+      scope = scope.distinct if selected_tag_ids.any?
       scope = apply_cursor(scope) if params[:cursor].present?
       scope
+    end
+
+    def selected_tag_ids
+      @selected_tag_ids ||= Array(params[:tag_ids]).flat_map { |value| value.to_s.split(",") }.map(&:to_i).reject(&:zero?).uniq
+    end
+
+    def selected_game_id
+      value = Array(params[:game_id]).first
+      return if value.blank?
+
+      parsed = value.to_i
+      parsed.positive? ? parsed : nil
+    end
+
+    def news_tags_payload(scope)
+      article_scope = scope.except(:includes, :order, :limit, :offset, :select)
+      tagged_counts = NewsTag.joins(news_article_tags: :news_article)
+        .merge(article_scope)
+        .group("news_tags.id")
+        .count("news_articles.id")
+
+      selected_tags = NewsTag.where(id: selected_tag_ids).order(:name)
+      visible_tags = NewsTag.where(id: tagged_counts.keys).order(:name)
+      (selected_tags + visible_tags).uniq(&:id).map do |tag|
+        news_tag_payload(tag, articles_count: tagged_counts[tag.id] || 0)
+      end
     end
 
     def limit_param
@@ -126,7 +160,7 @@ module Api
       timestamp, article_id = decode_cursor(params[:cursor])
       return scope if timestamp.blank? || article_id.blank?
 
-      sort_sql = "COALESCE(published_at, fetched_at, created_at)"
+      sort_sql = "COALESCE(news_articles.published_at, news_articles.fetched_at, news_articles.created_at)"
       scope.where(
         "(#{sort_sql} < :timestamp) OR (#{sort_sql} = :timestamp AND id < :article_id)",
         timestamp: timestamp,

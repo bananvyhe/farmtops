@@ -6,6 +6,8 @@ class Game < ApplicationRecord
   validates :name, presence: true
   validates :slug, presence: true, uniqueness: true
 
+  before_validation :normalize_name
+
   def self.find_or_match_by_identified_name!(identified_game_name:, slug:, external_game_id: nil)
     normalized = normalize_identified_name(identified_game_name)
     game = match_by_external_game_id(external_game_id)
@@ -35,5 +37,26 @@ class Game < ApplicationRecord
 
   def followers_count
     news_game_bookmarks.count
+  end
+
+  def self.search_candidates(query:, limit: 20)
+    normalized = normalize_identified_name(query)
+    scope = all
+
+    if normalized.present?
+      pattern = "#{ActiveRecord::Base.sanitize_sql_like(normalized)}%"
+      scope = scope.where(
+        "normalized_name LIKE :pattern OR LOWER(slug) LIKE :pattern",
+        pattern:
+      )
+    end
+
+    scope.order(Arel.sql("normalized_name ASC NULLS LAST"), :id).limit(limit)
+  end
+
+  private
+
+  def normalize_name
+    self.normalized_name = self.class.normalize_identified_name(name)
   end
 end

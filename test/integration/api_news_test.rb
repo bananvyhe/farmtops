@@ -103,6 +103,79 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
     assert_equal playtoearn_article.id, json_response["articles"].first["id"]
   end
 
+  test "exposes tags in the feed and filters by tag id" do
+    tag = NewsTag.create!(name: "MMORPG")
+    NewsArticleTag.create!(news_article: @article, news_tag: tag)
+
+    other_game = Game.create!(name: "Another Game", slug: "another-game")
+    other_article = @section.news_articles.create!(
+      news_source: @source,
+      news_section: @section,
+      source_article_id: "news-2",
+      canonical_url: "https://example.com/news/2",
+      title: "Other",
+      preview_text: "Other preview",
+      body_text: "Other body",
+      image_url: "https://example.com/image-2.jpg",
+      published_at: Time.zone.parse("2026-03-20 09:00:00"),
+      fetched_at: Time.zone.now,
+      content_hash: "hash-2",
+      raw_payload: {}
+    )
+    other_article.create_news_article_game!(
+      game: other_game,
+      request_id: "req-2",
+      identified_game_name: "Another Game",
+      slug: "another-game",
+      confidence: 1.0,
+      model: "test-model",
+      raw_response: {}
+    )
+
+    get "/api/news"
+
+    assert_response :success
+    assert_includes json_response["tags"].map { |item| item["name"] }, "MMORPG"
+    assert_includes json_response["articles"].first["tags"].map { |item| item["name"] }, "MMORPG"
+
+    get "/api/news", params: { tag_ids: tag.id }
+
+    assert_response :success
+    assert_equal ["Hello"], json_response["articles"].map { |article| article["title"] }
+  end
+
+  test "filters news by game id" do
+    other_game = Game.create!(name: "Another Game", slug: "another-game")
+    other_article = @section.news_articles.create!(
+      news_source: @source,
+      news_section: @section,
+      source_article_id: "news-2",
+      canonical_url: "https://example.com/news/2",
+      title: "Other",
+      preview_text: "Other preview",
+      body_text: "Other body",
+      image_url: "https://example.com/image-2.jpg",
+      published_at: Time.zone.parse("2026-03-20 09:00:00"),
+      fetched_at: Time.zone.now,
+      content_hash: "hash-2",
+      raw_payload: {}
+    )
+    other_article.create_news_article_game!(
+      game: other_game,
+      request_id: "req-2",
+      identified_game_name: "Another Game",
+      slug: "another-game",
+      confidence: 1.0,
+      model: "test-model",
+      raw_response: {}
+    )
+
+    get "/api/news", params: { game_id: other_game.id }
+
+    assert_response :success
+    assert_equal ["Other"], json_response["articles"].map { |article| article["title"] }
+  end
+
   test "hides blocked sources and their articles" do
     blocked_source = NewsSource.create!(
       name: "The Block",

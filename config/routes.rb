@@ -33,6 +33,7 @@ Rails.application.routes.draw do
       delete :leave, on: :member
     end
     post "games/:game_id/shard", to: "shards#create"
+    get "games/search", to: "games#search"
     resource :dashboard, only: :show, controller: :dashboard
     resources :payment_transactions, path: "payments", only: %i[create show]
     resources :news, only: %i[index show] do

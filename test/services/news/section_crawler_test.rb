@@ -903,6 +903,65 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     refute_includes article.body_html, "swipe_morningmo.png"
   end
 
+  test "extracts article tags into news tag relations" do
+    source = NewsSource.create!(
+      name: "MassivelyOP",
+      base_url: "https://massivelyop.com",
+      active: true,
+      crawl_delay_min_seconds: 0,
+      crawl_delay_max_seconds: 0,
+      config: {
+        "article_body_selector" => ".td-post-content",
+        "article_image_selector" => "meta[property='og:image'], .td-post-content img, img"
+      }
+    )
+    section = source.news_sections.create!(
+      name: "Patch",
+      url: "https://massivelyop.com/category/patch/",
+      active: true,
+      config: source.config
+    )
+
+    pages = {
+      "https://massivelyop.com/category/patch/" => listing_page(
+        [
+          { title: "Patch Article", href: "/2026/03/20/patch-article/", preview: "Feed preview" }
+        ]
+      ),
+      "https://massivelyop.com/2026/03/20/patch-article/" => <<~HTML
+        <html>
+          <head>
+            <meta property="og:image" content="https://massivelyop.com/wp-content/uploads/2026/03/patch.jpg">
+            <link rel="canonical" href="https://massivelyop.com/2026/03/20/patch-article/">
+            <title>Patch Article</title>
+          </head>
+          <body>
+            <article class="td-post-content">
+              <div class="td-post-category">
+                <a href="/tag/mmorpg" rel="tag">MMORPG</a>
+                <a href="/tag/industry" rel="tag">Industry</a>
+              </div>
+              <p>This is the unique body paragraph that should remain.</p>
+            </article>
+          </body>
+        </html>
+      HTML
+    }
+
+    result = News::SectionCrawler.new(
+      section:,
+      client: FakeClient.new(pages),
+      sleeper: NullSleeper.new,
+      max_articles: 12,
+      max_pages: 2,
+      max_retries: 1
+    ).call
+
+    assert_equal 1, result.articles_saved
+    article = section.news_articles.find_by!(canonical_url: "https://massivelyop.com/2026/03/20/patch-article/")
+    assert_equal ["Industry", "MMORPG"], article.news_tags.order(:name).map(&:name)
+  end
+
   test "removes a duplicated leading featured image block when it matches the article hero" do
     source = NewsSource.create!(
       name: "MassivelyOP",

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_04_08_140000) do
+ActiveRecord::Schema[8.0].define(version: 2026_04_18_002000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -70,6 +70,16 @@ ActiveRecord::Schema[8.0].define(version: 2026_04_08_140000) do
     t.index ["user_id", "read_at"], name: "index_news_article_reads_on_user_id_and_read_at"
     t.index ["user_id"], name: "index_news_article_reads_on_user_id"
     t.index ["visitor_uuid", "read_at"], name: "index_news_article_reads_on_visitor_uuid_and_read_at"
+  end
+
+  create_table "news_article_tags", force: :cascade do |t|
+    t.bigint "news_article_id", null: false
+    t.bigint "news_tag_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["news_article_id", "news_tag_id"], name: "index_news_article_tags_on_news_article_id_and_news_tag_id", unique: true
+    t.index ["news_article_id"], name: "index_news_article_tags_on_news_article_id"
+    t.index ["news_tag_id"], name: "index_news_article_tags_on_news_tag_id"
   end
 
   create_table "news_articles", force: :cascade do |t|
@@ -172,6 +182,15 @@ ActiveRecord::Schema[8.0].define(version: 2026_04_08_140000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["name"], name: "index_news_sources_on_name", unique: true
+  end
+
+  create_table "news_tags", force: :cascade do |t|
+    t.string "name", null: false
+    t.string "slug", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["name"], name: "index_news_tags_on_name"
+    t.index ["slug"], name: "index_news_tags_on_slug", unique: true
   end
 
   create_table "payment_transactions", force: :cascade do |t|
@@ -285,6 +304,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_04_08_140000) do
   add_foreign_key "news_article_games", "news_articles"
   add_foreign_key "news_article_reads", "news_articles"
   add_foreign_key "news_article_reads", "users", on_delete: :cascade
+  add_foreign_key "news_article_tags", "news_articles"
+  add_foreign_key "news_article_tags", "news_tags"
   add_foreign_key "news_articles", "news_crawl_runs"
   add_foreign_key "news_articles", "news_sections"
   add_foreign_key "news_articles", "news_sources"

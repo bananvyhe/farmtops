@@ -62,6 +62,7 @@ export const api = {
     request(withQuery(`/api/shards/${id}/enter`, { layer_id: layerId }), { method: "POST" }),
   leaveShard: (id) => request(`/api/shards/${id}/leave`, { method: "DELETE" }),
   createShard: (gameId) => request(`/api/games/${gameId}/shard`, { method: "POST" }),
+  searchGames: (params = {}) => request(withQuery("/api/games/search", params)),
   dashboard: () => request("/api/dashboard"),
   createPayment: (payload) => request("/api/payments", { method: "POST", body: JSON.stringify(payload) }),
   getPayment: (id) => request(`/api/payments/${id}`),

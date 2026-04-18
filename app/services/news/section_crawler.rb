@@ -127,7 +127,8 @@ module News
             listing_title: extract_text(node, title_selector),
             listing_url: href,
             listing_preview: extract_text(node, preview_selector),
-            listing_preview_html: extract_preview_html(node, preview_selector, page_url)
+            listing_preview_html: extract_preview_html(node, preview_selector, page_url),
+            tags: article_tag_names(node)
           }
         )
       end
@@ -153,7 +154,8 @@ module News
             feed_preview: extract_text(node, "description, summary, content"),
             feed_preview_html: feed_item_preview_html(node),
             feed_description_html: node.at_css("description")&.inner_html.to_s,
-            published_at: feed_item_published_at(node)
+            published_at: feed_item_published_at(node),
+            tags: article_tag_names(node)
           }
         )
       end
@@ -203,9 +205,13 @@ module News
         return { saved: false, duplicate: true }
       end
 
+      tag_names = article_data[:tag_names]
       article_data = original_article_data(article_data)
-      article = section.news_articles.build(article_data)
-      article.save!
+      article = section.news_articles.build(article_data.except(:tag_names))
+      NewsArticle.transaction do
+        article.save!
+        article.replace_news_tags!(tag_names) if tag_names.present?
+      end
       unique_keys.each { |key| seen_keys << key }
       { saved: true, article: }
     rescue StandardError => e
@@ -234,7 +240,8 @@ module News
           "source_preview_html" => article_data[:preview_html],
           "source_body_text" => article_data[:body_text],
           "source_body_html" => article_data[:body_html],
-          "translation_status" => "pending"
+          "translation_status" => "pending",
+          "tags" => article_data[:tag_names]
         ).compact
       )
     end
@@ -270,6 +277,7 @@ module News
         published_at:,
         fetched_at: Time.current,
         content_hash:,
+        tag_names: article_tag_names(document),
         raw_payload: {
           source_page_url: page_url,
           article_url: candidate.url,
@@ -278,7 +286,8 @@ module News
           source_listing_image_url: candidate.image_url,
           title: title,
           preview_text: preview_text,
-          preview_html: candidate.preview_html
+          preview_html: candidate.preview_html,
+          tags: article_tag_names(document)
         }.compact
       }
     end
@@ -318,6 +327,7 @@ module News
         published_at:,
         fetched_at: Time.current,
         content_hash:,
+        tag_names: article_tag_names(document),
         raw_payload: {
           source_page_url: page_url,
           article_url: candidate.url,
@@ -326,7 +336,8 @@ module News
           source_listing_image_url: candidate.image_url,
           title: title,
           preview_text: preview_text,
-          preview_html: preview_html
+          preview_html: preview_html,
+          tags: article_tag_names(document)
         }.compact
       }
     end
@@ -378,7 +389,8 @@ module News
           "source_body_html" => article_data[:body_html],
           "translation_request_id" => translated.request_id,
           "translation_model" => translated.model,
-          "translation_status" => translated.status
+          "translation_status" => translated.status,
+          "tags" => article_data[:tag_names]
         ).compact
       )
     end
@@ -402,7 +414,8 @@ module News
           "translation_status" => "fallback",
           "translation_error" => error.message,
           "translation_error_class" => error.class.name,
-          "translation_fallback_url" => candidate.url
+          "translation_fallback_url" => candidate.url,
+          "tags" => article_data[:tag_names]
         ).compact
       )
     end
@@ -950,6 +963,26 @@ module News
 
       html = normalize_lazy_images(strip_article_noise(preview_node.inner_html), base_url)
       sanitize_news_html(html).presence
+    end
+
+    def article_tag_names(node)
+      selectors = config_value(
+        "article_tag_selectors",
+        "a[rel='tag'], .tags a, .tag-links a, .entry-tags a, .post-tags a, .td-post-category a, .cat-links a, .entry-categories a, meta[property='article:tag'], meta[property='article:section']"
+      )
+      fragment = Nokogiri::HTML.fragment(node.to_html)
+
+      fragment.css(selectors).filter_map do |tag_node|
+        value = if tag_node.name == "meta"
+          tag_node["content"]
+        else
+          tag_node.text
+        end
+
+        value.to_s.gsub(/\s+/, " ").strip.presence
+      end.uniq
+    rescue StandardError
+      []
     end
   end
 end

@@ -9,11 +9,17 @@ import { useNewsUiStore } from "../stores/newsUi"
 const articles = ref([])
 const sources = ref([])
 const sections = ref([])
+const tags = ref([])
+const gameItems = ref([])
 const loading = ref(false)
 const loadingMore = ref(false)
+const gamesLoading = ref(false)
 const error = ref("")
 const selectedSourceId = ref(null)
 const selectedSectionId = ref(null)
+const selectedTagIds = ref([])
+const selectedGameId = ref(null)
+const gameSearch = ref("")
 const nextCursor = ref(null)
 const hasMore = ref(true)
 const sentinel = ref(null)
@@ -28,6 +34,7 @@ const READ_VISIBILITY_MS = 1000
 let readObserver = null
 let flushTimer = null
 let requestToken = 0
+let gameSearchToken = 0
 const route = useRoute()
 const router = useRouter()
 const newsUi = useNewsUiStore()
@@ -46,10 +53,31 @@ function parseQueryId(value) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function parseQueryIds(value) {
+  if (Array.isArray(value)) value = value.join(",")
+  if (value === null || value === undefined || value === "") return []
+
+  return String(value)
+    .split(",")
+    .map((item) => Number(item))
+    .filter((item) => Number.isFinite(item) && item > 0)
+}
+
+function filtersKey(sourceId, sectionId, tagIds, gameId) {
+  return [
+    sourceId ?? "",
+    sectionId ?? "",
+    Array.isArray(tagIds) ? tagIds.join(",") : "",
+    gameId ?? ""
+  ].join(":")
+}
+
 function filtersFromRoute() {
   return {
     sourceId: parseQueryId(route.query.source_id),
-    sectionId: parseQueryId(route.query.section_id)
+    sectionId: parseQueryId(route.query.section_id),
+    tagIds: parseQueryIds(route.query.tag_ids),
+    gameId: parseQueryId(route.query.game_id)
   }
 }
 
@@ -57,6 +85,8 @@ function routeQueryForFilters() {
   const query = {}
   if (selectedSourceId.value !== null && selectedSourceId.value !== undefined) query.source_id = String(selectedSourceId.value)
   if (selectedSectionId.value !== null && selectedSectionId.value !== undefined) query.section_id = String(selectedSectionId.value)
+  if (selectedTagIds.value.length) query.tag_ids = selectedTagIds.value.join(",")
+  if (selectedGameId.value !== null && selectedGameId.value !== undefined) query.game_id = String(selectedGameId.value)
   return query
 }
 
@@ -64,7 +94,9 @@ async function syncRouteQuery() {
   const nextQuery = routeQueryForFilters()
   const currentQuery = {
     ...(route.query.source_id ? { source_id: String(route.query.source_id) } : {}),
-    ...(route.query.section_id ? { section_id: String(route.query.section_id) } : {})
+    ...(route.query.section_id ? { section_id: String(route.query.section_id) } : {}),
+    ...(route.query.tag_ids ? { tag_ids: String(route.query.tag_ids) } : {}),
+    ...(route.query.game_id ? { game_id: String(route.query.game_id) } : {})
   }
 
   if (JSON.stringify(nextQuery) === JSON.stringify(currentQuery)) return
@@ -88,6 +120,12 @@ const sectionItems = computed(() => {
     ...filtered.map((section) => ({ title: `${section.name} · ${section.source_name}`, value: section.id }))
   ]
 })
+
+const tagItems = computed(() => tags.value.map((tag) => ({ title: tag.name, value: tag.id })))
+
+const selectedFiltersSignature = computed(() =>
+  filtersKey(selectedSourceId.value, selectedSectionId.value, selectedTagIds.value, selectedGameId.value)
+)
 
 const formatDate = (value) => {
   if (!value) return "—"
@@ -121,12 +159,17 @@ const displayArticles = computed(() =>
 
 function captureFeedSnapshot() {
   return {
-    filterKey: `${selectedSourceId.value ?? ""}:${selectedSectionId.value ?? ""}`,
+    filterKey: selectedFiltersSignature.value,
     articles: articles.value,
     sources: sources.value,
     sections: sections.value,
+    tags: tags.value,
     selectedSourceId: selectedSourceId.value,
     selectedSectionId: selectedSectionId.value,
+    selectedTagIds: selectedTagIds.value,
+    selectedGameId: selectedGameId.value,
+    gameItems: gameItems.value,
+    gameSearch: gameSearch.value,
     nextCursor: nextCursor.value,
     hasMore: hasMore.value,
     scrollY: scrollY.value,
@@ -140,7 +183,8 @@ function saveFeedSnapshot() {
 
 function restoreFeedSnapshot() {
   const state = newsUi.feedSnapshot
-  const routeKey = `${filtersFromRoute().sourceId ?? ""}:${filtersFromRoute().sectionId ?? ""}`
+  const routeFilters = filtersFromRoute()
+  const routeKey = filtersKey(routeFilters.sourceId, routeFilters.sectionId, routeFilters.tagIds, routeFilters.gameId)
 
   if (!state || state.filterKey !== routeKey || !Array.isArray(state.articles) || !state.articles.length) {
     return false
@@ -149,8 +193,13 @@ function restoreFeedSnapshot() {
   articles.value = state.articles
   sources.value = state.sources || []
   sections.value = state.sections || []
+  tags.value = state.tags || []
   selectedSourceId.value = state.selectedSourceId ?? null
   selectedSectionId.value = state.selectedSectionId ?? null
+  selectedTagIds.value = Array.isArray(state.selectedTagIds) ? state.selectedTagIds : []
+  selectedGameId.value = state.selectedGameId ?? null
+  gameItems.value = state.gameItems || []
+  gameSearch.value = state.gameSearch || ""
   nextCursor.value = state.nextCursor || null
   hasMore.value = Boolean(state.hasMore)
   loading.value = false
@@ -330,8 +379,29 @@ async function toggleGameBookmark(article) {
   }
 }
 
+async function loadGameOptions(query = gameSearch.value) {
+  const currentToken = ++gameSearchToken
+  gamesLoading.value = true
+
+  try {
+    const data = await api.searchGames({
+      q: query,
+      ids: selectedGameId.value ? String(selectedGameId.value) : undefined,
+      limit: 20
+    })
+
+    if (currentToken !== gameSearchToken) return
+    gameItems.value = data.games || []
+  } catch (_err) {
+    if (currentToken !== gameSearchToken) return
+  } finally {
+    if (currentToken !== gameSearchToken) return
+    gamesLoading.value = false
+  }
+}
+
 async function loadFeed() {
-  const queryKey = `${selectedSourceId.value ?? ""}:${selectedSectionId.value ?? ""}`
+  const queryKey = selectedFiltersSignature.value
   const currentToken = ++requestToken
   activeQueryKey.value = queryKey
   loading.value = true
@@ -346,12 +416,15 @@ async function loadFeed() {
     const data = await api.news({
       source_id: selectedSourceId.value,
       section_id: selectedSectionId.value,
+      tag_ids: selectedTagIds.value.join(","),
+      game_id: selectedGameId.value,
       limit: 20
     })
     if (currentToken !== requestToken || activeQueryKey.value !== queryKey) return
     articles.value = data.articles
     sources.value = data.sources
     sections.value = data.sections
+    tags.value = data.tags || []
     nextCursor.value = data.next_cursor || null
     hasMore.value = Boolean(data.has_more)
 
@@ -380,6 +453,8 @@ async function loadMore() {
     const data = await api.news({
       source_id: selectedSourceId.value,
       section_id: selectedSectionId.value,
+      tag_ids: selectedTagIds.value.join(","),
+      game_id: selectedGameId.value,
       limit: 20,
       cursor: nextCursor.value
     })
@@ -427,7 +502,16 @@ watchThrottled(
   { throttle: 250, trailing: true }
 )
 
-watch([selectedSourceId, selectedSectionId], () => {
+watchThrottled(
+  gameSearch,
+  () => {
+    if (!hydrated.value) return
+    loadGameOptions(gameSearch.value)
+  },
+  { throttle: 250, trailing: true }
+)
+
+watch(selectedFiltersSignature, () => {
   if (!hydrated.value) return
 
   if (selectedSectionId.value && sectionItems.value.every((item) => item.value !== selectedSectionId.value)) {
@@ -477,6 +561,8 @@ onMounted(async () => {
   const initialFilters = filtersFromRoute()
   selectedSourceId.value = initialFilters.sourceId
   selectedSectionId.value = initialFilters.sectionId
+  selectedTagIds.value = initialFilters.tagIds
+  selectedGameId.value = initialFilters.gameId
 
   hydrated.value = true
   if (!restoreFeedSnapshot()) {
@@ -485,6 +571,10 @@ onMounted(async () => {
   } else {
     await nextTick()
     syncReadObserver()
+  }
+
+  if (selectedGameId.value !== null) {
+    await loadGameOptions()
   }
 })
 
@@ -522,6 +612,36 @@ onBeforeUnmount(() => {
           item-title="title"
           item-value="value"
           label="Раздел"
+          variant="outlined"
+          density="comfortable"
+          hide-details
+        />
+        <v-select
+          v-model="selectedTagIds"
+          :items="tagItems"
+          item-title="title"
+          item-value="value"
+          label="Теги"
+          multiple
+          chips
+          closable-chips
+          clearable
+          variant="outlined"
+          density="comfortable"
+          hide-details
+        />
+        <v-autocomplete
+          v-model="selectedGameId"
+          v-model:search="gameSearch"
+          :items="gameItems"
+          item-title="name"
+          item-value="id"
+          label="Игра"
+          placeholder="Начните вводить название"
+          clearable
+          no-filter
+          hide-no-data
+          :loading="gamesLoading"
           variant="outlined"
           density="comfortable"
           hide-details
@@ -602,6 +722,16 @@ onBeforeUnmount(() => {
             </v-tooltip>
             <v-chip size="small" variant="flat" color="primary">{{ article.source_name }}</v-chip>
             <v-chip size="small" variant="outlined">{{ article.section_name }}</v-chip>
+            <v-chip
+              v-for="tag in article.tags || []"
+              :key="tag.id"
+              size="small"
+              variant="tonal"
+              color="secondary"
+              class="news-card__tag-chip"
+            >
+              {{ tag.name }}
+            </v-chip>
             <span class="news-card__time">{{ formatDate(article.published_at || article.fetched_at) }}</span>
             <span v-if="isUnread(article)" class="news-card__badge">Новая</span>
           </div>
@@ -625,7 +755,7 @@ onBeforeUnmount(() => {
 
     <section v-if="!loading && !articles.length" class="news-empty card card--dark">
       <h2>Ничего не найдено</h2>
-      <p>Попробуйте другой источник или раздел.</p>
+      <p>Попробуйте другой источник, раздел, тег или игру.</p>
     </section>
 
     <p v-if="error" class="news-error">{{ error }}</p>
@@ -682,7 +812,7 @@ onBeforeUnmount(() => {
 }
 .news-filters__grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(16rem, 1.3fr) auto;
   gap: var(--space-s);
   align-items: center;
 }
@@ -757,6 +887,10 @@ onBeforeUnmount(() => {
 }
 
 .news-card__game-count {
+  color: var(--farmspot-text-on-dark-muted);
+}
+
+.news-card__tag-chip {
   color: var(--farmspot-text-on-dark-muted);
 }
 

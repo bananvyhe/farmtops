@@ -144,12 +144,22 @@ module Api
         translation_source_locale: article.translation_source_locale,
         content_hash: article.content_hash,
         raw_payload: article.raw_payload,
+        tags: article.news_tags.sort_by(&:name).map { |tag| news_tag_payload(tag) },
         game: game.present? ? news_game_payload(
           game,
           bookmarked: bookmarked_game_ids.nil? ? news_game_bookmarked?(game) : bookmarked_game_ids.include?(game.id),
           bookmarks_count: game_bookmark_counts.nil? ? news_game_bookmark_count_for(game) : game_bookmark_counts.fetch(game.id, 0)
         ) : nil,
         read: read.nil? ? news_article_read?(article) : read
+      }
+    end
+
+    def news_tag_payload(tag, articles_count: nil)
+      {
+        id: tag.id,
+        name: tag.name,
+        slug: tag.slug,
+        articles_count:
       }
     end
 
