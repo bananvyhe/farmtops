@@ -1,52 +1,15 @@
 # Dev Notes
 
-- Local manual edits from the user in the editor are expected and should be treated as intentional.
-- Do not flag unrelated user changes as accidental; only modify files needed for the current task.
-- For future projects based on this repo, keep/update the bootstrap cheat sheet:
-  - `docs/NEW_PROJECT_CHEATSHEET.md`
-- Project rules:
-  - Frontend is always `Vue 3 Composition API`.
-  - Rails is backend/API and executes all security-sensitive logic.
-  - Keep local development environment fully running while working:
-    - PostgreSQL
-    - Redis
-    - Rails
-    - Sidekiq
-    - Vite frontend
-  - Periodic jobs are scheduled through `sidekiq-cron`.
-  - Production deploy is Docker-only.
-  - Use `./scripts/deploy_prod.sh` for VPS deploys from the local machine.
-  - News translation in production depends on host-to-container network access to `NEWS_TRANSLATOR_BASE_URL`; if host healthchecks pass but Sidekiq times out, check UFW on the VPS and allow Docker bridge traffic to `19191/tcp`.
-  - Translation requests are still synchronous HTTP calls to the remote translator; the app now processes them as a lock-guarded one-article chain (`NewsTranslatePendingArticlesJob` -> `NewsTranslateArticleJob`) so only one translation is in flight at a time.
-  - `NEWS_TRANSLATOR_READ_TIMEOUT_SECONDS` is the per-article wait budget; raise it if the translator can legitimately need longer for one article.
-  - Crawls save original articles first and translation updates them afterward.
-  - On `Sidekiq` boot the translation recovery runs once: stale `news:translation:pending_articles_lock` is cleared, fresh failed articles and stalled `translating` articles are reset to `pending`, and the translation chain is re-enqueued.
-  - There is no periodic cron for translation recovery anymore; translation should advance only on completed jobs or the one-shot boot recovery.
-  - The same recovery is available manually via `bundle exec rake news:translation:recover`.
-  - Translation/Sidekiq incident notes live in `docs/runbooks/news_translation.md`.
-  - In this template `config/credentials.yml.enc` is baked into the Docker image.
-  - After any credentials change, rebuild affected app containers; `restart` is not enough.
-  - For new projects, store app secrets in `Rails credentials` immediately; keep only infra secrets in `.env.production`.
-  - Billing: balances may go negative. Do not block hourly charges on negative balances.
-  - Billing schedule:
-    - Development: every 60 minutes (Sidekiq cron).
-    - Production: every 60 minutes (Sidekiq cron).
-    - Interval can be overridden with `BILLING_INTERVAL_MINUTES`.
-  - Keep infrastructure secrets in server `.env.production` only when they are needed before Rails boot:
-    - `RAILS_MASTER_KEY`
-    - `POSTGRES_PASSWORD`
-  - App secrets belong in `Rails credentials`:
-    - `jwt`
-    - `sidekiq`
-    - `yoomoney`
-    - app-level production notes
-  - `Sidekiq Web` auth is separate from site users.
-  - Imported users do not guarantee billing works:
-    - verify tariffs/manual hourly rates after import
-    - verify scheduler enqueue and `hourly_charge` ledger rows in production
-
-- Recent clone pitfalls (Farmspot):
-  - If Rails/Vite were already running from another project, ports `3000/5173` will be taken and new services will exit immediately.
-  - Sidekiq must be started after Redis and the DB exist; otherwise `sidekiq-cron` will crash on boot.
-  - For fast debugging, run `rails server`, `sidekiq`, and `vite` in the foreground to see errors.
-  - Do a sweep for leftover branding/env vars (examples: `PIXELUP` in templates, `PIXELUP_DATABASE_PASSWORD` in `config/database.yml`).
+- Canonical context entry: [docs/index.md](/Users/rufus/workspace/projects/farmspot/docs/index.md).
+- Keep this file operational, not encyclopedic. Do not repeat material that already lives in the docs tree.
+- Treat user edits in the workspace as intentional unless they directly block the current task.
+- Keep local dev runnable end to end: PostgreSQL, Redis, Rails, Sidekiq, Vite frontend.
+- Production deploy is Docker-only; use `./scripts/deploy_prod.sh` for VPS deploys.
+- News translation depends on host-to-container access to `NEWS_TRANSLATOR_BASE_URL`; if Sidekiq times out, check UFW and allow Docker bridge traffic to `19191/tcp`.
+- Translation is a lock-guarded one-article chain and should advance only on job completion or the one-shot boot recovery.
+- The recovery entrypoint is `bundle exec rake news:translation:recover`.
+- Rebuild app containers after any credentials change; `restart` is not enough when `config/credentials.yml.enc` changes.
+- Keep app secrets in `Rails credentials`; keep only infra boot secrets in `.env.production`.
+- Billing can go negative; do not block hourly charges on negative balances.
+- Verify imported users after migration: tariff assignment, hourly rates, and ledger rows.
+- Common clone pitfalls: port collisions on `3000/5173`, Sidekiq starting before Redis/DB, and stale branding/env vars from template projects.
