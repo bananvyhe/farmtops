@@ -15,7 +15,8 @@ module Shards
         shard: shard_payload,
         layers: layer_payloads,
         active_layer_id: @layer&.id,
-        world: world_payload
+        world: world_payload,
+        chat_messages: chat_messages_payload
       }
     end
 
@@ -73,6 +74,12 @@ module Shards
 
     def world_payload
       Shards::WorldSimulator.new(shard: @shard, layer: @layer || @shard.default_layer).call
+    end
+
+    def chat_messages_payload
+      @shard.chat_messages.includes(:user).recent_first.limit(50).reverse.map do |message|
+        Shards::RealtimeBroadcaster.chat_message_payload(message)
+      end
     end
 
     def map_payload(rng)
@@ -319,7 +326,7 @@ module Shards
     end
 
     def current_week_slot_utc
-      Time.current.utc.wday * 24 + Time.current.utc.hour
+      ((Time.current.utc.wday + 6) % 7) * 24 + Time.current.utc.hour
     end
 
     def lerp(from, to, progress)

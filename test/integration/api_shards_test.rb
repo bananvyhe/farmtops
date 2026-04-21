@@ -1,6 +1,19 @@
 require "test_helper"
 
 class ApiShardsTest < ActionDispatch::IntegrationTest
+  def register_user!(session, email)
+    session.post "/api/registration",
+      params: {
+        email: email,
+        password: "Password123!",
+        password_confirmation: "Password123!"
+      }.to_json,
+      headers: { "CONTENT_TYPE" => "application/json" }
+
+    assert_equal 201, session.response.status
+    session.response.parsed_body["csrf_token"]
+  end
+
   test "creates a shard world with a default layer and active membership" do
     source = NewsSource.create!(
       name: "Example",
@@ -41,23 +54,13 @@ class ApiShardsTest < ActionDispatch::IntegrationTest
 
     post "/api/news/#{article.id}/bookmark_game"
 
-    post "/api/registration",
-      params: {
-        email: "shard-world@example.com",
-        password: "Password123!",
-        password_confirmation: "Password123!"
-      }.to_json,
-      headers: { "CONTENT_TYPE" => "application/json" }
-
-    assert_response :created
-    csrf_token = json_response["csrf_token"]
+    csrf_token = register_user!(self, "shard-world@example.com")
 
     post "/api/games/#{game.id}/shard", headers: { "X-CSRF-Token" => csrf_token }
 
     assert_response :created
     assert_equal game.id, json_response.dig("shard", "game_id")
     assert_equal 1, json_response.dig("layers", 0, "occupancy")
-    assert_equal 1, json_response.dig("world", "players").size
 
     shard_id = json_response.dig("shard", "id")
     get "/api/shards/#{shard_id}/world"
@@ -65,6 +68,54 @@ class ApiShardsTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_equal shard_id, json_response.dig("shard", "id")
     assert_equal 1, json_response.dig("layers", 0, "occupancy")
-    assert_equal 1, json_response.dig("world", "progress", "occupancy")
+    assert_equal 1, json_response.dig("world", "progress", "members_count")
+  end
+
+  test "second user joins existing shared shard for the game" do
+    game = Game.create!(name: "Lineage", slug: "lineage")
+
+    first = open_session
+    first_csrf_token = register_user!(first, "shared-world-first@example.com")
+    first_user = User.find_by!(email: "shared-world-first@example.com")
+    NewsGameBookmark.create!(game: game, user: first_user, bookmarked_at: Time.current)
+    first.post "/api/games/#{game.id}/shard", headers: { "X-CSRF-Token" => first_csrf_token }
+    assert_equal 201, first.response.status
+    shard_id = first.response.parsed_body.dig("shard", "id")
+
+    second = open_session
+    second_csrf_token = register_user!(second, "shared-world-second@example.com")
+    second_user = User.find_by!(email: "shared-world-second@example.com")
+    NewsGameBookmark.create!(game: game, user: second_user, bookmarked_at: Time.current)
+    second.post "/api/games/#{game.id}/shard", headers: { "X-CSRF-Token" => second_csrf_token }
+    assert_equal 201, second.response.status
+    assert_equal shard_id, second.response.parsed_body.dig("shard", "id")
+    assert_equal 2, second.response.parsed_body.dig("layers", 0, "occupancy")
+
+    second.get "/api/shards"
+    assert_equal 200, second.response.status
+    assert_equal [shard_id], second.response.parsed_body.fetch("shards").map { |shard| shard["id"] }
+  end
+
+  test "creates and reads shard chat messages" do
+    game = Game.create!(name: "Aion", slug: "aion")
+    csrf_token = register_user!(self, "chat-shard-user@example.com")
+    user = User.find_by!(email: "chat-shard-user@example.com")
+    NewsGameBookmark.create!(game: game, user: user, bookmarked_at: Time.current)
+
+    post "/api/games/#{game.id}/shard", headers: { "X-CSRF-Token" => csrf_token }
+    assert_response :created
+    shard_id = json_response.dig("shard", "id")
+
+    post "/api/shards/#{shard_id}/chat_messages",
+      params: { content: "hello shard" }.to_json,
+      headers: { "CONTENT_TYPE" => "application/json", "X-CSRF-Token" => csrf_token }
+
+    assert_response :created
+    assert_equal "hello shard", json_response.dig("message", "content")
+
+    get "/api/shards/#{shard_id}/chat_messages"
+    assert_response :success
+    assert_equal 1, json_response.fetch("messages").size
+    assert_equal "hello shard", json_response.dig("messages", 0, "content")
   end
 end

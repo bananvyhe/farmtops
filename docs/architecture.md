@@ -74,6 +74,7 @@
 - серверной симуляции mobs/resources/player avatars;
 - хранения прайм-сетки;
 - матчмейкинга;
+- realtime-каналов `ActionCable` для world snapshots и shard-чата;
 - оркестрации генерации контента;
 - интеграции с AI-воркерами.
 
@@ -121,6 +122,7 @@
 - `shard_bosses`
 - `shard_resources`
 - `shard_loot_drops`
+- `shard_chat_messages`
 - `player_shard_progress`
 - `bot_runs`
 

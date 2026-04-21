@@ -864,7 +864,7 @@ module Shards
     end
 
     def current_week_slot_utc(now)
-      now.utc.wday * 24 + now.utc.hour
+      ((now.utc.wday + 6) % 7) * 24 + now.utc.hour
     end
 
     def boss_name

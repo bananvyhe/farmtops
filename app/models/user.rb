@@ -11,6 +11,7 @@ class User < ApplicationRecord
   has_many :news_game_bookmarks, dependent: :destroy
   has_many :shards, dependent: :destroy
   has_many :shard_layer_memberships, dependent: :destroy
+  has_many :shard_chat_messages, dependent: :destroy
 
   enum :role, { admin: 0, user: 1, client: 2 }, default: :client
 

@@ -19,6 +19,7 @@ Rails.application.routes.draw do
   get "sitemap.xml", to: "public_assets#sitemap", defaults: { format: :xml }
 
   get "up" => "rails/health#show", as: :rails_health_check
+  mount ActionCable.server => "/cable"
   mount protected_sidekiq_web, at: "/sidekiq"
 
   namespace :api do
@@ -31,6 +32,7 @@ Rails.application.routes.draw do
       get :world, on: :member
       post :enter, on: :member
       delete :leave, on: :member
+      resources :chat_messages, only: %i[index create], controller: "shard_chat_messages"
     end
     post "games/:game_id/shard", to: "shards#create"
     get "games/search", to: "games#search"

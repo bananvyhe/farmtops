@@ -9,14 +9,12 @@ class NewsArticle < ApplicationRecord
   has_many :news_tags, through: :news_article_tags
 
   TAG_SELECTORS = %w[
-    a[rel='tag']
-    .tags a
-    .tag-links a
-    .entry-tags a
-    .post-tags a
     .td-post-category a
     .cat-links a
     .entry-categories a
+    .post-categories a
+    .post-meta .td-post-category a
+    .post-meta .cat-links a
     meta[property='article:tag']
     meta[property='article:section']
   ].freeze
@@ -85,10 +83,8 @@ class NewsArticle < ApplicationRecord
   def self.extract_tag_names_from_payload(article)
     payload = article.raw_payload.to_h
     candidates = []
-    candidates.concat(Array(payload["tags"]))
+    candidates.concat(Array(payload["article_tag_names"]))
     candidates.concat(Array(payload["tag_names"]))
-    candidates.concat(Array(payload["categories"]))
-    candidates.concat(extract_tag_names_from_html(article.body_html))
     candidates.map { |value| value.to_s.strip }.reject(&:blank?).uniq
   end
 end

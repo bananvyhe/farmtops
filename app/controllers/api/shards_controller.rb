@@ -4,7 +4,7 @@ module Api
     before_action :set_shard, only: %i[world enter leave]
 
     def index
-      shards = current_user.shards.includes(:game, layers: :memberships).order(created_at: :desc)
+      shards = Shard.visible_to_user(current_user).includes(:game, layers: :memberships).order("shards.created_at DESC")
       render json: { shards: shards.map { |shard| shard_payload(shard) } }
     end
 
@@ -12,28 +12,35 @@ module Api
       game = Game.find(params[:game_id])
       return render_error("Game not available", status: :not_found) if game.followers_count.zero?
 
-      shard = current_user.shards.find_or_initialize_by(game_id: game.id)
+      shard = Shard.find_or_initialize_by(game_id: game.id)
       shard.assign_attributes(
-        name: Shard.build_name(game, current_user),
+        user_id: shard.user_id || current_user.id,
+        name: shard.name.presence || Shard.build_name(game),
         world_seed: shard.world_seed.presence || Shard.build_seed,
         status: shard.status || :draft
       )
 
       if shard.save
         Shards::LayerAllocator.new(shard:, user: current_user).call
-        render json: world_payload(shard), status: :created
+        payload = world_payload(shard)
+        broadcast_world_snapshot(shard, payload)
+        render json: payload, status: :created
       else
         render json: { errors: shard.errors.full_messages }, status: :unprocessable_entity
       end
     end
 
     def world
-      render json: world_payload(@shard)
+      payload = world_payload(@shard)
+      broadcast_world_snapshot(@shard, payload)
+      render json: payload
     end
 
     def enter
       result = Shards::LayerAllocator.new(shard: @shard, user: current_user, desired_layer_id: params[:layer_id]).call
-      render json: world_payload(@shard).merge(joined_layer_id: result.layer.id)
+      payload = world_payload(@shard).merge(joined_layer_id: result.layer.id)
+      broadcast_world_snapshot(@shard, payload.except(:joined_layer_id))
+      render json: payload
     rescue ActiveRecord::RecordNotFound
       render_error("Layer not found", status: :not_found)
     rescue StandardError => e
@@ -42,24 +49,30 @@ module Api
 
     def leave
       membership = @shard.layer_memberships.find_by(user_id: current_user.id)
-      return render json: world_payload(@shard).merge(left: false) unless membership
+      unless membership
+        payload = world_payload(@shard).merge(left: false)
+        return render json: payload
+      end
 
       membership.destroy!
-      render json: world_payload(@shard).merge(left: true)
+      payload = world_payload(@shard).merge(left: true)
+      broadcast_world_snapshot(@shard, payload.except(:left))
+      render json: payload
     end
 
     private
 
     def set_shard
-      @shard = current_user.shards.includes(layers: { memberships: :user }).find_by(id: params[:id])
-      return if @shard.present?
-
-      @shard = Shard.joins(:layer_memberships).includes(layers: { memberships: :user }).find_by(id: params[:id], shard_layer_memberships: { user_id: current_user.id })
+      @shard = Shard.visible_to_user(current_user).includes(layers: { memberships: :user }).find_by(id: params[:id])
       render_error("Shard not found", status: :not_found) if @shard.blank?
     end
 
     def world_payload(shard)
       Shards::WorldStateBuilder.new(shard:, current_user:).call
+    end
+
+    def broadcast_world_snapshot(shard, payload)
+      Shards::RealtimeBroadcaster.broadcast_world_snapshot(shard:, payload:)
     end
 
     def shard_payload(shard)

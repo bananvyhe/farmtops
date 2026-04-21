@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_04_18_002000) do
+ActiveRecord::Schema[8.0].define(version: 2026_04_21_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -212,6 +212,17 @@ ActiveRecord::Schema[8.0].define(version: 2026_04_18_002000) do
     t.index ["user_id"], name: "index_payment_transactions_on_user_id"
   end
 
+  create_table "shard_chat_messages", force: :cascade do |t|
+    t.bigint "shard_id", null: false
+    t.bigint "user_id", null: false
+    t.text "content", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["shard_id", "created_at"], name: "index_shard_chat_messages_on_shard_and_created_at"
+    t.index ["shard_id"], name: "index_shard_chat_messages_on_shard_id"
+    t.index ["user_id"], name: "index_shard_chat_messages_on_user_id"
+  end
+
   create_table "shard_layer_memberships", force: :cascade do |t|
     t.bigint "shard_id", null: false
     t.bigint "shard_layer_id", null: false
@@ -252,9 +263,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_04_18_002000) do
     t.integer "status", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["game_id"], name: "index_shards_on_game_id"
+    t.index ["game_id"], name: "index_shards_on_game_id_unique", unique: true
     t.index ["status"], name: "index_shards_on_status"
-    t.index ["user_id", "game_id"], name: "index_shards_on_user_id_and_game_id", unique: true
     t.index ["user_id"], name: "index_shards_on_user_id"
   end
 
@@ -315,6 +325,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_04_18_002000) do
   add_foreign_key "news_game_bookmarks", "users", on_delete: :cascade
   add_foreign_key "news_sections", "news_sources"
   add_foreign_key "payment_transactions", "users", on_delete: :cascade
+  add_foreign_key "shard_chat_messages", "shards"
+  add_foreign_key "shard_chat_messages", "users"
   add_foreign_key "shard_layer_memberships", "shard_layers"
   add_foreign_key "shard_layer_memberships", "shards"
   add_foreign_key "shard_layer_memberships", "users"

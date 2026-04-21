@@ -205,9 +205,9 @@ module News
         return { saved: false, duplicate: true }
       end
 
-      tag_names = article_data[:tag_names]
+      tag_names = article_data[:article_tag_names]
       article_data = original_article_data(article_data)
-      article = section.news_articles.build(article_data.except(:tag_names))
+      article = section.news_articles.build(article_data.except(:article_tag_names))
       NewsArticle.transaction do
         article.save!
         article.replace_news_tags!(tag_names) if tag_names.present?
@@ -241,7 +241,7 @@ module News
           "source_body_text" => article_data[:body_text],
           "source_body_html" => article_data[:body_html],
           "translation_status" => "pending",
-          "tags" => article_data[:tag_names]
+          "article_tag_names" => article_data[:article_tag_names]
         ).compact
       )
     end
@@ -277,7 +277,6 @@ module News
         published_at:,
         fetched_at: Time.current,
         content_hash:,
-        tag_names: article_tag_names(document),
         raw_payload: {
           source_page_url: page_url,
           article_url: candidate.url,
@@ -287,7 +286,7 @@ module News
           title: title,
           preview_text: preview_text,
           preview_html: candidate.preview_html,
-          tags: article_tag_names(document)
+          article_tag_names: article_tag_names(document)
         }.compact
       }
     end
@@ -327,7 +326,6 @@ module News
         published_at:,
         fetched_at: Time.current,
         content_hash:,
-        tag_names: article_tag_names(document),
         raw_payload: {
           source_page_url: page_url,
           article_url: candidate.url,
@@ -337,7 +335,7 @@ module News
           title: title,
           preview_text: preview_text,
           preview_html: preview_html,
-          tags: article_tag_names(document)
+          article_tag_names: article_tag_names(document)
         }.compact
       }
     end
@@ -390,7 +388,7 @@ module News
           "translation_request_id" => translated.request_id,
           "translation_model" => translated.model,
           "translation_status" => translated.status,
-          "tags" => article_data[:tag_names]
+          "article_tag_names" => article_data[:article_tag_names]
         ).compact
       )
     end
@@ -415,7 +413,7 @@ module News
           "translation_error" => error.message,
           "translation_error_class" => error.class.name,
           "translation_fallback_url" => candidate.url,
-          "tags" => article_data[:tag_names]
+          "article_tag_names" => article_data[:article_tag_names]
         ).compact
       )
     end
@@ -968,7 +966,7 @@ module News
     def article_tag_names(node)
       selectors = config_value(
         "article_tag_selectors",
-        "a[rel='tag'], .tags a, .tag-links a, .entry-tags a, .post-tags a, .td-post-category a, .cat-links a, .entry-categories a, meta[property='article:tag'], meta[property='article:section']"
+        ".td-post-category a, .cat-links a, .entry-categories a, .post-categories a, .post-meta .td-post-category a, .post-meta .cat-links a, meta[property='article:tag'], meta[property='article:section']"
       )
       fragment = Nokogiri::HTML.fragment(node.to_html)
 

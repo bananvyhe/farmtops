@@ -14,16 +14,7 @@ module Shards
 
       Shard.transaction do
         @shard.lock!
-        @shard.layers.load
-
-        layer = if @desired_layer_id.present?
-          selected = @shard.layers.find_by(id: @desired_layer_id)
-          raise ActiveRecord::RecordNotFound, "Layer not found" unless selected
-          raise StandardError, "Layer is full" if selected.full? && selected.memberships.where(user_id: @user.id).blank?
-          selected
-        else
-          select_layer
-        end
+        layer = @shard.default_layer
 
         membership = @shard.layer_memberships.find_or_initialize_by(user_id: @user.id)
         membership.shard_layer = layer
@@ -40,16 +31,6 @@ module Shards
       end
 
       Result.new(layer:, membership:)
-    end
-
-    private
-
-    def select_layer
-      @shard.layers.order(:layer_index).detect { |layer| !layer.full? } || @shard.layers.create!(layer_index: next_layer_index)
-    end
-
-    def next_layer_index
-      (@shard.layers.maximum(:layer_index) || 0) + 1
     end
   end
 end

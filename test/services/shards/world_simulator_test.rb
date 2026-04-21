@@ -10,7 +10,7 @@ class Shards::WorldSimulatorTest < ActiveSupport::TestCase
       nickname: "owner-one",
       role: :client
     )
-    active_slot = Time.current.utc.wday * 24 + Time.current.utc.hour
+    active_slot = ((Time.current.utc.wday + 6) % 7) * 24 + Time.current.utc.hour
     active_user = User.create!(
       email: "active@example.com",
       password: "Password123!",

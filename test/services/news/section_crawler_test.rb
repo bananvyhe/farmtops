@@ -937,6 +937,9 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
           </head>
           <body>
             <article class="td-post-content">
+              <div class="post-tags">
+                <a href="/tag/chaff" rel="tag">Chaff</a>
+              </div>
               <div class="td-post-category">
                 <a href="/tag/mmorpg" rel="tag">MMORPG</a>
                 <a href="/tag/industry" rel="tag">Industry</a>

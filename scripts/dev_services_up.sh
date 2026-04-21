@@ -25,8 +25,27 @@ if [ ! -d "$PG_DATA/base" ]; then
   echo "port = $PG_PORT" >> "$PG_DATA/postgresql.conf"
 fi
 
-if ! "$PG_BIN/pg_ctl" -D "$PG_DATA" status >/dev/null 2>&1; then
-  "$PG_BIN/pg_ctl" -D "$PG_DATA" -l "$PG_LOG" start
+postgres_available() {
+  if "$PG_BIN/pg_isready" -h "$PG_HOST" -p "$PG_PORT" >/dev/null 2>&1; then
+    return 0
+  fi
+  if command -v lsof >/dev/null 2>&1 && lsof -ti "tcp:$PG_PORT" >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
+if postgres_available; then
+  echo "PostgreSQL already available on $PG_HOST:$PG_PORT, skipping local start"
+elif ! "$PG_BIN/pg_ctl" -D "$PG_DATA" status >/dev/null 2>&1; then
+  if ! "$PG_BIN/pg_ctl" -D "$PG_DATA" -l "$PG_LOG" start; then
+    if postgres_available; then
+      echo "PostgreSQL became available on $PG_HOST:$PG_PORT, continuing"
+    else
+      echo "Failed to start PostgreSQL. See $PG_LOG"
+      exit 1
+    fi
+  fi
 fi
 
 cat > "$REDIS_CONF" <<EOF

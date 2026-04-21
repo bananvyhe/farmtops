@@ -1,4 +1,6 @@
 class ShardLayer < ApplicationRecord
+  SHARED_LAYER_CAPACITY = 200
+
   belongs_to :shard
   has_many :memberships, class_name: "ShardLayerMembership", dependent: :destroy
   has_many :users, through: :memberships
@@ -26,7 +28,7 @@ class ShardLayer < ApplicationRecord
   end
 
   def capacity
-    10
+    SHARED_LAYER_CAPACITY
   end
 
   def full?

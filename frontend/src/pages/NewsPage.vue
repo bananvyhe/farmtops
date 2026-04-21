@@ -616,7 +616,7 @@ onBeforeUnmount(() => {
           density="comfortable"
           hide-details
         />
-        <v-select
+          <v-select
           v-model="selectedTagIds"
           :items="tagItems"
           item-title="title"

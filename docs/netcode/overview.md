@@ -9,7 +9,7 @@
 ## Подход
 
 - Rails API хранит и подтверждает состояние.
-- Клиент получает snapshot и delta updates.
+- Клиент получает snapshot и delta updates через `ActionCable` (`/cable`) + HTTP fallback.
 - Боевые и экономические расчеты выполняются на backend или worker side.
 - PixiJS только отображает server-authoritative snapshot и UI.
 - Любая имитация движения, смерти, respawn и loot pickup должна исходить из server state, а не из локальной клиентской логики.
@@ -17,13 +17,14 @@
 ## Что синхронизируется
 
 - shard lifecycle;
-- shard layers and layer occupancy;
+- shared shard occupancy;
 - список участников;
 - presence events;
 - позиции player avatars, привязанных к аккаунтам живых пользователей;
 - состояние мобов и босса;
 - resource nodes и pickups;
 - XP bank, HP, энергия и ключевые статусы.
+- чат шарда (общий канал игроков).
 
 ## Prime grid и matchmaking
 
@@ -55,7 +56,9 @@
 
 Практичный старт:
 
-- client poll или lightweight subscription каждые 1-3 секунды;
+- `ShardWorldTickJob` поддерживает симуляцию;
+- websocket-клиенты могут запрашивать server tick в канале и получать broadcast снапшота;
+- HTTP polling остается fallback-механизмом;
 - background simulation ticks на backend;
 - отдельный lock на активный shard tick;
 - snapshot versioning для идемпотентного обновления клиента.
@@ -73,6 +76,8 @@
 - `POST /api/shards/:id/presence`
 - `POST /api/shards/:id/actions`
 - `GET /api/shards/:id/result`
+- `GET /api/shards/:id/chat_messages`
+- `POST /api/shards/:id/chat_messages`
 
 ## Состояние на клиенте
 

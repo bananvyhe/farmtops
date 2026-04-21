@@ -1,7 +1,7 @@
 <script setup>
 import { Application, Container, Graphics, Text } from "pixi.js"
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue"
-import { useRoute, RouterLink } from "vue-router"
+import { useRoute } from "vue-router"
 import { api } from "../api"
 
 const route = useRoute()
@@ -10,12 +10,20 @@ const refreshing = ref(false)
 const error = ref("")
 const worldResponse = ref(null)
 const selectedLayerId = ref(null)
+const chatMessages = ref([])
+const chatDraft = ref("")
+const chatSending = ref(false)
 const pixiHostRef = ref(null)
+const chatMessagesRef = ref(null)
 const sceneSummary = ref("")
 let frameHandle = null
 let renderHandle = null
 let refreshHandle = null
 let visibilityHandler = null
+let cableSocket = null
+let cableReconnectHandle = null
+let cableIdentifier = null
+let componentUnmounted = false
 let app = null
 let stageContainer = null
 let pixiMounted = false
@@ -30,6 +38,7 @@ const shard = computed(() => worldResponse.value?.shard || null)
 const layers = computed(() => worldResponse.value?.layers || [])
 const world = computed(() => worldResponse.value?.world || null)
 const activeLayer = computed(() => layers.value.find((layer) => String(layer.id) === String(selectedLayerId.value)) || null)
+const canSendChat = computed(() => Boolean(chatDraft.value.trim()) && !chatSending.value)
 
 function formatDate(value) {
   if (!value) return "—"
@@ -70,6 +79,35 @@ function resetRenderState(seed = null) {
   renderState.players.clear()
   renderState.mobs.clear()
   renderState.boss = null
+}
+
+function scrollChatToBottom() {
+  if (!chatMessagesRef.value) return
+  chatMessagesRef.value.scrollTop = chatMessagesRef.value.scrollHeight
+}
+
+function setChatMessages(messages) {
+  chatMessages.value = Array.isArray(messages) ? messages.slice(-100) : []
+  nextTick(scrollChatToBottom)
+}
+
+function appendChatMessage(message) {
+  if (!message?.id) return
+  const messageId = Number(message.id)
+  if (chatMessages.value.some((item) => Number(item.id) === messageId)) return
+  chatMessages.value = [...chatMessages.value, message].slice(-100)
+  nextTick(scrollChatToBottom)
+}
+
+function mergeWorldResponse(payload) {
+  if (!payload) return
+  worldResponse.value = payload
+  if (!selectedLayerId.value || !layers.value.some((layer) => String(layer.id) === String(selectedLayerId.value))) {
+    selectedLayerId.value = payload.active_layer_id || payload.layers?.[0]?.id || null
+  }
+  if (Array.isArray(payload.chat_messages)) {
+    setChatMessages(payload.chat_messages)
+  }
 }
 
 function smoothPosition(current, target, factor = 0.12) {
@@ -143,8 +181,7 @@ async function enterLayer(layerId = null) {
 
   try {
     const data = await api.enterShard(shardId, layerId)
-    worldResponse.value = data
-    selectedLayerId.value = data.joined_layer_id || data.active_layer_id || data.layers?.[0]?.id || null
+    mergeWorldResponse(data)
   } catch (err) {
     error.value = err.message
   } finally {
@@ -159,8 +196,7 @@ async function loadWorld() {
 
   try {
     const data = await api.shardWorld(shardId)
-    worldResponse.value = data
-    selectedLayerId.value = data.active_layer_id || data.layers?.[0]?.id || null
+    mergeWorldResponse(data)
   } catch (err) {
     error.value = err.message
   } finally {
@@ -175,10 +211,7 @@ async function refreshWorld() {
   refreshing.value = true
   try {
     const data = await api.shardWorld(route.params.id)
-    worldResponse.value = data
-    if (!selectedLayerId.value || !layers.value.some((layer) => String(layer.id) === String(selectedLayerId.value))) {
-      selectedLayerId.value = data.active_layer_id || data.layers?.[0]?.id || null
-    }
+    mergeWorldResponse(data)
   } catch (err) {
     error.value = err.message
   } finally {
@@ -186,9 +219,104 @@ async function refreshWorld() {
   }
 }
 
-async function chooseLayer(layerId) {
-  if (String(layerId) === String(selectedLayerId.value)) return
-  await enterLayer(layerId)
+function cableUrl() {
+  const protocol = window.location.protocol === "https:" ? "wss" : "ws"
+  const isViteDev = window.location.port === "5173"
+  const host = window.location.hostname === "localhost" ? "127.0.0.1" : window.location.hostname
+  const port = isViteDev ? "3000" : window.location.port
+  return `${protocol}://${host}${port ? `:${port}` : ""}/cable`
+}
+
+function cableConnected() {
+  return cableSocket && cableSocket.readyState === WebSocket.OPEN
+}
+
+function sendCableCommand(action, payload = {}) {
+  if (!cableConnected() || !cableIdentifier) return false
+
+  cableSocket.send(
+    JSON.stringify({
+      command: "message",
+      identifier: cableIdentifier,
+      data: JSON.stringify({ action, ...payload })
+    })
+  )
+  return true
+}
+
+function connectShardCable() {
+  if (!route.params.id) return
+
+  if (cableReconnectHandle) {
+    window.clearTimeout(cableReconnectHandle)
+    cableReconnectHandle = null
+  }
+  if (cableSocket) {
+    cableSocket.close()
+    cableSocket = null
+  }
+
+  cableIdentifier = JSON.stringify({ channel: "ShardChannel", shard_id: String(route.params.id) })
+  cableSocket = new WebSocket(cableUrl())
+
+  cableSocket.addEventListener("open", () => {
+    cableSocket.send(
+      JSON.stringify({
+        command: "subscribe",
+        identifier: cableIdentifier
+      })
+    )
+  })
+
+  cableSocket.addEventListener("message", (event) => {
+    let packet = {}
+    try {
+      packet = JSON.parse(event.data || "{}")
+    } catch (_) {
+      return
+    }
+    if (packet.type === "ping" || packet.type === "welcome" || packet.type === "confirm_subscription") return
+    if (!packet.message) return
+
+    const message = packet.message
+    if (message.type === "world_snapshot" && message.payload) {
+      mergeWorldResponse(message.payload)
+      return
+    }
+    if (message.type === "chat_bootstrap" && Array.isArray(message.messages)) {
+      setChatMessages(message.messages)
+      return
+    }
+    if (message.type === "chat_message" && message.message) {
+      appendChatMessage(message.message)
+    }
+  })
+
+  cableSocket.addEventListener("close", () => {
+    if (componentUnmounted) return
+    cableReconnectHandle = window.setTimeout(connectShardCable, 2000)
+  })
+}
+
+async function sendChatMessage() {
+  const content = chatDraft.value.trim()
+  if (!content || chatSending.value) return
+
+  chatSending.value = true
+  error.value = ""
+
+  try {
+    const sentViaCable = sendCableCommand("speak", { content })
+    if (!sentViaCable) {
+      const data = await api.createShardChatMessage(route.params.id, { content })
+      appendChatMessage(data.message)
+    }
+    chatDraft.value = ""
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    chatSending.value = false
+  }
 }
 
 async function mountPixiScene() {
@@ -413,23 +541,30 @@ onMounted(async () => {
   await nextTick()
   await mountPixiScene()
   await loadWorld()
-  await enterLayer(selectedLayerId.value)
+  await enterLayer()
+  connectShardCable()
   drawWorld(performance.now())
   app?.render()
   renderHandle = window.setInterval(() => {
     animationLoop(performance.now())
   }, 80)
-  refreshHandle = window.setInterval(refreshWorld, 5000)
+  refreshHandle = window.setInterval(() => {
+    if (!sendCableCommand("tick")) refreshWorld()
+  }, 3000)
   visibilityHandler = () => {
-    if (!document.hidden) refreshWorld()
+    if (document.hidden) return
+    if (!sendCableCommand("tick")) refreshWorld()
   }
   document.addEventListener("visibilitychange", visibilityHandler)
 })
 
 onBeforeUnmount(() => {
+  componentUnmounted = true
   if (frameHandle) window.cancelAnimationFrame(frameHandle)
   if (renderHandle) window.clearInterval(renderHandle)
   if (refreshHandle) window.clearInterval(refreshHandle)
+  if (cableReconnectHandle) window.clearTimeout(cableReconnectHandle)
+  if (cableSocket) cableSocket.close()
   if (visibilityHandler) document.removeEventListener("visibilitychange", visibilityHandler)
   app?.destroy(true, { children: true, texture: true, context: true })
   app = null
@@ -453,34 +588,9 @@ onBeforeUnmount(() => {
       <div class="world-hero__meta">
         <span class="profile-pill">Seed: {{ shard ? shard.world_seed : "—" }}</span>
         <span class="profile-pill">Создан: {{ shard ? formatDate(shard.created_at) : "—" }}</span>
-        <span class="profile-pill">Лайер: {{ activeLayer ? formatLayerLabel(activeLayer) : "—" }}</span>
+        <span class="profile-pill">Общий слой: {{ activeLayer ? formatLayerLabel(activeLayer) : "—" }}</span>
         <span class="profile-pill">Режим: {{ world?.mode || "—" }}</span>
       </div>
-    </section>
-
-    <section class="card world-layers card--dark">
-      <div class="profile-grid-card__header">
-        <div>
-          <h2>Слои</h2>
-          <p class="muted">На одном слое одновременно может быть не больше 10 активных участников.</p>
-        </div>
-        <RouterLink to="/profile" class="ghost">Вернуться в профиль</RouterLink>
-      </div>
-
-      <v-tabs
-        v-if="layers.length"
-        v-model="selectedLayerId"
-        @update:modelValue="chooseLayer"
-        class="profile-shards-tabs world-layer-tabs"
-        color="primary"
-        show-arrows
-      >
-        <v-tab v-for="layer in layers" :key="layer.id" :value="String(layer.id)">
-          {{ formatLayerLabel(layer) }} · {{ layer.active_occupancy ?? layer.occupancy }}/{{ layer.capacity }}
-        </v-tab>
-      </v-tabs>
-
-      <p v-else class="muted">Слои еще не созданы.</p>
     </section>
 
     <section class="card world-canvas-card card--dark">
@@ -609,6 +719,29 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <p v-else class="muted">Сейчас нет совпавших праймов, поэтому фарм-лог пуст.</p>
+      </section>
+
+      <section class="card card--dark world-panel world-panel--wide">
+        <h2>Чат шарда</h2>
+        <div ref="chatMessagesRef" class="world-chat-list">
+          <div v-for="message in chatMessages" :key="message.id" class="world-chat-item">
+            <strong>{{ message.nickname }}</strong>
+            <span>{{ message.content }}</span>
+            <small>{{ formatDate(message.created_at) }}</small>
+          </div>
+          <p v-if="!chatMessages.length" class="muted">Сообщений пока нет.</p>
+        </div>
+        <form class="world-chat-form" @submit.prevent="sendChatMessage">
+          <input
+            v-model="chatDraft"
+            type="text"
+            maxlength="500"
+            placeholder="Написать в чат шарда..."
+          />
+          <button class="ghost" type="submit" :disabled="!canSendChat">
+            {{ chatSending ? "..." : "Отправить" }}
+          </button>
+        </form>
       </section>
     </section>
 
@@ -889,6 +1022,49 @@ onBeforeUnmount(() => {
 
 .world-log-item span {
   color: var(--farmspot-text-on-dark-muted);
+}
+
+.world-chat-list {
+  max-height: 14rem;
+  overflow-y: auto;
+  display: grid;
+  gap: var(--space-xs);
+  padding-right: var(--space-2xs);
+}
+
+.world-chat-item {
+  display: grid;
+  gap: 0.2rem;
+  padding-bottom: var(--space-2xs);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.world-chat-item strong {
+  color: var(--farmspot-text-on-dark);
+  font-size: var(--step--1);
+}
+
+.world-chat-item span {
+  color: var(--farmspot-text-on-dark);
+}
+
+.world-chat-item small {
+  color: var(--farmspot-text-on-dark-muted);
+}
+
+.world-chat-form {
+  display: flex;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+}
+
+.world-chat-form input {
+  flex: 1;
+  border-radius: var(--radius-m);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--farmspot-text-on-dark);
+  padding: 0.55rem 0.75rem;
 }
 
 @media (max-width: 960px) {
