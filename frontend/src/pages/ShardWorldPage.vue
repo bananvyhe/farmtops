@@ -23,6 +23,7 @@ let visibilityHandler = null
 let cableSocket = null
 let cableReconnectHandle = null
 let cableIdentifier = null
+let cableSubscriptionConfirmed = false
 let componentUnmounted = false
 let app = null
 let stageContainer = null
@@ -225,7 +226,7 @@ function cableUrl() {
 }
 
 function cableConnected() {
-  return cableSocket && cableSocket.readyState === WebSocket.OPEN
+  return cableSocket && cableSocket.readyState === WebSocket.OPEN && cableSubscriptionConfirmed
 }
 
 function sendCableCommand(action, payload = {}) {
@@ -252,6 +253,7 @@ function connectShardCable() {
     cableSocket.close()
     cableSocket = null
   }
+  cableSubscriptionConfirmed = false
 
   cableIdentifier = JSON.stringify({ channel: "ShardChannel", shard_id: String(route.params.id) })
   cableSocket = new WebSocket(cableUrl())
@@ -272,7 +274,11 @@ function connectShardCable() {
     } catch (_) {
       return
     }
-    if (packet.type === "ping" || packet.type === "welcome" || packet.type === "confirm_subscription") return
+    if (packet.type === "confirm_subscription") {
+      cableSubscriptionConfirmed = true
+      return
+    }
+    if (packet.type === "ping" || packet.type === "welcome") return
     if (!packet.message) return
 
     const message = packet.message
@@ -290,6 +296,7 @@ function connectShardCable() {
   })
 
   cableSocket.addEventListener("close", () => {
+    cableSubscriptionConfirmed = false
     if (componentUnmounted) return
     cableReconnectHandle = window.setTimeout(connectShardCable, 2000)
   })

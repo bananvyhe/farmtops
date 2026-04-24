@@ -1,14 +1,16 @@
 class ShardChannel < ApplicationCable::Channel
   def subscribed
     @shard = find_visible_shard
-    reject unless @shard
+    return reject unless @shard
 
     Shards::MembershipPresence.touch(shard: @shard, user: current_user)
     stream_from Shards::RealtimeBroadcaster.stream_name(@shard.id)
     transmit Shards::RealtimeBroadcaster.chat_bootstrap_payload(shard: @shard)
     transmit(
+      {
       type: "world_snapshot",
       payload: Shards::WorldStateBuilder.new(shard: @shard, current_user: current_user).call
+      }
     )
   end
 
