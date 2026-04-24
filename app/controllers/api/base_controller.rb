@@ -23,6 +23,8 @@ module Api
     end
 
     def user_payload(user)
+      shard_subscriptions = user.shard_layer_memberships.includes(shard: :game, shard_layer: []).order(last_seen_at: :desc)
+
       {
         id: user.id,
         email: user.email,
@@ -45,7 +47,20 @@ module Api
         world_xp_total: user.world_xp_total,
         world_xp_to_next_level: user.world_xp_to_next_level,
         world_xp_bank: user.world_xp_bank,
-        world_boss_kills: user.world_boss_kills
+        world_boss_kills: user.world_boss_kills,
+        shard_subscriptions: shard_subscriptions.map do |membership|
+          {
+            shard_id: membership.shard_id,
+            shard_name: membership.shard.name,
+            shard_status: membership.shard.status,
+            game_id: membership.shard.game_id,
+            game_name: membership.shard.game.name,
+            layer_id: membership.shard_layer_id,
+            layer_index: membership.shard_layer.layer_index,
+            joined_at: membership.joined_at,
+            last_seen_at: membership.last_seen_at
+          }
+        end
       }
     end
 

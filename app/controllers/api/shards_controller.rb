@@ -31,6 +31,7 @@ module Api
     end
 
     def world
+      Shards::MembershipPresence.touch(shard: @shard, user: current_user)
       payload = world_payload(@shard)
       broadcast_world_snapshot(@shard, payload)
       render json: payload

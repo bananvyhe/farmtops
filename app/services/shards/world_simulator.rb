@@ -11,11 +11,13 @@ module Shards
     end
 
     def call
+      Shards::MembershipPresence.prune_stale!(shard: @shard)
+
       @layer.with_lock do
         state = ensure_state!
         now = Time.current
         current_slot_utc = current_week_slot_utc(now)
-        members = @layer.memberships.includes(:user).order(:joined_at).to_a
+        members = @layer.memberships.recent.includes(:user).order(:joined_at).to_a
         active_members = members.select { |membership| membership.user.prime_slots_utc.include?(current_slot_utc) }
 
         tick_state!(state, active_members, now, current_slot_utc)

@@ -118,4 +118,47 @@ class ApiShardsTest < ActionDispatch::IntegrationTest
     assert_equal 1, json_response.fetch("messages").size
     assert_equal "hello shard", json_response.dig("messages", 0, "content")
   end
+
+  test "leave removes shard membership" do
+    game = Game.create!(name: "Ragnarok", slug: "ragnarok")
+    csrf_token = register_user!(self, "leave-shard-user@example.com")
+    user = User.find_by!(email: "leave-shard-user@example.com")
+    NewsGameBookmark.create!(game: game, user: user, bookmarked_at: Time.current)
+
+    post "/api/games/#{game.id}/shard", headers: { "X-CSRF-Token" => csrf_token }
+    assert_response :created
+    shard_id = json_response.dig("shard", "id")
+
+    delete "/api/shards/#{shard_id}/leave", headers: { "X-CSRF-Token" => csrf_token }
+    assert_response :success
+    assert_equal true, json_response["left"]
+    assert_nil ShardLayerMembership.find_by(shard_id: shard_id, user_id: user.id)
+  end
+
+  test "stale memberships are pruned from shard world" do
+    game = Game.create!(name: "Perfect World", slug: "perfect-world")
+
+    owner = open_session
+    owner_csrf_token = register_user!(owner, "stale-owner@example.com")
+    owner_user = User.find_by!(email: "stale-owner@example.com")
+    NewsGameBookmark.create!(game: game, user: owner_user, bookmarked_at: Time.current)
+    owner.post "/api/games/#{game.id}/shard", headers: { "X-CSRF-Token" => owner_csrf_token }
+    assert_equal 201, owner.response.status
+    shard_id = owner.response.parsed_body.dig("shard", "id")
+
+    stale = open_session
+    stale_csrf_token = register_user!(stale, "stale-member@example.com")
+    stale_user = User.find_by!(email: "stale-member@example.com")
+    NewsGameBookmark.create!(game: game, user: stale_user, bookmarked_at: Time.current)
+    stale.post "/api/games/#{game.id}/shard", headers: { "X-CSRF-Token" => stale_csrf_token }
+    assert_equal 201, stale.response.status
+
+    membership = ShardLayerMembership.find_by!(shard_id: shard_id, user_id: stale_user.id)
+    membership.update_columns(last_seen_at: 1.hour.ago)
+
+    owner.get "/api/shards/#{shard_id}/world"
+    assert_equal 200, owner.response.status
+    assert_equal 1, owner.response.parsed_body.dig("layers", 0, "occupancy")
+    assert_nil ShardLayerMembership.find_by(id: membership.id)
+  end
 end

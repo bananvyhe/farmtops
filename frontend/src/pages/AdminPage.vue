@@ -129,7 +129,7 @@ onMounted(loadAdmin)
     <section class="card card-wide">
       <h2>Пользователи</h2>
       <table>
-        <thead><tr><th>E-mail</th><th>Роль</th><th>Тариф</th><th>Ручное списание</th><th>Баланс</th><th>Активен</th><th></th><th></th></tr></thead>
+        <thead><tr><th>E-mail</th><th>Роль</th><th>Тариф</th><th>Ручное списание</th><th>Баланс</th><th>Шарды</th><th>Активен</th><th></th><th></th></tr></thead>
         <tbody>
           <tr v-for="user in users" :key="user.id">
             <td>{{ user.email }}</td>
@@ -148,6 +148,14 @@ onMounted(loadAdmin)
             </td>
             <td><input v-model="user.manual_hourly_rate_cents" type="number" min="0" step="1" /></td>
             <td>{{ formatCurrency(user.balance_cents) }}</td>
+            <td>
+              <div v-if="user.shard_subscriptions?.length">
+                <div v-for="subscription in user.shard_subscriptions" :key="`${user.id}-${subscription.shard_id}-${subscription.layer_id}`">
+                  {{ subscription.game_name }} / {{ subscription.shard_name }} / слой {{ subscription.layer_index }} / {{ subscription.shard_status }}
+                </div>
+              </div>
+              <span v-else>—</span>
+            </td>
             <td><input v-model="user.active" type="checkbox" /></td>
             <td><button @click="saveUser(user)">Сохранить</button></td>
             <td>

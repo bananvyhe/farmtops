@@ -11,6 +11,8 @@ module Shards
     end
 
     def call
+      Shards::MembershipPresence.prune_stale!(shard: @shard)
+
       {
         shard: shard_payload,
         layers: layer_payloads,
@@ -24,7 +26,7 @@ module Shards
 
     def resolved_layer
       if @current_user.present?
-        membership = @shard.layer_memberships.find_by(user_id: @current_user.id)
+        membership = @shard.layer_memberships.recent.find_by(user_id: @current_user.id)
         return membership.shard_layer if membership
       end
 
@@ -48,7 +50,7 @@ module Shards
     def layer_payloads
       current_slot_utc = current_week_slot_utc
       @shard.layers.includes(memberships: :user).order(:layer_index).map do |layer|
-        memberships = layer.memberships.includes(:user).order(:joined_at).to_a
+        memberships = layer.memberships.recent.includes(:user).order(:joined_at).to_a
         active_members_count = memberships.count { |membership| membership.user.prime_slots_utc.include?(current_slot_utc) }
         {
           id: layer.id,

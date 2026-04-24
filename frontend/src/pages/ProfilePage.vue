@@ -28,8 +28,10 @@ const nicknameSaving = ref(false)
 const shards = ref([])
 const loadingShards = ref(false)
 const activeShardId = ref(null)
+const primeGridWrapperRef = ref(null)
 let autoSaveTimer = null
 let nicknameCheckTimer = null
+let primeGridScrollTimer = null
 const route = useRoute()
 const router = useRouter()
 
@@ -97,6 +99,25 @@ function onCellPointerEnter(dayIndex, hour) {
 
 function stopDragSelection() {
   dragActive.value = false
+}
+
+function nudgePrimeGrid(left, top, behavior = "smooth") {
+  if (!primeGridWrapperRef.value) return
+  primeGridWrapperRef.value.scrollBy({ left, top, behavior })
+}
+
+function startPrimeGridScroll(left, top) {
+  stopPrimeGridScroll()
+  nudgePrimeGrid(left, top)
+  primeGridScrollTimer = window.setInterval(() => {
+    nudgePrimeGrid(left, top, "auto")
+  }, 140)
+}
+
+function stopPrimeGridScroll() {
+  if (!primeGridScrollTimer) return
+  window.clearInterval(primeGridScrollTimer)
+  primeGridScrollTimer = null
 }
 
 async function loadProfile() {
@@ -281,6 +302,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("pointerup", stopDragSelection)
   if (autoSaveTimer) window.clearTimeout(autoSaveTimer)
   if (nicknameCheckTimer) window.clearTimeout(nicknameCheckTimer)
+  stopPrimeGridScroll()
 })
 
 watch(scheduleSignature, (nextValue) => {
@@ -330,7 +352,7 @@ watch(nicknameDraft, (nextValue) => {
         <button class="ghost" type="button" @click="selectedSlotsLocal = new Set()">Очистить</button>
       </div>
 
-      <div class="prime-grid-wrapper">
+      <div ref="primeGridWrapperRef" class="prime-grid-wrapper">
         <div class="prime-grid">
           <div class="prime-grid__corner">Локальное время</div>
           <div v-for="day in DAYS" :key="day" class="prime-grid__day">{{ day }}</div>
@@ -349,6 +371,57 @@ watch(nicknameDraft, (nextValue) => {
               <span class="sr-only">{{ day }} {{ hour }}:00</span>
             </button>
           </template>
+        </div>
+
+        <div class="prime-grid-pad" aria-label="Навигация по сетке расписания">
+          <button
+            type="button"
+            class="prime-grid-pad__button prime-grid-pad__button--up"
+            aria-label="Прокрутить вверх"
+            @pointerdown.prevent="startPrimeGridScroll(0, -132)"
+            @pointerup="stopPrimeGridScroll"
+            @pointerleave="stopPrimeGridScroll"
+            @pointercancel="stopPrimeGridScroll"
+            @click="nudgePrimeGrid(0, -132)"
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            class="prime-grid-pad__button prime-grid-pad__button--left"
+            aria-label="Прокрутить влево"
+            @pointerdown.prevent="startPrimeGridScroll(-160, 0)"
+            @pointerup="stopPrimeGridScroll"
+            @pointerleave="stopPrimeGridScroll"
+            @pointercancel="stopPrimeGridScroll"
+            @click="nudgePrimeGrid(-160, 0)"
+          >
+            ←
+          </button>
+          <button
+            type="button"
+            class="prime-grid-pad__button prime-grid-pad__button--right"
+            aria-label="Прокрутить вправо"
+            @pointerdown.prevent="startPrimeGridScroll(160, 0)"
+            @pointerup="stopPrimeGridScroll"
+            @pointerleave="stopPrimeGridScroll"
+            @pointercancel="stopPrimeGridScroll"
+            @click="nudgePrimeGrid(160, 0)"
+          >
+            →
+          </button>
+          <button
+            type="button"
+            class="prime-grid-pad__button prime-grid-pad__button--down"
+            aria-label="Прокрутить вниз"
+            @pointerdown.prevent="startPrimeGridScroll(0, 132)"
+            @pointerup="stopPrimeGridScroll"
+            @pointerleave="stopPrimeGridScroll"
+            @pointercancel="stopPrimeGridScroll"
+            @click="nudgePrimeGrid(0, 132)"
+          >
+            ↓
+          </button>
         </div>
       </div>
 

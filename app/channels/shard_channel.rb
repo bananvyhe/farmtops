@@ -3,6 +3,7 @@ class ShardChannel < ApplicationCable::Channel
     @shard = find_visible_shard
     reject unless @shard
 
+    Shards::MembershipPresence.touch(shard: @shard, user: current_user)
     stream_from Shards::RealtimeBroadcaster.stream_name(@shard.id)
     transmit Shards::RealtimeBroadcaster.chat_bootstrap_payload(shard: @shard)
     transmit(
@@ -14,6 +15,7 @@ class ShardChannel < ApplicationCable::Channel
   def tick
     return unless @shard
 
+    Shards::MembershipPresence.touch(shard: @shard, user: current_user)
     payload = Shards::WorldStateBuilder.new(shard: @shard, current_user: current_user).call
     Shards::RealtimeBroadcaster.broadcast_world_snapshot(shard: @shard, payload: payload)
   end

@@ -9,6 +9,10 @@ export function setCsrfToken(token) {
   csrfToken = token
 }
 
+export function currentCsrfToken() {
+  return csrfToken
+}
+
 async function request(url, options = {}) {
   const headers = { ...jsonHeaders, ...(options.headers || {}) }
   const method = (options.method || "GET").toUpperCase()

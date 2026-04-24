@@ -10,6 +10,7 @@
 
 - Rails API хранит и подтверждает состояние.
 - Клиент получает snapshot и delta updates через `ActionCable` (`/cable`) + HTTP fallback.
+- В production reverse proxy обязан пробрасывать `/cable` с `Upgrade`/`Connection: upgrade`, иначе realtime и shard-chat не поднимутся.
 - Боевые и экономические расчеты выполняются на backend или worker side.
 - PixiJS только отображает server-authoritative snapshot и UI.
 - Любая имитация движения, смерти, respawn и loot pickup должна исходить из server state, а не из локальной клиентской логики.
@@ -59,6 +60,8 @@
 - `ShardWorldTickJob` поддерживает симуляцию;
 - websocket-клиенты могут запрашивать server tick в канале и получать broadcast снапшота;
 - HTTP polling остается fallback-механизмом;
+- membership пользователя живет как presence-связь с TTL и должна регулярно обновляться через `world`/`tick`/`subscribe`;
+- если клиент ушел со страницы или пропал, stale membership должен удаляться, чтобы бот не продолжал фармить по старой связи;
 - background simulation ticks на backend;
 - отдельный lock на активный shard tick;
 - snapshot versioning для идемпотентного обновления клиента.
@@ -88,6 +91,7 @@ UI state стоит держать в слоях:
 - shard lobby state;
 - active shard runtime state;
 - Pixi entity cache and render adapters.
+- для закрытия вкладки или ухода со страницы нужен keepalive-leave запрос, иначе очистка memberships останется только на серверном TTL.
 
 ## Server Simulation Contract
 
