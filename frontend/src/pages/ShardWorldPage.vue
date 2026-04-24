@@ -2,7 +2,7 @@
 import { Application, Container, Graphics, Text } from "pixi.js"
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue"
 import { useRoute } from "vue-router"
-import { api, currentCsrfToken } from "../api"
+import { api } from "../api"
 
 const route = useRoute()
 const loading = ref(true)
@@ -24,7 +24,6 @@ let cableSocket = null
 let cableReconnectHandle = null
 let cableIdentifier = null
 let componentUnmounted = false
-let pageHideHandler = null
 let app = null
 let stageContainer = null
 let pixiMounted = false
@@ -296,22 +295,6 @@ function connectShardCable() {
   })
 }
 
-function leaveShardKeepalive() {
-  const shardId = route.params.id
-  if (!shardId) return
-
-  const headers = { Accept: "application/json" }
-  const csrfToken = currentCsrfToken()
-  if (csrfToken) headers["X-CSRF-Token"] = csrfToken
-
-  fetch(`/api/shards/${shardId}/leave`, {
-    method: "DELETE",
-    headers,
-    keepalive: true,
-    credentials: "same-origin"
-  }).catch(() => {})
-}
-
 async function sendChatMessage() {
   const content = chatDraft.value.trim()
   if (!content || chatSending.value) return
@@ -569,23 +552,17 @@ onMounted(async () => {
     if (document.hidden) return
     if (!sendCableCommand("tick")) refreshWorld()
   }
-  pageHideHandler = () => {
-    leaveShardKeepalive()
-  }
   document.addEventListener("visibilitychange", visibilityHandler)
-  window.addEventListener("pagehide", pageHideHandler)
 })
 
 onBeforeUnmount(() => {
   componentUnmounted = true
-  leaveShardKeepalive()
   if (frameHandle) window.cancelAnimationFrame(frameHandle)
   if (renderHandle) window.clearInterval(renderHandle)
   if (refreshHandle) window.clearInterval(refreshHandle)
   if (cableReconnectHandle) window.clearTimeout(cableReconnectHandle)
   if (cableSocket) cableSocket.close()
   if (visibilityHandler) document.removeEventListener("visibilitychange", visibilityHandler)
-  if (pageHideHandler) window.removeEventListener("pagehide", pageHideHandler)
   app?.destroy(true, { children: true, texture: true, context: true })
   app = null
   stageContainer = null

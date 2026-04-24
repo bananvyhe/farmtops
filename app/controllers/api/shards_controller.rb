@@ -55,7 +55,7 @@ module Api
         return render json: payload
       end
 
-      membership.destroy!
+      membership.touch_presence!(ShardLayerMembership::PRESENCE_TTL.ago - 1.second)
       payload = world_payload(@shard).merge(left: true)
       broadcast_world_snapshot(@shard, payload.except(:left))
       render json: payload
