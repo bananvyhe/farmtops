@@ -2,7 +2,11 @@ class User < ApplicationRecord
   has_secure_password
 
   PRIME_SLOTS_RANGE = 0...168
+  PRIME_CYCLE_DAYS_RANGE = 1..14
+  PRIME_CYCLE_SLOTS_RANGE = 0...(14 * 24)
   NICKNAME_PATTERN = /\A[a-z][a-z0-9_-]{2,19}\z/
+  REFERENCE_LOCAL_MONDAY = Date.new(2026, 1, 5)
+  REFERENCE_UTC_MONDAY = Time.utc(2026, 1, 5, 0, 0, 0)
 
   belongs_to :tariff, optional: true
   has_many :payment_transactions, dependent: :destroy
@@ -28,6 +32,8 @@ class User < ApplicationRecord
   validates :world_boss_kills, numericality: { greater_than_or_equal_to: 0 }
   validate :prime_time_zone_must_be_valid
   validate :prime_slots_utc_must_be_valid
+  validate :prime_cycle_days_must_be_valid
+  validate :prime_cycle_slots_local_must_be_valid
   validate :nickname_change_allowed_only_once, if: :nickname_changed?
 
   scope :billable, -> { where(active: true).where("COALESCE(hourly_rate_cents, 0) > 0 OR tariff_id IS NOT NULL") }
@@ -67,15 +73,51 @@ class User < ApplicationRecord
   end
 
   def prime_slots_utc=(value)
+    @prime_slots_legacy_assigned = true
     super(normalized_prime_slots(value))
+  end
+
+  def prime_cycle_days=(value)
+    super(normalized_prime_cycle_days(value))
+  end
+
+  def prime_cycle_slots_local=(value)
+    @prime_cycle_slots_local_assigned = true
+    super(normalized_prime_cycle_slots(value, prime_cycle_days))
   end
 
   def nickname=(value)
     super(normalized_nickname(value))
   end
 
-  def prime_slot_overlap(other_user)
-    prime_slots_utc & Array(other_user&.prime_slots_utc)
+  def prime_cycle_days
+    normalized_prime_cycle_days(self[:prime_cycle_days])
+  end
+
+  def prime_cycle_slots_local
+    normalized_prime_cycle_slots(self[:prime_cycle_slots_local], prime_cycle_days)
+  end
+
+  def prime_cycle_anchor_on
+    self[:prime_cycle_anchor_on] || REFERENCE_LOCAL_MONDAY
+  end
+
+  def prime_schedule_active?(time = Time.current)
+    prime_cycle_slots_local.include?(current_prime_cycle_slot_local(time))
+  end
+
+  def prime_slots_utc_preview
+    preview_weekly_slots_from_cycle
+  end
+
+  def prime_slot_overlap(other_user, from: Time.current, horizon_days: 14)
+    return [] if other_user.blank?
+
+    start_time = from.utc.beginning_of_hour
+    Array.new(horizon_days * 24).filter_map do |offset|
+      slot_time = start_time + offset.hours
+      slot_time.iso8601 if prime_schedule_active?(slot_time) && other_user.prime_schedule_active?(slot_time)
+    end
   end
 
   def world_level
@@ -141,7 +183,21 @@ class User < ApplicationRecord
   def normalize_profile_fields!
     self.nickname_change_used = true if persisted? && nickname_changed? && !nickname_change_used?
     self.prime_time_zone = prime_time_zone.to_s.presence || "UTC"
-    self.prime_slots_utc = normalized_prime_slots(prime_slots_utc)
+    self[:prime_cycle_days] = normalized_prime_cycle_days(prime_cycle_days)
+
+    if @prime_slots_legacy_assigned && !@prime_cycle_slots_local_assigned
+      self[:prime_cycle_days] = 7
+      self[:prime_cycle_anchor_on] = REFERENCE_LOCAL_MONDAY
+      self[:prime_cycle_slots_local] = normalized_prime_cycle_slots(
+        convert_legacy_prime_slots_to_cycle_local(self[:prime_slots_utc], prime_time_zone),
+        self[:prime_cycle_days]
+      )
+    else
+      self[:prime_cycle_anchor_on] = normalized_prime_cycle_anchor_on(self[:prime_cycle_anchor_on], prime_time_zone)
+      self[:prime_cycle_slots_local] = normalized_prime_cycle_slots(self[:prime_cycle_slots_local], self[:prime_cycle_days])
+    end
+
+    self[:prime_slots_utc] = preview_weekly_slots_from_cycle
   end
 
   def ensure_generated_nickname
@@ -156,6 +212,69 @@ class User < ApplicationRecord
     Array(value).map(&:to_i).select { |slot| PRIME_SLOTS_RANGE.cover?(slot) }.uniq.sort
   end
 
+  def normalized_prime_cycle_days(value)
+    days = value.to_i
+    return 7 if days <= 0
+
+    [[days, PRIME_CYCLE_DAYS_RANGE.min].max, PRIME_CYCLE_DAYS_RANGE.max].min
+  end
+
+  def normalized_prime_cycle_slots(value, cycle_days)
+    max_slot = normalized_prime_cycle_days(cycle_days) * 24
+    Array(value).map(&:to_i).select { |slot| slot >= 0 && slot < max_slot && PRIME_CYCLE_SLOTS_RANGE.cover?(slot) }.uniq.sort
+  end
+
+  def normalized_prime_cycle_anchor_on(value, time_zone)
+    return value if value.is_a?(Date)
+    return Date.parse(value.to_s) if value.present?
+
+    current_local_date_for(time_zone)
+  rescue ArgumentError
+    current_local_date_for(time_zone)
+  end
+
+  def current_local_date_for(time_zone)
+    Time.find_zone!(time_zone).now.to_date
+  end
+
+  def current_prime_cycle_slot_local(time)
+    local_time = time.in_time_zone(prime_time_zone)
+    day_offset = (local_time.to_date - prime_cycle_anchor_on).to_i % prime_cycle_days
+    (day_offset * 24) + local_time.hour
+  end
+
+  def convert_legacy_prime_slots_to_cycle_local(slots, time_zone)
+    zone = Time.find_zone!(time_zone)
+
+    normalized_prime_slots(slots).map do |slot|
+      utc_time = REFERENCE_UTC_MONDAY + slot.hours
+      local_time = utc_time.in_time_zone(zone)
+      local_day_index = (local_time.wday + 6) % 7
+      (local_day_index * 24) + local_time.hour
+    end
+  end
+
+  def preview_weekly_slots_from_cycle
+    zone = Time.find_zone!(prime_time_zone)
+
+    prime_cycle_slots_local.filter_map do |slot|
+      day_index = slot / 24
+      next if day_index >= 7
+
+      hour = slot % 24
+      local_time = zone.local(
+        REFERENCE_LOCAL_MONDAY.year,
+        REFERENCE_LOCAL_MONDAY.month,
+        REFERENCE_LOCAL_MONDAY.day + day_index,
+        hour,
+        0,
+        0
+      )
+      utc_time = local_time.utc
+      ((utc_time.wday + 6) % 7) * 24 + utc_time.hour
+    end.uniq.sort
+  end
+
   def nickname_change_allowed_only_once
     return if new_record?
     return if nickname == nickname_was
@@ -168,6 +287,19 @@ class User < ApplicationRecord
     return if Array(prime_slots_utc).all? { |slot| slot.is_a?(Integer) && PRIME_SLOTS_RANGE.cover?(slot) }
 
     errors.add(:prime_slots_utc, "must contain unique UTC weekly hour slots from 0 to 167")
+  end
+
+  def prime_cycle_days_must_be_valid
+    return if PRIME_CYCLE_DAYS_RANGE.cover?(prime_cycle_days)
+
+    errors.add(:prime_cycle_days, "must be between 1 and 14 days")
+  end
+
+  def prime_cycle_slots_local_must_be_valid
+    max_slot = prime_cycle_days * 24
+    return if prime_cycle_slots_local.all? { |slot| slot.is_a?(Integer) && slot >= 0 && slot < max_slot }
+
+    errors.add(:prime_cycle_slots_local, "must contain unique local cycle hour slots within the selected cycle")
   end
 
   def prime_time_zone_must_be_valid

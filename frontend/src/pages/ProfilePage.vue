@@ -4,19 +4,20 @@ import { RouterLink, useRoute, useRouter } from "vue-router"
 import { api } from "../api"
 import { sessionState } from "../useSession"
 
-const DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour)
-const REFERENCE_LOCAL_MONDAY = [2026, 0, 5]
+const MAX_CYCLE_DAYS = 14
 const REFERENCE_UTC_MONDAY_MS = Date.UTC(2026, 0, 5, 0, 0, 0, 0)
 
 const loading = ref(true)
 const saving = ref(false)
 const error = ref("")
 const success = ref("")
-const selectedSlotsLocal = ref(new Set())
+const selectedCycleSlots = ref(new Set())
+const cycleDays = ref(1)
 const dragActive = ref(false)
 const dragPaintValue = ref(true)
 const browserTimeZone = ref(detectTimeZone())
+const displayAnchorIso = ref(todayIso())
 const profileHydrated = ref(false)
 const lastSavedSignature = ref("")
 const nicknameDraft = ref("")
@@ -39,66 +40,177 @@ function detectTimeZone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
 }
 
-function formatCurrency(cents) {
-  return new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB" }).format((cents || 0) / 100)
+function todayLocalDate() {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate())
 }
 
-function slotKey(dayIndex, hour) {
-  return `${dayIndex}:${hour}`
+function todayIso() {
+  return dateToIso(todayLocalDate())
 }
 
-function localSlotToUtcSlot(dayIndex, hour) {
-  const localDate = new Date(REFERENCE_LOCAL_MONDAY[0], REFERENCE_LOCAL_MONDAY[1], REFERENCE_LOCAL_MONDAY[2] + dayIndex, hour, 0, 0, 0)
-  const utcDayIndex = (localDate.getUTCDay() + 6) % 7
-  return utcDayIndex * 24 + localDate.getUTCHours()
+function dateToIso(date) {
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-")
 }
 
-function utcSlotToLocalKey(utcSlot) {
+function parseIsoDate(value) {
+  if (!value) return null
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return null
+
+  const [, year, month, day] = match
+  return new Date(Number(year), Number(month) - 1, Number(day))
+}
+
+function addDays(date, days) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days)
+}
+
+function dayStamp(date) {
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
+}
+
+function diffCalendarDays(left, right) {
+  return Math.round((dayStamp(left) - dayStamp(right)) / 86400000)
+}
+
+function mod(value, base) {
+  return ((value % base) + base) % base
+}
+
+function weekdayIndexMonday(date) {
+  return (date.getDay() + 6) % 7
+}
+
+function weekdayShort(date) {
+  const label = new Intl.DateTimeFormat("ru-RU", { weekday: "short" }).format(date)
+  return label.slice(0, 1).toUpperCase() + label.slice(1).replace(".", "")
+}
+
+function formatDayLabel(date) {
+  return `${weekdayShort(date)} ${new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit" }).format(date)}`
+}
+
+function formatDayTitle(date) {
+  return new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" }).format(date)
+}
+
+function formatUtcDateTime(date) {
+  return new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "UTC",
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date)
+}
+
+function clampCycleDays(value) {
+  const days = Number(value) || 1
+  return Math.min(MAX_CYCLE_DAYS, Math.max(1, days))
+}
+
+function cycleSlotIndex(dayIndex, hour) {
+  return (dayIndex * 24) + hour
+}
+
+function normalizeCycleSlots(slots, days) {
+  const maxSlot = clampCycleDays(days) * 24
+  return Array.from(new Set(Array.from(slots || []).map((slot) => Number(slot)).filter((slot) => Number.isInteger(slot) && slot >= 0 && slot < maxSlot))).sort((left, right) => left - right)
+}
+
+function utcSlotToLocalCycleSlot(utcSlot, todayWeekdayIndex) {
   const utcDayIndex = Math.floor(utcSlot / 24)
   const hour = utcSlot % 24
   const localDate = new Date(REFERENCE_UTC_MONDAY_MS + ((utcDayIndex * 24 + hour) * 60 * 60 * 1000))
-  const localDayIndex = (localDate.getDay() + 6) % 7
-  return slotKey(localDayIndex, localDate.getHours())
+  const localDayIndex = weekdayIndexMonday(localDate)
+  const rotatedDayIndex = mod(localDayIndex - todayWeekdayIndex, 7)
+  return cycleSlotIndex(rotatedDayIndex, localDate.getHours())
 }
 
-function setSelectionFromUtcSlots(slots) {
-  selectedSlotsLocal.value = new Set(Array.from(slots || []).map((slot) => utcSlotToLocalKey(Number(slot))))
+function setSelectionFromCycle(days, slots, anchorIso) {
+  const normalizedDays = clampCycleDays(days)
+  const today = todayLocalDate()
+  const todayIsoValue = dateToIso(today)
+  const sourceAnchor = parseIsoDate(anchorIso) || today
+  const shift = mod(diffCalendarDays(today, sourceAnchor), normalizedDays)
+  const next = new Set()
+
+  normalizeCycleSlots(slots, normalizedDays).forEach((slot) => {
+    const sourceDayIndex = Math.floor(slot / 24)
+    const hour = slot % 24
+    const rotatedDayIndex = mod(sourceDayIndex - shift, normalizedDays)
+    next.add(cycleSlotIndex(rotatedDayIndex, hour))
+  })
+
+  cycleDays.value = normalizedDays
+  selectedCycleSlots.value = next
+  displayAnchorIso.value = todayIsoValue
 }
 
-function selectedUtcSlots() {
-  return Array.from(selectedSlotsLocal.value)
-    .map((key) => {
-      const [dayIndex, hour] = key.split(":").map(Number)
-      return localSlotToUtcSlot(dayIndex, hour)
-    })
-    .sort((left, right) => left - right)
+function setSelectionFromLegacyUtc(slots) {
+  const todayWeekdayIndex = weekdayIndexMonday(todayLocalDate())
+  cycleDays.value = 7
+  selectedCycleSlots.value = new Set(Array.from(slots || []).map((slot) => utcSlotToLocalCycleSlot(Number(slot), todayWeekdayIndex)))
+  displayAnchorIso.value = todayIso()
 }
 
-function toggleLocalSlot(dayIndex, hour, forceValue = null) {
-  const next = new Set(selectedSlotsLocal.value)
-  const key = slotKey(dayIndex, hour)
-  const shouldEnable = forceValue === null ? !next.has(key) : forceValue
+function hydrateSchedule(user) {
+  const nextCycleDays = clampCycleDays(user?.prime_cycle_days || 7)
+  const cycleSlots = Array.isArray(user?.prime_cycle_slots_local) && user.prime_cycle_slots_local.length
+    ? user.prime_cycle_slots_local
+    : null
 
-  if (shouldEnable) next.add(key)
-  else next.delete(key)
+  if (cycleSlots) {
+    setSelectionFromCycle(nextCycleDays, cycleSlots, user?.prime_cycle_anchor_on)
+    return
+  }
 
-  selectedSlotsLocal.value = next
+  setSelectionFromLegacyUtc(user?.prime_slots_utc || [])
+}
+
+function selectedCycleSlotsArray() {
+  return normalizeCycleSlots(selectedCycleSlots.value, cycleDays.value)
+}
+
+function toggleCycleSlot(dayIndex, hour, forceValue = null) {
+  const next = new Set(selectedCycleSlots.value)
+  const slot = cycleSlotIndex(dayIndex, hour)
+  const shouldEnable = forceValue === null ? !next.has(slot) : forceValue
+
+  if (shouldEnable) next.add(slot)
+  else next.delete(slot)
+
+  selectedCycleSlots.value = next
 }
 
 function onCellPointerDown(dayIndex, hour) {
-  const key = slotKey(dayIndex, hour)
-  dragPaintValue.value = !selectedSlotsLocal.value.has(key)
+  const slot = cycleSlotIndex(dayIndex, hour)
+  dragPaintValue.value = !selectedCycleSlots.value.has(slot)
   dragActive.value = true
-  toggleLocalSlot(dayIndex, hour, dragPaintValue.value)
+  toggleCycleSlot(dayIndex, hour, dragPaintValue.value)
 }
 
 function onCellPointerEnter(dayIndex, hour) {
   if (!dragActive.value) return
-  toggleLocalSlot(dayIndex, hour, dragPaintValue.value)
+  toggleCycleSlot(dayIndex, hour, dragPaintValue.value)
 }
 
 function stopDragSelection() {
   dragActive.value = false
+}
+
+function changeCycleDays(delta) {
+  const nextDays = clampCycleDays(cycleDays.value + delta)
+  if (nextDays === cycleDays.value) return
+
+  cycleDays.value = nextDays
+  selectedCycleSlots.value = new Set(selectedCycleSlotsArray().filter((slot) => slot < nextDays * 24))
+}
+
+function clearCycle() {
+  selectedCycleSlots.value = new Set()
 }
 
 function nudgePrimeGrid(left, top, behavior = "smooth") {
@@ -120,6 +232,10 @@ function stopPrimeGridScroll() {
   primeGridScrollTimer = null
 }
 
+function formatCurrency(cents) {
+  return new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB" }).format((cents || 0) / 100)
+}
+
 async function loadProfile() {
   loading.value = true
   error.value = ""
@@ -132,7 +248,7 @@ async function loadProfile() {
     nicknameAvailable.value = true
     nicknameStatus.value = data.user.can_change_nickname ? "Ник можно изменить один раз." : "Ник уже менялся."
     nicknameStatusKind.value = data.user.can_change_nickname ? "muted" : "error"
-    setSelectionFromUtcSlots(data.user.prime_slots_utc || [])
+    hydrateSchedule(data.user)
     lastSavedSignature.value = scheduleSignature.value
     profileHydrated.value = true
   } catch (err) {
@@ -239,12 +355,14 @@ async function saveProfile({ silent = false } = {}) {
   try {
     const data = await api.updateProfile({
       prime_time_zone: browserTimeZone.value,
-      prime_slots_utc: selectedUtcSlots()
+      prime_cycle_days: cycleDays.value,
+      prime_cycle_anchor_on: displayAnchorIso.value,
+      prime_cycle_slots_local: selectedCycleSlotsArray()
     })
     sessionState.user = data.user
-    setSelectionFromUtcSlots(data.user.prime_slots_utc || [])
+    hydrateSchedule(data.user)
     lastSavedSignature.value = scheduleSignature.value
-    success.value = silent ? "Изменения сохранены автоматически." : "Прайм-окна сохранены."
+    success.value = silent ? "Изменения сохранены автоматически." : "Прайм-цикл сохранен."
   } catch (err) {
     error.value = err.message
   } finally {
@@ -252,25 +370,74 @@ async function saveProfile({ silent = false } = {}) {
   }
 }
 
-const selectedLocalCount = computed(() => selectedSlotsLocal.value.size)
-const selectedSlotsSignature = computed(() => selectedUtcSlots().join(","))
-const scheduleSignature = computed(() => `${browserTimeZone.value}|${selectedSlotsSignature.value}`)
+const selectedLocalCount = computed(() => selectedCycleSlots.value.size)
+const selectedSlotsSignature = computed(() => selectedCycleSlotsArray().join(","))
+const scheduleSignature = computed(() => `${browserTimeZone.value}|${displayAnchorIso.value}|${cycleDays.value}|${selectedSlotsSignature.value}`)
+
+const visibleCycleDays = computed(() => {
+  const start = parseIsoDate(displayAnchorIso.value) || todayLocalDate()
+
+  return Array.from({ length: cycleDays.value }, (_, offset) => {
+    const date = addDays(start, offset)
+    return {
+      index: offset,
+      date,
+      shortLabel: formatDayLabel(date),
+      title: formatDayTitle(date),
+      cycleLabel: offset === 0 ? "Сегодня" : `День ${offset + 1}`
+    }
+  })
+})
+
+const upcomingPreviewDays = computed(() => {
+  const start = parseIsoDate(displayAnchorIso.value) || todayLocalDate()
+
+  return Array.from({ length: MAX_CYCLE_DAYS }, (_, offset) => {
+    const date = addDays(start, offset)
+    return {
+      index: offset,
+      date,
+      cycleIndex: mod(offset, cycleDays.value),
+      repeated: offset >= cycleDays.value,
+      shortLabel: formatDayLabel(date),
+      title: formatDayTitle(date)
+    }
+  })
+})
+
+const editorGridStyle = computed(() => ({
+  gridTemplateColumns: `96px repeat(${cycleDays.value}, minmax(92px, 1fr))`,
+  minWidth: `${96 + (cycleDays.value * 92)}px`
+}))
+
+const previewGridStyle = computed(() => ({
+  gridTemplateColumns: `84px repeat(${MAX_CYCLE_DAYS}, minmax(66px, 1fr))`,
+  minWidth: `${84 + (MAX_CYCLE_DAYS * 66)}px`
+}))
+
+const cycleSummary = computed(() => {
+  if (!selectedLocalCount.value) return "Часы в цикле еще не выбраны."
+  return `В цикле ${cycleDays.value} ${cycleDays.value === 1 ? "день" : cycleDays.value < 5 ? "дня" : "дней"} и ${selectedLocalCount.value} активных часов.`
+})
 
 const utcSummary = computed(() => {
   const grouped = new Map()
+  const start = parseIsoDate(displayAnchorIso.value) || todayLocalDate()
 
-  selectedUtcSlots().forEach((slot) => {
-    const dayIndex = Math.floor(slot / 24)
-    const hour = slot % 24
-    const hours = grouped.get(dayIndex) || []
-    hours.push(hour)
-    grouped.set(dayIndex, hours)
+  upcomingPreviewDays.value.slice(0, 7).forEach((day) => {
+    HOURS.forEach((hour) => {
+      if (!selectedCycleSlots.value.has(cycleSlotIndex(day.cycleIndex, hour))) return
+
+      const localDate = new Date(start.getFullYear(), start.getMonth(), start.getDate() + day.index, hour, 0, 0, 0)
+      const utcDate = new Date(localDate.getTime() + (localDate.getTimezoneOffset() * 60000))
+      const key = dateToIso(new Date(utcDate.getUTCFullYear(), utcDate.getUTCMonth(), utcDate.getUTCDate()))
+      const hours = grouped.get(key) || []
+      hours.push(formatUtcDateTime(localDate))
+      grouped.set(key, hours)
+    })
   })
 
-  return DAYS.map((day, dayIndex) => ({
-    day,
-    hours: (grouped.get(dayIndex) || []).sort((left, right) => left - right)
-  })).filter(({ hours }) => hours.length > 0)
+  return Array.from(grouped.entries()).map(([date, labels]) => ({ date, labels }))
 })
 
 const activeShard = computed(() => shards.value.find((shard) => String(shard.id) === String(activeShardId.value)) || null)
@@ -333,12 +500,13 @@ watch(nicknameDraft, (nextValue) => {
         <div class="eyebrow">профиль и прайм-окна</div>
         <h1>Профиль наблюдателя</h1>
         <p class="muted">
-          Отметьте часы, когда ваш бот должен запускаться от вашего имени. Слоты сохраняются в UTC, поэтому
-          пересечения между пользователями можно сравнивать напрямую и искать общие окна для будущего шарда.
+          Цикл теперь строится от текущего локального дня. Вы выбираете первый день и добавляете следующие дни цикла,
+          а ниже сразу видно, как этот узор повторится на 14 суток вперед.
         </p>
       </div>
       <div class="profile-hero__meta">
         <span class="profile-pill">Локальный часовой пояс: {{ browserTimeZone }}</span>
+        <span class="profile-pill">Длина цикла: {{ cycleDays }} дн.</span>
         <span class="profile-pill">Выбрано часов: {{ selectedLocalCount }}</span>
       </div>
     </section>
@@ -346,29 +514,43 @@ watch(nicknameDraft, (nextValue) => {
     <section class="card profile-grid-card" v-if="!loading">
       <div class="profile-grid-card__header">
         <div>
-          <h2>Почасовая сетка</h2>
-          <p class="muted">Клик переключает час, зажатие мыши позволяет быстро прокрасить диапазон.</p>
+          <h2>Почасовой цикл</h2>
+          <p class="muted">
+            Первый столбец всегда означает сегодня. Добавляйте дни до 14, а фантомная сетка ниже покажет повторение цикла.
+          </p>
         </div>
-        <button class="ghost" type="button" @click="selectedSlotsLocal = new Set()">Очистить</button>
+        <div class="profile-grid-card__actions">
+          <button class="ghost" type="button" :disabled="cycleDays <= 1" @click="changeCycleDays(-1)">− день</button>
+          <button class="ghost" type="button" :disabled="cycleDays >= MAX_CYCLE_DAYS" @click="changeCycleDays(1)">+ день</button>
+          <button class="ghost" type="button" @click="clearCycle">Очистить</button>
+        </div>
+      </div>
+
+      <div class="profile-cycle-summary">
+        <strong>{{ cycleSummary }}</strong>
+        <span class="muted">Сохранение идет автоматически. Текущий день всегда пересобирается первым при новом заходе в профиль.</span>
       </div>
 
       <div ref="primeGridWrapperRef" class="prime-grid-wrapper">
-        <div class="prime-grid">
+        <div class="prime-grid prime-grid--editor" :style="editorGridStyle">
           <div class="prime-grid__corner">Локальное время</div>
-          <div v-for="day in DAYS" :key="day" class="prime-grid__day">{{ day }}</div>
+          <div v-for="day in visibleCycleDays" :key="day.index" class="prime-grid__day prime-grid__day--editor" :title="day.title">
+            <strong>{{ day.shortLabel }}</strong>
+            <span>{{ day.cycleLabel }}</span>
+          </div>
 
           <template v-for="hour in HOURS" :key="hour">
             <div class="prime-grid__hour">{{ String(hour).padStart(2, "0") }}:00</div>
             <button
-              v-for="(day, dayIndex) in DAYS"
-              :key="`${day}-${hour}`"
+              v-for="day in visibleCycleDays"
+              :key="`${day.index}-${hour}`"
               class="prime-grid__cell"
-              :class="{ 'prime-grid__cell--active': selectedSlotsLocal.has(slotKey(dayIndex, hour)) }"
+              :class="{ 'prime-grid__cell--active': selectedCycleSlots.has(cycleSlotIndex(day.index, hour)) }"
               type="button"
-              @pointerdown.prevent="onCellPointerDown(dayIndex, hour)"
-              @pointerenter="onCellPointerEnter(dayIndex, hour)"
+              @pointerdown.prevent="onCellPointerDown(day.index, hour)"
+              @pointerenter="onCellPointerEnter(day.index, hour)"
             >
-              <span class="sr-only">{{ day }} {{ hour }}:00</span>
+              <span class="sr-only">{{ day.shortLabel }} {{ hour }}:00</span>
             </button>
           </template>
         </div>
@@ -422,6 +604,42 @@ watch(nicknameDraft, (nextValue) => {
           >
             ↓
           </button>
+        </div>
+      </div>
+
+      <div class="profile-preview-card">
+        <div>
+          <h3>Фантомный прогноз на 14 дней</h3>
+          <p class="muted">Плотная подсветка — текущий цикл. Легкая подсветка — повтор этого же часа на следующих днях.</p>
+        </div>
+
+        <div class="prime-grid-wrapper prime-grid-wrapper--preview">
+          <div class="prime-grid prime-grid--preview" :style="previewGridStyle">
+            <div class="prime-grid__corner prime-grid__corner--preview">14 дней</div>
+            <div
+              v-for="day in upcomingPreviewDays"
+              :key="`preview-${day.index}`"
+              class="prime-grid__day prime-grid__day--preview"
+              :class="{ 'prime-grid__day--ghost': day.repeated }"
+              :title="day.title"
+            >
+              <strong>{{ day.shortLabel }}</strong>
+              <span>{{ day.repeated ? `Повтор ${Math.floor(day.index / cycleDays) + 1}` : `Цикл ${day.index + 1}` }}</span>
+            </div>
+
+            <template v-for="hour in HOURS" :key="`preview-hour-${hour}`">
+              <div class="prime-grid__hour prime-grid__hour--preview">{{ String(hour).padStart(2, "0") }}</div>
+              <div
+                v-for="day in upcomingPreviewDays"
+                :key="`preview-${day.index}-${hour}`"
+                class="prime-grid__cell prime-grid__cell--preview"
+                :class="{
+                  'prime-grid__cell--active': selectedCycleSlots.has(cycleSlotIndex(day.cycleIndex, hour)) && !day.repeated,
+                  'prime-grid__cell--ghost': selectedCycleSlots.has(cycleSlotIndex(day.cycleIndex, hour)) && day.repeated
+                }"
+              />
+            </template>
+          </div>
         </div>
       </div>
 
@@ -529,15 +747,14 @@ watch(nicknameDraft, (nextValue) => {
       </section>
 
       <section class="card">
-        <h2>UTC-представление</h2>
+        <h2>UTC-прогноз</h2>
         <p class="muted">
-          Эти слоты уже нормализованы в UTC. Для поиска пересечений между пользователями достаточно сравнить массивы
-          `prime_slots_utc` и взять общие часы.
+          Здесь видно, как ближайшие 7 суток будут выглядеть в UTC после применения текущего цикла и вашего локального часового пояса.
         </p>
         <div v-if="utcSummary.length" class="utc-summary">
-          <div v-for="item in utcSummary" :key="item.day" class="utc-summary__row">
-            <strong>{{ item.day }} UTC</strong>
-            <span>{{ item.hours.map((hour) => `${String(hour).padStart(2, "0")}:00`).join(", ") }}</span>
+          <div v-for="item in utcSummary" :key="item.date" class="utc-summary__row">
+            <strong>{{ item.date }} UTC</strong>
+            <span>{{ item.labels.join(", ") }}</span>
           </div>
         </div>
         <p v-else class="muted">Часы еще не выбраны.</p>

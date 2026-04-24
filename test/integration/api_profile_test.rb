@@ -20,7 +20,9 @@ class ApiProfileTest < ActionDispatch::IntegrationTest
     assert_equal "profile@example.com", json_response.dig("user", "email")
     assert_match(/\Au_[a-z0-9]{8}\z/, json_response.dig("user", "nickname"))
     assert_equal "Asia/Yekaterinburg", json_response.dig("user", "prime_time_zone")
-    assert_equal [0, 1, 25], json_response.dig("user", "prime_slots_utc")
+    assert_equal 7, json_response.dig("user", "prime_cycle_days")
+    assert_equal Date.new(2026, 1, 5).iso8601, json_response.dig("user", "prime_cycle_anchor_on")
+    assert_equal [5, 6, 30], json_response.dig("user", "prime_cycle_slots_local")
     assert_equal 3, json_response.dig("user", "prime_slots_count")
   end
 
@@ -80,7 +82,7 @@ class ApiProfileTest < ActionDispatch::IntegrationTest
     assert_includes json_response["errors"], "Nickname can be changed only once"
   end
 
-  test "updates the authenticated user prime schedule in utc" do
+  test "updates the authenticated user prime cycle schedule" do
     user = User.create!(
       email: "profile-update@example.com",
       password: "Password123!",
@@ -93,7 +95,9 @@ class ApiProfileTest < ActionDispatch::IntegrationTest
     patch "/api/profile",
       params: {
         prime_time_zone: "Asia/Yekaterinburg",
-        prime_slots_utc: [49, 50, 49, 170]
+        prime_cycle_days: 3,
+        prime_cycle_anchor_on: "2026-04-24",
+        prime_cycle_slots_local: [0, 1, 24, 25, 48, 50, 72]
       }.to_json,
       headers: {
         "CONTENT_TYPE" => "application/json",
@@ -102,11 +106,15 @@ class ApiProfileTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_equal "Asia/Yekaterinburg", json_response.dig("user", "prime_time_zone")
-    assert_equal [49, 50], json_response.dig("user", "prime_slots_utc")
+    assert_equal 3, json_response.dig("user", "prime_cycle_days")
+    assert_equal "2026-04-24", json_response.dig("user", "prime_cycle_anchor_on")
+    assert_equal [0, 1, 24, 25, 48, 50], json_response.dig("user", "prime_cycle_slots_local")
 
     user.reload
     assert_equal "Asia/Yekaterinburg", user.prime_time_zone
-    assert_equal [49, 50], user.prime_slots_utc
+    assert_equal 3, user.prime_cycle_days
+    assert_equal Date.new(2026, 4, 24), user.prime_cycle_anchor_on
+    assert_equal [0, 1, 24, 25, 48, 50], user.prime_cycle_slots_local
   end
 
   test "rejects invalid timezone values" do

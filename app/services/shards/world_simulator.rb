@@ -18,7 +18,7 @@ module Shards
         now = Time.current
         current_slot_utc = current_week_slot_utc(now)
         members = @layer.memberships.recent.includes(:user).order(:joined_at).to_a
-        active_members = members.select { |membership| membership.user.prime_slots_utc.include?(current_slot_utc) }
+        active_members = members.select { |membership| membership.user.prime_schedule_active?(now) }
 
         tick_state!(state, active_members, now, current_slot_utc)
         persist_state!(state, now)

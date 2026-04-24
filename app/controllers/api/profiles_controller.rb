@@ -33,6 +33,9 @@ module Api
       attrs[:nickname] = params[:nickname] if params.key?(:nickname)
       attrs[:prime_time_zone] = params[:prime_time_zone] if params.key?(:prime_time_zone)
       attrs[:prime_slots_utc] = Array(params[:prime_slots_utc]) if params.key?(:prime_slots_utc)
+      attrs[:prime_cycle_days] = params[:prime_cycle_days] if params.key?(:prime_cycle_days)
+      attrs[:prime_cycle_anchor_on] = params[:prime_cycle_anchor_on] if params.key?(:prime_cycle_anchor_on)
+      attrs[:prime_cycle_slots_local] = Array(params[:prime_cycle_slots_local]) if params.key?(:prime_cycle_slots_local)
       attrs
     end
 

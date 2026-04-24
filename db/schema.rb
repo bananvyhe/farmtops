@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_04_21_090000) do
+ActiveRecord::Schema[8.0].define(version: 2026_04_24_121500) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -301,9 +301,13 @@ ActiveRecord::Schema[8.0].define(version: 2026_04_21_090000) do
     t.bigint "world_xp_total", default: 0, null: false
     t.bigint "world_xp_bank", default: 0, null: false
     t.integer "world_boss_kills", default: 0, null: false
+    t.integer "prime_cycle_days", default: 7, null: false
+    t.integer "prime_cycle_slots_local", default: [], null: false, array: true
+    t.date "prime_cycle_anchor_on", default: "2026-01-05", null: false
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["external_id"], name: "index_users_on_external_id"
     t.index ["nickname"], name: "index_users_on_nickname", unique: true
+    t.index ["prime_cycle_slots_local"], name: "index_users_on_prime_cycle_slots_local", using: :gin
     t.index ["prime_slots_utc"], name: "index_users_on_prime_slots_utc", using: :gin
     t.index ["tariff_id"], name: "index_users_on_tariff_id"
   end

@@ -48,10 +48,11 @@ module Shards
     end
 
     def layer_payloads
+      now = Time.current
       current_slot_utc = current_week_slot_utc
       @shard.layers.includes(memberships: :user).order(:layer_index).map do |layer|
         memberships = layer.memberships.recent.includes(:user).order(:joined_at).to_a
-        active_members_count = memberships.count { |membership| membership.user.prime_slots_utc.include?(current_slot_utc) }
+        active_members_count = memberships.count { |membership| membership.user.prime_schedule_active?(now) }
         {
           id: layer.id,
           layer_index: layer.layer_index,
@@ -67,7 +68,7 @@ module Shards
               joined_at: membership.joined_at,
               last_seen_at: membership.last_seen_at,
               owner: membership.user_id == @shard.user_id,
-              active_now: membership.user.prime_slots_utc.include?(current_slot_utc)
+              active_now: membership.user.prime_schedule_active?(now)
             }
           end
         }
@@ -302,7 +303,7 @@ module Shards
     def farm_log_payload(active_members, elapsed_seconds, current_week_slot_utc)
       active_members.each_with_index.flat_map do |left, index|
         active_members[(index + 1)..].to_a.map do |right|
-          overlap = left.user.prime_slot_overlap(right.user)
+          overlap = left.user.prime_slot_overlap(right.user, from: Time.current, horizon_days: 14)
           next if overlap.empty?
 
           shared_hours = overlap.size
