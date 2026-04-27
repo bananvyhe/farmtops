@@ -252,7 +252,7 @@ onMounted(() => {
   margin-block: 0 var(--space-s);
   max-width: none;
   font-size: clamp(2rem, 4vw, 3.15rem);
-  line-height: var(--leading-display);
+  line-height: var(--leading-display-lg);
   letter-spacing: -0.045em;
     color: transparent;
   background-image: linear-gradient(
@@ -265,7 +265,12 @@ onMounted(() => {
   -webkit-background-clip: text;
   background-clip: text;
 }
-@media (max-width: 840px) {
+@media (max-width: 1380px) {
+  .news-article-title {
+    line-height: var(--leading-display);
+  }
+}
+@media (max-width: 1060px) {
   .news-article-title {
     line-height: var(--leading-relaxed);
   }
