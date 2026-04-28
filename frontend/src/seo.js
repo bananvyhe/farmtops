@@ -60,7 +60,9 @@ export function setSeo({
   type = "website",
   image,
   publishedTime,
-  modifiedTime
+  modifiedTime,
+  keywords,
+  articleTags
 } = {}) {
   if (typeof document === "undefined") return
 
@@ -80,6 +82,35 @@ export function setSeo({
   setMetaTag('meta[name="twitter:title"]', { name: "twitter:title", content: resolvedTitle })
   setMetaTag('meta[name="twitter:description"]', { name: "twitter:description", content: resolvedDescription })
   setLinkTag('link[rel="canonical"]', { rel: "canonical", href: resolvedCanonical })
+
+  const resolvedKeywords = Array.isArray(keywords)
+    ? keywords
+    : String(keywords || "")
+        .split(",")
+        .map((value) => value.trim())
+  const normalizedKeywords = [...new Set(resolvedKeywords.map((value) => String(value || "").trim()).filter(Boolean))]
+  if (normalizedKeywords.length) {
+    setMetaTag('meta[name="keywords"]', {
+      name: "keywords",
+      content: normalizedKeywords.join(", ")
+    })
+  } else {
+    removeMetaTag('meta[name="keywords"]')
+  }
+
+  document.head.querySelectorAll('meta[property="article:tag"]').forEach((element) => element.remove())
+  const resolvedArticleTags = Array.isArray(articleTags)
+    ? articleTags
+    : String(articleTags || "")
+        .split(",")
+        .map((value) => value.trim())
+  const normalizedArticleTags = [...new Set(resolvedArticleTags.map((value) => String(value || "").trim()).filter(Boolean))]
+  normalizedArticleTags.forEach((value) => {
+    const element = document.createElement("meta")
+    element.setAttribute("property", "article:tag")
+    element.setAttribute("content", value)
+    document.head.appendChild(element)
+  })
 
   if (image) {
     const resolvedImage = image.startsWith("http") ? image : getAbsoluteUrl(image)

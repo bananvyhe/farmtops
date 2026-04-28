@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router"
 import { useIntersectionObserver, useWindowScroll, watchThrottled } from "@vueuse/core"
 import { api } from "../api"
 import { sessionState } from "../useSession"
+import NewsGameActions from "../components/NewsGameActions.vue"
 import { useNewsUiStore } from "../stores/newsUi"
 
 const articles = ref([])
@@ -28,7 +29,6 @@ const activeQueryKey = ref("")
 const articleRefs = new Map()
 const readTimers = new Map()
 const pendingReadIds = new Set()
-const creatingShardGameId = ref(null)
 const READ_VISIBILITY_RATIO = 0.75
 const READ_VISIBILITY_MS = 1000
 let readObserver = null
@@ -334,51 +334,6 @@ function gameFollowersLabel(count) {
   return `${value} ${forms[pr.select(value)] || forms.other}`
 }
 
-function shardTooltip(article) {
-  if (!article.game?.can_create_shard) return "У игры пока нет следящих."
-  if (!sessionState.authenticated) return "Для входа в мир необходима регистрация."
-  return "Создать шард этой игры."
-}
-
-function canEnterWorld(article) {
-  return Boolean(article.game?.can_create_shard && sessionState.authenticated)
-}
-
-async function enterWorld(article) {
-  if (!canEnterWorld(article)) return
-  if (creatingShardGameId.value === article.game.id) return
-
-  creatingShardGameId.value = article.game.id
-  error.value = ""
-
-  try {
-    const data = await api.createShard(article.game.id)
-    await router.push({ path: `/world/${data.shard.id}` })
-  } catch (err) {
-    error.value = err.message
-  } finally {
-    creatingShardGameId.value = null
-  }
-}
-
-async function toggleGameBookmark(article) {
-  const game = article.game
-  if (!game) return
-
-  const nextBookmarked = !game.bookmarked
-
-  try {
-    const data = nextBookmarked
-      ? await api.bookmarkNewsGame(article.id)
-      : await api.unbookmarkNewsGame(article.id)
-
-    const bookmarked = Boolean(data.game?.bookmarked ?? nextBookmarked)
-    syncGameBookmarkInArticles(game.id, bookmarked, data.game?.bookmarks_count)
-  } catch (err) {
-    error.value = err.message
-  }
-}
-
 async function loadGameOptions(query = gameSearch.value) {
   const currentToken = ++gameSearchToken
   gamesLoading.value = true
@@ -678,48 +633,10 @@ onBeforeUnmount(() => {
 
         <div class="news-card__body">
           <div class="news-card__meta">
-            <v-chip
-              v-if="article.game"
-              size="small"
-              :variant="article.game.bookmarked ? 'flat' : 'outlined'"
-              :color="article.game.bookmarked ? 'primary' : undefined"
-              class="news-card__game-chip"
-              @click.stop="toggleGameBookmark(article)"
-            >
-              {{ gameToggleLabel(article.game) }}
-            </v-chip>
-            <v-chip
-              v-if="article.game"
-              size="small"
-              variant="tonal"
-              color="secondary"
-              class="news-card__game-count"
-            >
-              {{ gameFollowersLabel(article.game.bookmarks_count) }}
-            </v-chip>
-            <v-tooltip :text="shardTooltip(article)" location="top">
-              <template #activator="{ props }">
-                <span v-bind="props" class="news-card__world-button-wrap" v-if="article.game">
-                  <button
-                    v-if="article.game?.can_create_shard"
-                    class="news-card__world-button"
-                    type="button"
-                    :disabled="!canEnterWorld(article) || creatingShardGameId === article.game.id"
-                    @click.stop="enterWorld(article)"
-                  >
-                    {{ creatingShardGameId === article.game.id ? "Создаем..." : "Войти в мир" }}
-                  </button>
-                  <button
-                    v-else
-                    class="news-card__world-button news-card__world-button--disabled"
-                    type="button"
-                    disabled
-                  >
-                    Войти в мир
-                  </button>
-                </span>
-              </template>
-            </v-tooltip>
+            <NewsGameActions
+              :article="article"
+              @update-bookmark="({ gameId, bookmarked, bookmarks_count }) => syncGameBookmarkInArticles(gameId, bookmarked, bookmarks_count)"
+            />
             <v-chip size="small" variant="flat" color="primary">{{ article.source_name }}</v-chip>
             <v-chip size="small" variant="outlined">{{ article.section_name }}</v-chip>
             <v-chip

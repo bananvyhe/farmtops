@@ -3,7 +3,9 @@ import { computed, onMounted, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { api } from "../api"
 import { useNewsUiStore } from "../stores/newsUi"
+import { sessionState } from "../useSession"
 import { setSeo } from "../seo"
+import NewsGameActions from "../components/NewsGameActions.vue"
 
 const route = useRoute()
 const router = useRouter()
@@ -52,6 +54,38 @@ const articleDescription = computed(() => {
   return text.replace(/\s+/g, " ").trim()
 })
 
+const articleKeywords = computed(() => {
+  if (!article.value) return []
+
+  const gameName = article.value.game?.name
+  if (!gameName) return []
+
+  const tagNames = Array.isArray(article.value.tags) ? article.value.tags.map((tag) => tag.name) : []
+
+  return [
+    ...(gameName ? [gameName] : []),
+    ...tagNames,
+    "онлайн",
+    "mmo",
+    "mmorpg",
+    "подбор игроков",
+    "подбор прайма",
+    "лфп",
+    "лфг"
+  ]
+})
+
+const articleTags = computed(() => {
+  if (!article.value) return []
+
+  const gameName = article.value.game?.name
+  if (!gameName) return []
+
+  const tagNames = Array.isArray(article.value.tags) ? article.value.tags.map((tag) => tag.name) : []
+
+  return [...new Set([...(gameName ? [gameName] : []), ...tagNames])]
+})
+
 watch(
   () => article.value,
   (nextArticle) => {
@@ -71,7 +105,9 @@ watch(
       canonicalPath: `/news/${nextArticle.id}`,
       type: "article",
       image: nextArticle.image_url || nextArticle.preview_image_url,
-      publishedTime: nextArticle.published_at || nextArticle.fetched_at
+      publishedTime: nextArticle.published_at || nextArticle.fetched_at,
+      keywords: articleKeywords.value,
+      articleTags: articleTags.value
     })
   },
   { immediate: true }
@@ -90,28 +126,6 @@ function syncGameBookmarkInArticle(bookmarked, bookmarksCount) {
   }
 
   newsUi.updateGameBookmark(article.value.game.id, bookmarked, bookmarksCount)
-}
-
-function gameToggleLabel(game) {
-  if (!game) return ""
-  return `${game.name} · ${game.bookmarked ? "Выкл" : "Вкл"}`
-}
-
-async function toggleGameBookmark() {
-  if (!article.value?.game) return
-
-  const nextBookmarked = !article.value.game.bookmarked
-
-  try {
-    const data = nextBookmarked
-      ? await api.bookmarkNewsGame(article.value.id)
-      : await api.unbookmarkNewsGame(article.value.id)
-
-    const bookmarked = Boolean(data.game?.bookmarked ?? nextBookmarked)
-    syncGameBookmarkInArticle(bookmarked, data.game?.bookmarks_count)
-  } catch (err) {
-    error.value = err.message
-  }
 }
 
 async function loadArticle() {
@@ -165,16 +179,6 @@ onMounted(() => {
         <button type="button" class="news-article-back" @click="closeArticle">← Назад к ленте</button>
 
         <div class="news-article-meta">
-          <v-chip
-            v-if="article.game"
-            size="small"
-            :variant="article.game.bookmarked ? 'flat' : 'outlined'"
-            :color="article.game.bookmarked ? 'primary' : undefined"
-            class="news-article-game"
-            @click.stop="toggleGameBookmark"
-          >
-            {{ gameToggleLabel(article.game) }}
-          </v-chip>
           <span>{{ article.source_name }}</span>
           <span>{{ article.section_name }}</span>
           <span>{{ formatDate(article.published_at || article.fetched_at) }}</span>
@@ -193,6 +197,11 @@ onMounted(() => {
 
         <div class="news-article-links">
           <a :href="article.canonical_url" target="_blank" rel="noreferrer">Открыть оригинал</a>
+          <NewsGameActions
+            v-if="article"
+            :article="article"
+            @update-bookmark="({ bookmarked, bookmarks_count }) => syncGameBookmarkInArticle(bookmarked, bookmarks_count)"
+          />
           <v-btn color="primary" variant="flat" class="news-article-close" @click="closeArticle">Закрыть</v-btn>
         </div>
       </div>
@@ -246,6 +255,33 @@ onMounted(() => {
 
 .news-article-game {
   cursor: pointer;
+}
+
+.news-article-world-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.25rem;
+  padding: 0 var(--space-s);
+  border-radius: 999px;
+  border: 1px solid rgba(255, 222, 194, 0.22);
+  background: rgba(199, 89, 35, 0.14);
+  color: var(--farmspot-text-on-dark);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+
+.news-article-world-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: rgba(199, 89, 35, 0.24);
+  border-color: rgba(255, 222, 194, 0.42);
+  box-shadow: 0 10px 18px rgba(199, 89, 35, 0.18);
+}
+
+.news-article-world-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .news-article-title {
