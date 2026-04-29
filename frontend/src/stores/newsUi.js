@@ -12,6 +12,15 @@ export const useNewsUiStore = defineStore("newsUi", {
       this.feedSnapshot = null
     },
     updateGameBookmark(gameId, bookmarked, bookmarksCount) {
+      this.updateGameState(gameId, {
+        bookmarked,
+        ...(typeof bookmarksCount === "number" ? {
+          bookmarks_count: bookmarksCount,
+          can_create_shard: bookmarksCount > 0
+        } : {})
+      })
+    },
+    updateGameState(gameId, gamePatch) {
       if (!this.feedSnapshot?.articles?.length) return
 
       const nextArticles = this.feedSnapshot.articles.map((article) => {
@@ -21,8 +30,7 @@ export const useNewsUiStore = defineStore("newsUi", {
           ...article,
           game: {
             ...article.game,
-            bookmarked,
-            ...(typeof bookmarksCount === "number" ? { bookmarks_count: bookmarksCount } : {})
+            ...gamePatch
           }
         }
       })

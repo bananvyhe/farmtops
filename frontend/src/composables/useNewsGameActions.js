@@ -57,11 +57,13 @@ export function useNewsGameActions(article) {
 
       const bookmarked = Boolean(data.game?.bookmarked ?? nextBookmarked)
       const bookmarks_count = data.game?.bookmarks_count
+      const game = data.game || null
 
       // Update global store
-      if (a.game?.id) newsUi.updateGameBookmark(a.game.id, bookmarked, bookmarks_count)
+      if (a.game?.id && game) newsUi.updateGameState(a.game.id, game)
+      else if (a.game?.id) newsUi.updateGameBookmark(a.game.id, bookmarked, bookmarks_count)
 
-      return { gameId: a.game.id, bookmarked, bookmarks_count }
+      return { gameId: a.game.id, bookmarked, bookmarks_count, game }
     } catch (err) {
       error.value = err.message
       return null

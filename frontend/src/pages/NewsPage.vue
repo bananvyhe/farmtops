@@ -299,7 +299,13 @@ function isUnread(article) {
   return !article.read
 }
 
-function syncGameBookmarkInArticles(gameId, bookmarked, bookmarksCount) {
+function syncGameBookmarkInArticles(gameId, bookmarked, bookmarksCount, game = null) {
+  const gamePatch = game ? { ...game } : {
+    bookmarked,
+    ...(typeof bookmarksCount === "number" ? { bookmarks_count: bookmarksCount } : {}),
+    ...(typeof game?.can_create_shard === "boolean" ? { can_create_shard: game.can_create_shard } : {})
+  }
+
   articles.value = articles.value.map((article) => {
     if (article.game?.id !== gameId) return article
 
@@ -307,13 +313,12 @@ function syncGameBookmarkInArticles(gameId, bookmarked, bookmarksCount) {
       ...article,
       game: {
         ...article.game,
-        bookmarked,
-        ...(typeof bookmarksCount === "number" ? { bookmarks_count: bookmarksCount } : {})
+        ...gamePatch
       }
     }
   })
 
-  newsUi.updateGameBookmark(gameId, bookmarked, bookmarksCount)
+  newsUi.updateGameState(gameId, gamePatch)
   saveFeedSnapshot()
 }
 
@@ -635,10 +640,9 @@ onBeforeUnmount(() => {
           <div class="news-card__meta">
             <NewsGameActions
               :article="article"
-              @update-bookmark="({ gameId, bookmarked, bookmarks_count }) => syncGameBookmarkInArticles(gameId, bookmarked, bookmarks_count)"
-            />
-            <v-chip size="small" variant="flat" color="primary">{{ article.source_name }}</v-chip>
-            <v-chip size="small" variant="outlined">{{ article.section_name }}</v-chip>
+            @update-bookmark="({ gameId, bookmarked, bookmarks_count, game }) => syncGameBookmarkInArticles(gameId, bookmarked, bookmarks_count, game)"
+          />
+             <v-chip size="small" variant="outlined">{{ article.section_name }}</v-chip>
             <v-chip
               v-for="tag in article.tags || []"
               :key="tag.id"

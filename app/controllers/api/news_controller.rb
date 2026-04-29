@@ -49,6 +49,7 @@ module Api
       return render_error("Game not available", status: :not_found) if game.blank?
 
       bookmark = upsert_news_game_bookmark(game.id)
+      join_news_game_shard!(game) if current_user.present?
       render json: { ok: true, game: news_game_payload(game, bookmarked: bookmark.present?, bookmarks_count: news_game_bookmark_count_for(game)) }
     end
 
@@ -59,6 +60,7 @@ module Api
       game = article.news_article_game&.game
       return render_error("Game not available", status: :not_found) if game.blank?
 
+      leave_news_game_shard!(game) if current_user.present?
       delete_news_game_bookmark(game.id)
       render json: { ok: true, game: news_game_payload(game, bookmarked: false, bookmarks_count: news_game_bookmark_count_for(game)) }
     end
@@ -148,6 +150,29 @@ module Api
       (selected_tags + visible_tags).uniq(&:id).map do |tag|
         news_tag_payload(tag, articles_count: tagged_counts[tag.id] || 0)
       end
+    end
+
+    def leave_news_game_shard!(game)
+      shard = Shard.find_by(game_id: game.id)
+      return if shard.blank?
+
+      Shard.transaction do
+        shard.layer_memberships.where(user_id: current_user.id).destroy_all
+        shard.destroy! if shard.layer_memberships.reload.none?
+      end
+    end
+
+    def join_news_game_shard!(game)
+      shard = Shard.find_or_initialize_by(game_id: game.id)
+      shard.assign_attributes(
+        user_id: shard.user_id || current_user.id,
+        name: shard.name.presence || Shard.build_name(game, current_user),
+        world_seed: shard.world_seed.presence || Shard.build_seed,
+        status: shard.status || :draft
+      )
+      shard.save! if shard.new_record? || shard.changed?
+
+      Shards::LayerAllocator.new(shard:, user: current_user).call
     end
 
     def limit_param

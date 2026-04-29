@@ -365,6 +365,30 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
     assert_equal true, json_response.dig("article", "game", "bookmarked")
   end
 
+  test "bookmarking a game enables shard creation for the authenticated user" do
+    user = User.create!(
+      email: "follow-shard@example.com",
+      password: "Password123!",
+      password_confirmation: "Password123!",
+      role: :client,
+      active: true
+    )
+    csrf_token = login_as(user)
+
+    post "/api/news/#{@article.id}/bookmark_game",
+      headers: { "X-CSRF-Token" => csrf_token }
+
+    assert_response :success
+    assert_equal true, json_response.dig("game", "bookmarked")
+    assert_equal 1, json_response.dig("game", "bookmarks_count")
+    assert_equal true, json_response.dig("game", "can_create_shard")
+
+    get "/api/news/#{@article.id}"
+
+    assert_response :success
+    assert_equal true, json_response.dig("article", "game", "can_create_shard")
+  end
+
   test "creates a shard only for authenticated users with a followed game" do
     post "/api/news/#{@article.id}/bookmark_game"
 
@@ -398,17 +422,49 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
   end
 
   test "unbookmarks a game" do
-    post "/api/news/#{@article.id}/bookmark_game"
+    user = User.create!(
+      email: "unbookmark-user@example.com",
+      password: "Password123!",
+      password_confirmation: "Password123!",
+      role: :client,
+      active: true
+    )
+    csrf_token = login_as(user)
+
+    post "/api/news/#{@article.id}/bookmark_game",
+      headers: { "X-CSRF-Token" => csrf_token }
     assert_response :success
 
-    delete "/api/news/#{@article.id}/unbookmark_game"
+    post "/api/games/#{@game.id}/shard",
+      headers: { "X-CSRF-Token" => csrf_token }
+    assert_response :created
+    shard_id = json_response.dig("shard", "id")
+    assert_equal true, ShardLayerMembership.exists?(shard_id: shard_id, user_id: user.id)
+
+    delete "/api/news/#{@article.id}/unbookmark_game",
+      headers: { "X-CSRF-Token" => csrf_token }
 
     assert_response :success
     assert_equal false, json_response.dig("game", "bookmarked")
+    assert_equal false, json_response.dig("game", "can_create_shard")
+    assert_equal 0, json_response.dig("game", "bookmarks_count")
+    assert_nil ShardLayerMembership.find_by(shard_id: shard_id, user_id: user.id)
+    assert_nil Shard.find_by(id: shard_id)
+
+    post "/api/news/#{@article.id}/bookmark_game",
+      headers: { "X-CSRF-Token" => csrf_token }
+
+    assert_response :success
+    assert_equal true, json_response.dig("game", "bookmarked")
+    assert_equal true, json_response.dig("game", "can_create_shard")
+    assert_equal 1, json_response.dig("game", "bookmarks_count")
+    recreated_shard = Shard.find_by!(game_id: @game.id)
+    refute_equal shard_id, recreated_shard.id
+    assert_equal true, ShardLayerMembership.exists?(shard_id: recreated_shard.id, user_id: user.id)
 
     get "/api/news/#{@article.id}"
     assert_response :success
-    assert_equal false, json_response.dig("article", "game", "bookmarked")
+    assert_equal true, json_response.dig("article", "game", "bookmarked")
   end
 
   test "paginates with cursor" do

@@ -12,6 +12,7 @@ module News
       return article if article.translated?
       return mark_failed!("Article is missing source text") if source_body_text.blank? && source_title.blank?
 
+      source_tag_names = source_tag_names_for_translation
       translated = translator.translate_article(
         request_id: request_id,
         source_lang: source_lang,
@@ -21,7 +22,9 @@ module News
         body_text: source_body_text
       )
 
-      apply_translation!(translated)
+      translated_tag_names = translate_tag_names(source_tag_names, request_id: request_id)
+
+      apply_translation!(translated, source_tag_names: source_tag_names, translated_tag_names: translated_tag_names)
       article
     rescue News::Translation::Error => e
       mark_failed!(e.message)
@@ -52,11 +55,46 @@ module News
       article.source_body_text.presence || article.body_text.to_s
     end
 
-    def apply_translation!(translated)
+    def source_tag_names_for_translation
+      article.news_tags.order(:name).map(&:name)
+    end
+
+    def translate_tag_names(source_tag_names, request_id:)
+      normalized = Array(source_tag_names).map { |value| value.to_s.strip }.reject(&:blank?).uniq
+      return normalized if normalized.blank? || source_lang == target_lang
+
+      translated = translator.translate_article(
+        request_id: "#{request_id}-tags",
+        source_lang: source_lang,
+        target_lang: target_lang,
+        title: normalized.first,
+        preview_text: normalized.join("\n"),
+        body_text: normalized.join("\n\n")
+      )
+      parsed = split_tag_translations(
+        translated.translated_body_text.presence || translated.translated_preview_text.presence || translated.translated_title.presence
+      )
+      parsed.presence || normalized
+    rescue News::Translation::Error => e
+      logger.warn("[News::ArticleTranslator] tag translation failed for #{article.canonical_url}: #{e.message}")
+      normalized.presence || Array(source_tag_names)
+    end
+
+    def split_tag_translations(text)
+      text.to_s
+        .split(/\r?\n+/)
+        .map { |value| value.to_s.strip }
+        .reject(&:blank?)
+        .uniq
+    end
+
+    def apply_translation!(translated, source_tag_names:, translated_tag_names:)
       translation_request_id = translated.request_id.presence || article.translation_request_id.presence
       translated_title = translated.translated_title.to_s.strip.presence || source_title
       translated_preview_text = translated.translated_preview_text.to_s.strip.presence || source_preview_text
       translated_body_text = translated.translated_body_text.to_s.strip.presence || source_body_text
+      source_tags = Array(source_tag_names).map { |value| value.to_s.strip }.reject(&:blank?).uniq
+      translated_tags = Array(translated_tag_names).map { |value| value.to_s.strip }.reject(&:blank?).uniq
 
       article.update!(
         title: normalize_text(translated_title),
@@ -80,11 +118,14 @@ module News
           "source_preview_html" => article.preview_html,
           "source_body_text" => source_body_text,
           "source_body_html" => article.body_html,
+          "source_tag_names" => source_tags,
+          "translated_tag_names" => translated_tags,
           "translation_request_id" => translation_request_id,
           "translation_model" => translated.model,
           "translation_status" => translated.status
         ).compact
       )
+      article.replace_news_tags!(translated_tags.presence || source_tags) if source_tags.present?
     end
 
     def mark_failed!(message)

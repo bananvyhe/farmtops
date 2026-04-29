@@ -133,6 +133,7 @@ class ApiShardsTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_equal true, json_response["left"]
     assert_nil ShardLayerMembership.find_by(shard_id: shard_id, user_id: user.id)
+    assert_nil Shard.find_by(id: shard_id)
   end
 
   test "stale memberships are pruned from shard world" do

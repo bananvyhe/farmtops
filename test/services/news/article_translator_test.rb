@@ -15,6 +15,42 @@ class News::ArticleTranslatorTest < ActiveSupport::TestCase
     end
   end
 
+  class TagAwareTranslator
+    attr_reader :calls
+
+    def initialize
+      @calls = []
+    end
+
+    def translate_article(**kwargs)
+      @calls << kwargs
+
+      if kwargs[:body_text].to_s.include?("Body one")
+        return News::Translation::Result.new(
+          request_id: kwargs[:request_id],
+          translated_title: "Привет",
+          translated_preview_text: "Превью",
+          translated_body_text: "Тело один\n\nТело два",
+          model: "fake-translator",
+          latency_ms: 10,
+          status: "ok",
+          error: nil
+        )
+      end
+
+      News::Translation::Result.new(
+        request_id: kwargs[:request_id],
+        translated_title: "ММОРПГ",
+        translated_preview_text: "Индустрия\nММОРПГ",
+        translated_body_text: "Индустрия\n\nММОРПГ",
+        model: "fake-translator",
+        latency_ms: 10,
+        status: "ok",
+        error: nil
+      )
+    end
+  end
+
   setup do
     @source = NewsSource.create!(
       name: "Example",
@@ -83,6 +119,23 @@ class News::ArticleTranslatorTest < ActiveSupport::TestCase
     assert_equal "req-1", translated.translation_request_id
     assert_equal "Hello", translated.source_title
     assert_equal "Body one\n\nBody two", translated.source_body_text
+  end
+
+  test "translates article tags and replaces the stored tag names" do
+    article = build_article
+    article.replace_news_tags!(["Industry", "MMORPG"])
+
+    translator = TagAwareTranslator.new
+
+    translated = News::ArticleTranslator.new(
+      article:,
+      translator:
+    ).call
+
+    assert_equal ["Body one\n\nBody two", "Industry\n\nMMORPG"], translator.calls.map { |call| call[:body_text] }
+    assert_equal ["Индустрия", "ММОРПГ"], translated.news_tags.order(:name).map(&:name)
+    assert_equal ["Industry", "MMORPG"], translated.raw_payload["source_tag_names"]
+    assert_equal ["Индустрия", "ММОРПГ"], translated.raw_payload["translated_tag_names"]
   end
 
   test "preserves embedded media blocks in translated body html" do

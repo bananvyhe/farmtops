@@ -113,19 +113,24 @@ watch(
   { immediate: true }
 )
 
-function syncGameBookmarkInArticle(bookmarked, bookmarksCount) {
+function syncGameBookmarkInArticle(bookmarked, bookmarksCount, game = null) {
   if (!article.value?.game) return
+
+  const gamePatch = game ? { ...game } : {
+    bookmarked,
+    ...(typeof bookmarksCount === "number" ? { bookmarks_count: bookmarksCount } : {}),
+    ...(typeof game?.can_create_shard === "boolean" ? { can_create_shard: game.can_create_shard } : {})
+  }
 
   article.value = {
     ...article.value,
     game: {
       ...article.value.game,
-      bookmarked,
-      ...(typeof bookmarksCount === "number" ? { bookmarks_count: bookmarksCount } : {})
+      ...gamePatch
     }
   }
 
-  newsUi.updateGameBookmark(article.value.game.id, bookmarked, bookmarksCount)
+  newsUi.updateGameState(article.value.game.id, gamePatch)
 }
 
 async function loadArticle() {
@@ -200,7 +205,7 @@ onMounted(() => {
           <NewsGameActions
             v-if="article"
             :article="article"
-            @update-bookmark="({ bookmarked, bookmarks_count }) => syncGameBookmarkInArticle(bookmarked, bookmarks_count)"
+            @update-bookmark="({ bookmarked, bookmarks_count, game }) => syncGameBookmarkInArticle(bookmarked, bookmarks_count, game)"
           />
           <v-btn color="primary" variant="flat" class="news-article-close" @click="closeArticle">Закрыть</v-btn>
         </div>
