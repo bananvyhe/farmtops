@@ -58,7 +58,7 @@ async function handleToggle() {
             :disabled="!canEnterWorld || creatingShardGameId === article.game.id"
             @click.stop.prevent="enterWorld"
           >
-            {{ creatingShardGameId === article.game.id ? "Создаем..." : "Войти в мир" }}
+            {{ creatingShardGameId === article.game.id ? "Создаем..." : "Найти группу" }}
           </button>
 
           <button
@@ -67,7 +67,7 @@ async function handleToggle() {
             type="button"
             disabled
           >
-            Войти в мир
+            Найти группу
           </button>
         </span>
       </template>

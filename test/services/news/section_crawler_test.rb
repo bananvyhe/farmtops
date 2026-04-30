@@ -328,6 +328,60 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     assert_includes section.news_articles.find_by!(canonical_url: "https://feed.example.com/posts/one").body_text, "significantly more context"
   end
 
+  test "preserves tags from feed descriptions when the article page is unavailable" do
+    source = NewsSource.create!(
+      name: "Feed Tags Example",
+      base_url: "https://feed.example.com",
+      active: true,
+      crawl_delay_min_seconds: 0,
+      crawl_delay_max_seconds: 0,
+      config: {
+        "pagination_mode" => "feed"
+      }
+    )
+    section = source.news_sections.create!(
+      name: "Feed",
+      url: "https://feed.example.com/category/news/",
+      active: true,
+      config: {
+        "pagination_mode" => "feed"
+      }
+    )
+
+    pages = {
+      "https://feed.example.com/category/news/feed/" => feed_page(
+        [
+          {
+            title: "Tagged feed article",
+            link: "https://feed.example.com/posts/tagged",
+            description: <<~HTML.strip,
+              <div class="td-post-category">
+                <a href="/tag/mmorpg" rel="tag">MMORPG</a>
+                <a href="/tag/industry" rel="tag">Industry</a>
+              </div>
+              <p>Feed preview with tags.</p>
+            HTML
+            guid: "tagged"
+          }
+        ]
+      )
+    }
+
+    result = News::SectionCrawler.new(
+      section:,
+      client: FakeClient.new(pages),
+      sleeper: NullSleeper.new,
+      max_articles: 12,
+      max_pages: 5,
+      max_retries: 1
+    ).call
+
+    assert_equal 1, result.articles_saved
+    article = section.news_articles.find_by!(canonical_url: "https://feed.example.com/posts/tagged")
+    assert_equal ["Industry", "MMORPG"], article.news_tags.order(:name).map(&:name)
+    assert_equal ["Industry", "MMORPG"], article.raw_payload["article_tag_names"]
+  end
+
   test "uses the full article page for feed sources when it is richer than the feed excerpt" do
     source = NewsSource.create!(
       name: "MassivelyOP",
@@ -963,6 +1017,7 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     assert_equal 1, result.articles_saved
     article = section.news_articles.find_by!(canonical_url: "https://massivelyop.com/2026/03/20/patch-article/")
     assert_equal ["Industry", "MMORPG"], article.news_tags.order(:name).map(&:name)
+    assert_equal ["Industry", "MMORPG"], article.raw_payload["article_tag_names"]
   end
 
   test "removes a duplicated leading featured image block when it matches the article hero" do

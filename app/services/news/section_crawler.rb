@@ -205,7 +205,7 @@ module News
         return { saved: false, duplicate: true }
       end
 
-      tag_names = article_data[:article_tag_names]
+      tag_names = article_tag_names_for(article_data)
       article_data = original_article_data(article_data)
       article = section.news_articles.build(article_data.except(:article_tag_names))
       NewsArticle.transaction do
@@ -246,6 +246,14 @@ module News
       )
     end
 
+    def article_tag_names_for(article_data)
+      Array(article_data[:article_tag_names]).presence ||
+        Array(article_data.dig(:raw_payload, "article_tag_names")).presence ||
+        Array(article_data.dig(:raw_payload, :article_tag_names)).presence ||
+        Array(article_data.dig(:raw_payload, "tags")).presence ||
+        Array(article_data.dig(:raw_payload, :tags))
+    end
+
     def extract_feed_article(candidate, page_url)
       fragment = Nokogiri::HTML.fragment(candidate.raw_payload[:feed_description_html].to_s)
       title = candidate.title
@@ -277,6 +285,7 @@ module News
         published_at:,
         fetched_at: Time.current,
         content_hash:,
+        article_tag_names: article_tag_names(fragment),
         raw_payload: {
           source_page_url: page_url,
           article_url: candidate.url,
@@ -286,7 +295,7 @@ module News
           title: title,
           preview_text: preview_text,
           preview_html: candidate.preview_html,
-          article_tag_names: article_tag_names(document)
+          article_tag_names: article_tag_names(fragment)
         }.compact
       }
     end
@@ -326,6 +335,7 @@ module News
         published_at:,
         fetched_at: Time.current,
         content_hash:,
+        article_tag_names: article_tag_names(document),
         raw_payload: {
           source_page_url: page_url,
           article_url: candidate.url,
