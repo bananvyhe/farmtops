@@ -708,9 +708,9 @@ watch(nicknameDraft, (nextValue) => {
           <div><span>Ник</span><strong>{{ sessionState.user.nickname }}</strong></div>
           <div><span>E-mail</span><strong>{{ sessionState.user.email }}</strong></div>
           <div><span>Роль</span><strong>{{ sessionState.user.role }}</strong></div>
-          <div><span>Тариф</span><strong>{{ sessionState.user.tariff_name }}</strong></div>
+           <!-- <div><span>Тариф</span><strong>{{ sessionState.user.tariff_name }}</strong></div>
           <div><span>Баланс</span><strong>{{ formatCurrency(sessionState.user.balance_cents) }}</strong></div>
-          <div><span>Списание в час</span><strong>{{ formatCurrency(sessionState.user.hourly_rate_cents) }}</strong></div>
+          <div><span>Списание в час</span><strong>{{ formatCurrency(sessionState.user.hourly_rate_cents) }}</strong></div> -->
           <div><span>Уровень мира</span><strong>{{ sessionState.user.world_level }}</strong></div>
           <div><span>XP аккаунта</span><strong>{{ sessionState.user.world_xp_total }}</strong></div>
           <div><span>До следующего уровня</span><strong>{{ sessionState.user.world_xp_to_next_level }}</strong></div>
