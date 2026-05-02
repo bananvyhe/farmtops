@@ -58,7 +58,7 @@ async function handleToggle() {
             :disabled="!canEnterWorld || creatingShardGameId === article.game.id"
             @click.stop.prevent="enterWorld"
           >
-            {{ creatingShardGameId === article.game.id ? "Создаем..." : "Найти группу" }}
+            {{ creatingShardGameId === article.game.id ? "Создаем..." : "поиск группы" }}
           </button>
 
           <button
@@ -76,5 +76,16 @@ async function handleToggle() {
 </template>
 
 <style scoped>
+.news-card__world-button{
+  padding: 0.25em 0.8em;
+margin: 0.8em;
+  font-size: 0.75rem;
+ 
+  border-radius: 6px;
+  background-color: var( --farmspot-primary);
+  color: var(--farmspot-text-on-dark);
+  border: none;
+  cursor: pointer;
+}
 /* component uses classes already present in pages' styles */
 </style>
