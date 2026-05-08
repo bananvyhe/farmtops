@@ -1,6 +1,6 @@
 const SITE_NAME = "Farmspot"
 const FALLBACK_ORIGIN = "https://farmspot.ru"
-const DEFAULT_DESCRIPTION = "Farmspot — новости, личный кабинет, миры и админка проекта."
+const DEFAULT_DESCRIPTION = "Farmspot — новости, поиск группы."
 
 function getSiteOrigin() {
   if (import.meta.env.PROD) {
