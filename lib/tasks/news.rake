@@ -74,7 +74,9 @@ namespace :news do
         "article_body_exclude_selectors" => ".__Info, footer, .footer, .related, .related-posts, .post-tags, .tags, .share, .social-share, .entry-footer, .post-tags-wrap, .wp-block-separator, .wp-block-group.has-background",
         "article_image_selector" => "meta[property='og:image'], meta[property='twitter:image'], article img[data-src], article img[data-lazy-src], article img[data-original], article img[srcset], article img, img[data-src], img[data-lazy-src], img[data-original], img[srcset], img",
         "next_page_selector" => "a[rel='next']",
-        "pagination_mode" => "query"
+        "pagination_mode" => "query",
+        "http_open_timeout_seconds" => 20,
+        "http_read_timeout_seconds" => 40
       }
     else
       {}
