@@ -45,7 +45,7 @@ module News
     def perform_request(uri)
       Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https", open_timeout:, read_timeout:) do |http|
         request = Net::HTTP::Get.new(uri)
-        request["User-Agent"] = user_agent
+        request["User-Agent"] = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         request["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
         request["Accept-Language"] = "en-US,en;q=0.9"
         request["Cache-Control"] = "no-cache"
@@ -54,6 +54,7 @@ module News
         request["Sec-Fetch-Dest"] = "document"
         request["Sec-Fetch-Mode"] = "navigate"
         request["Sec-Fetch-Site"] = "none"
+        request["Referer"] = "https://www.google.com/"
         http.request(request)
       end
     end
