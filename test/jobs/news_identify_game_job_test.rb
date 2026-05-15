@@ -67,6 +67,7 @@ class NewsIdentifyGameJobTest < ActiveSupport::TestCase
       fetched_at: Time.current,
       content_hash: "hash-1",
       raw_payload: {},
+      full_article_available: true,
       source_title: "Article 1",
       source_preview_text: "Preview 1",
       source_body_text: "Body 1",
@@ -107,6 +108,7 @@ class NewsIdentifyGameJobTest < ActiveSupport::TestCase
       fetched_at: Time.current,
       content_hash: "hash-old",
       raw_payload: {},
+      full_article_available: true,
       source_title: "Old Article",
       source_preview_text: "Old Preview",
       source_body_text: "Old Body",
@@ -126,9 +128,8 @@ class NewsIdentifyGameJobTest < ActiveSupport::TestCase
     assert lock_manager.released
   end
 
-  test "enqueues a watchdog after game identification" do
+  test "does not enqueue a watchdog after game identification" do
     lock_manager = FakeLockManager.new
-    watchdog = nil
 
     with_stubbed_constant(News::GameIdentification::LockManager, :new, -> { lock_manager }) do
       with_stubbed_constant(News::ArticleGameIdentifier, :new, ->(article:) do
@@ -146,16 +147,12 @@ class NewsIdentifyGameJobTest < ActiveSupport::TestCase
           end
         end
       end) do
-        with_stubbed_constant(NewsIdentifyPendingGamesJob, :perform_in, ->(delay, crawl_run_id = nil) {
-          watchdog = [delay, crawl_run_id]
-          "jid-1"
-        }) do
+        with_stubbed_constant(NewsIdentifyPendingGamesJob, :perform_in, ->(*) { flunk("should not enqueue watchdog") }) do
           NewsIdentifyGameJob.new.perform(@article.id, "lock-token", @crawl_run.id)
         end
       end
     end
 
-    assert_equal [1.minute, nil], watchdog
     assert lock_manager.released
   end
 

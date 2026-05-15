@@ -43,6 +43,7 @@ class News::ArticleGameIdentifierTest < ActiveSupport::TestCase
       fetched_at: Time.current,
       content_hash: "hash-1",
       raw_payload: {},
+      full_article_available: true,
       source_title: "Hello",
       source_preview_text: "Preview",
       source_body_text: body_text,

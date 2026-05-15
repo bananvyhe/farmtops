@@ -378,6 +378,8 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
 
     assert_equal 1, result.articles_saved
     article = section.news_articles.find_by!(canonical_url: "https://feed.example.com/posts/tagged")
+    assert_equal "Feed preview with tags.", article.body_text
+    refute_match(/\A<div>/, article.preview_text)
     assert_equal ["Industry", "MMORPG"], article.news_tags.order(:name).map(&:name)
     assert_equal ["Industry", "MMORPG"], article.raw_payload["article_tag_names"]
   end
@@ -439,6 +441,7 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     article = section.news_articles.find_by!(canonical_url: "https://massivelyop.com/2026/03/20/patch-article/")
     assert_includes article.body_text, "far more detail"
     assert_includes article.body_html, "Another paragraph"
+    refute_includes article.body_html, "wp-post-image"
     refute_includes article.body_text, "Short feed preview"
   end
 

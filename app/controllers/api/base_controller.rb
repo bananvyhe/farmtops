@@ -160,6 +160,7 @@ module Api
         translation_attempts: article.translation_attempts,
         translation_target_locale: article.translation_target_locale,
         translation_source_locale: article.translation_source_locale,
+        full_article_available: article.full_article_available,
         content_hash: article.content_hash,
         raw_payload: article.raw_payload,
         tags: article.news_tags.sort_by(&:name).map { |tag| news_tag_payload(tag) },
@@ -409,20 +410,28 @@ module Api
       first_block = fragment.children.find { |node| node.element? }
       return html if first_block.blank?
 
-      featured_class = first_block["class"].to_s
-      return html unless featured_class.match?(/\btd-post-featured-image\b|\b__NewsImage\b/)
-
       first_image = first_block.at_css("img[src]") || first_block.at_css("img[data-src]")
       return html if first_image.blank?
 
       normalized_src = normalize_url(first_image["src"].presence || first_image["data-src"].presence, image_urls.compact.first || "")
       comparison_urls = image_urls.compact.map { |url| normalize_url(url, normalized_src) }.compact
       return html unless comparison_urls.include?(normalized_src)
+      return html unless image_only_block?(first_block)
 
       first_block.remove
       fragment.to_html
     rescue StandardError
       html
+    end
+
+    def image_only_block?(node)
+      return false unless node&.element?
+
+      text = node.text.to_s.strip
+      return true if text.blank?
+      return false if text.length > 120
+
+      node.css("img, figure").any? && node.css("p, li, blockquote, figcaption, pre, h1, h2, h3, h4, h5, h6").empty?
     end
 
     def normalize_url(url, base_url)

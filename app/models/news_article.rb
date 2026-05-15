@@ -40,7 +40,7 @@ class NewsArticle < ApplicationRecord
   scope :translating_for_crawl_run, ->(crawl_run_id) do
     translating.where(news_crawl_run_id: crawl_run_id)
   end
-  scope :pending_game_identification, -> { translated.left_outer_joins(:news_article_game).where(news_article_games: { id: nil }) }
+  scope :pending_game_identification, -> { translated.where(full_article_available: true).left_outer_joins(:news_article_game).where(news_article_games: { id: nil }) }
   scope :pending_game_identification_for_crawl_run, ->(crawl_run_id) do
     pending_game_identification.where(news_crawl_run_id: crawl_run_id)
   end

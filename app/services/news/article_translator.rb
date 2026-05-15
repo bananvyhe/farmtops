@@ -158,7 +158,8 @@ module News
     end
 
     def build_translated_body_html(body_text)
-      News::Translation::HtmlBodyRenderer.new(source_html: article.body_html).call(body_text)
+      rendered = News::Translation::HtmlBodyRenderer.new(source_html: article.body_html).call(body_text)
+      rendered.presence || article.preview_html.to_s.presence || article.body_html.to_s
     end
   end
 end

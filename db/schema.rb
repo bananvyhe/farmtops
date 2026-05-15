@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_04_24_121500) do
+ActiveRecord::Schema[8.0].define(version: 2026_05_15_072000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -112,8 +112,10 @@ ActiveRecord::Schema[8.0].define(version: 2026_04_24_121500) do
     t.datetime "translation_started_at"
     t.string "translation_request_id"
     t.integer "translation_attempts", default: 0, null: false
+    t.boolean "full_article_available", default: false, null: false
     t.bigint "news_crawl_run_id"
     t.index ["canonical_url"], name: "index_news_articles_on_canonical_url"
+    t.index ["full_article_available"], name: "index_news_articles_on_full_article_available"
     t.index ["news_crawl_run_id"], name: "index_news_articles_on_news_crawl_run_id"
     t.index ["news_section_id"], name: "index_news_articles_on_news_section_id"
     t.index ["news_source_id", "content_hash"], name: "index_news_articles_on_news_source_id_and_content_hash", unique: true

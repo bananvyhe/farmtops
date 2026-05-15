@@ -191,6 +191,10 @@ onMounted(() => {
 
         <h1 class="news-article-title">{{ article.title }}</h1>
 
+        <div v-if="article.full_article_available === false" class="news-article-note">
+          Доступен только анонс статьи. Полный текст у источника сейчас недоступен.
+        </div>
+
         <img
           v-if="article.image_url"
           :src="article.image_url"
@@ -324,6 +328,20 @@ onMounted(() => {
   object-fit: cover;
   margin-block: var(--space-3xs) var(--space-2xs);
   border-radius: 1.25rem;
+}
+
+.news-article-note {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  margin-block: 0 var(--space-s);
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(255, 196, 0, 0.14);
+  color: var(--farmspot-text-on-dark);
+  font-size: var(--step--1);
+  line-height: var(--leading-tight);
+  letter-spacing: 0.02em;
 }
 
 .news-article-content {

@@ -144,14 +144,14 @@ module News
         Candidate.new(
           url: normalize_url(href, page_url),
           title: extract_text(node, "title") || feed_item_title(node),
-          preview_text: extract_text(node, "description, summary, content") || feed_item_preview(node),
+          preview_text: feed_item_preview_text(node),
           preview_html: feed_item_preview_html(node),
           image_url: feed_item_image_url(node, page_url),
           source_article_id: feed_item_id(node, href, page_url),
           raw_payload: {
             feed_title: extract_text(node, "title"),
             feed_link: href,
-            feed_preview: extract_text(node, "description, summary, content"),
+            feed_preview: feed_item_preview_text(node),
             feed_preview_html: feed_item_preview_html(node),
             feed_description_html: node.at_css("description")&.inner_html.to_s,
             published_at: feed_item_published_at(node),
@@ -225,7 +225,7 @@ module News
       article_data.merge(
         source_title: article_data[:title],
         source_preview_text: article_data[:preview_text],
-        source_body_text: article_data[:body_text],
+        source_body_text: article_data[:source_body_text],
         news_crawl_run: crawl_run,
         translated_at: nil,
         translation_model: nil,
@@ -238,8 +238,9 @@ module News
           "source_title" => article_data[:title],
           "source_preview_text" => article_data[:preview_text],
           "source_preview_html" => article_data[:preview_html],
-          "source_body_text" => article_data[:body_text],
+          "source_body_text" => article_data[:source_body_text],
           "source_body_html" => article_data[:body_html],
+          "full_article_available" => article_data[:full_article_available],
           "translation_status" => "pending",
           "article_tag_names" => article_data[:article_tag_names]
         ).compact
@@ -258,8 +259,9 @@ module News
       fragment = Nokogiri::HTML.fragment(candidate.raw_payload[:feed_description_html].to_s)
       title = candidate.title
       body_html = sanitize_news_html(rewrite_fragment_urls(fragment.to_html, candidate.url))
-      body_text = extract_fragment_body_text(Nokogiri::HTML.fragment(body_html))
+      body_text = extract_feed_text(fragment).presence || extract_fragment_body_text(Nokogiri::HTML.fragment(body_html))
       preview_text = preview_excerpt(body_text, candidate.preview_text)
+      body_text = body_text.presence || preview_text
       image_url = image_node_url(fragment.at_css("img")).presence || candidate.image_url
       published_at = candidate.raw_payload[:published_at]
       source_article_id = candidate.source_article_id.presence || candidate.url
@@ -274,12 +276,14 @@ module News
         news_source: source,
         news_section: section,
         news_crawl_run: crawl_run,
+        full_article_available: false,
         source_article_id:,
         canonical_url: candidate.url,
         title: normalize_text(title),
         preview_text: normalize_text(preview_text),
         preview_html: sanitize_news_html(rewrite_fragment_urls(candidate.preview_html.to_s.presence || fragment.to_html, candidate.url)),
         body_text: body_text.to_s.strip.presence,
+        source_body_text: nil,
         body_html: strip_duplicate_leading_featured_image(body_html, [image_url, candidate.image_url]),
         image_url: normalize_url(image_url, candidate.url),
         published_at:,
@@ -306,9 +310,21 @@ module News
         meta_content(document, "og:title") ||
         candidate.title
       body_html = extract_body_html(document, candidate.url)
-      body_text = extract_body_text_from_html(body_html).presence || extract_body_text(document)
+      body_text = extract_body_text_from_html(body_html)
+      if excerpt_like_body?(body_html, body_text)
+        fallback_body_html = extract_body_html_from_document(document, candidate.url)
+        fallback_body_text = extract_body_text_from_html(fallback_body_html)
+
+        if richer_body?(fallback_body_html, fallback_body_text, body_html, body_text)
+          body_html = fallback_body_html
+          body_text = fallback_body_text
+        end
+      end
+
+      body_text = body_text.presence || extract_body_text(document)
       preview_html = extract_preview_html(document, config_value("article_preview_selector", "header p, .lead, .excerpt"), candidate.url)
       preview_text = preview_excerpt(body_text, candidate.preview_text)
+      body_text = body_text.presence || preview_text
       image_url = article_image_url(document, candidate)
       published_at = extract_datetime(document)
       source_article_id = candidate.source_article_id.presence ||
@@ -324,12 +340,14 @@ module News
         news_source: source,
         news_section: section,
         news_crawl_run: crawl_run,
+        full_article_available: !excerpt_like_body?(body_html, body_text),
         source_article_id:,
         canonical_url: article_url,
         title: normalize_text(title),
         preview_text: normalize_text(preview_text),
         preview_html: sanitize_news_html(rewrite_fragment_urls(preview_html.to_s, candidate.url)),
         body_text: body_text.to_s.strip.presence,
+        source_body_text: body_text.to_s.strip.presence,
         body_html: strip_duplicate_leading_featured_image(body_html, [image_url, candidate.image_url]),
         image_url: better_image_url(image_url, candidate.image_url),
         published_at:,
@@ -383,7 +401,7 @@ module News
         body_html: build_translated_body_html(translated_body_text, source_html: article_data[:body_html]),
         source_title: article_data[:title],
         source_preview_text: article_data[:preview_text],
-        source_body_text: article_data[:body_text],
+        source_body_text: article_data[:source_body_text],
         news_crawl_run: crawl_run,
         translated_at: Time.current,
         translation_model: translated.model.presence,
@@ -393,8 +411,9 @@ module News
           "source_title" => article_data[:title],
           "source_preview_text" => article_data[:preview_text],
           "source_preview_html" => article_data[:preview_html],
-          "source_body_text" => article_data[:body_text],
+          "source_body_text" => article_data[:source_body_text],
           "source_body_html" => article_data[:body_html],
+          "full_article_available" => article_data[:full_article_available],
           "translation_request_id" => translated.request_id,
           "translation_model" => translated.model,
           "translation_status" => translated.status,
@@ -407,7 +426,7 @@ module News
       article_data.merge(
         source_title: article_data[:title],
         source_preview_text: article_data[:preview_text],
-        source_body_text: article_data[:body_text],
+        source_body_text: article_data[:source_body_text],
         news_crawl_run: crawl_run,
         translated_at: nil,
         translation_model: nil,
@@ -417,8 +436,9 @@ module News
           "source_title" => article_data[:title],
           "source_preview_text" => article_data[:preview_text],
           "source_preview_html" => article_data[:preview_html],
-          "source_body_text" => article_data[:body_text],
+          "source_body_text" => article_data[:source_body_text],
           "source_body_html" => article_data[:body_html],
+          "full_article_available" => article_data[:full_article_available],
           "translation_status" => "fallback",
           "translation_error" => error.message,
           "translation_error_class" => error.class.name,
@@ -429,16 +449,14 @@ module News
     end
 
     def build_translated_body_html(body_text, source_html:)
-      News::Translation::HtmlBodyRenderer.new(source_html:).call(body_text)
+      rendered = News::Translation::HtmlBodyRenderer.new(source_html:).call(body_text)
+      rendered.presence || source_html.to_s
     end
 
     def strip_duplicate_leading_featured_image(html, image_urls)
       fragment = Nokogiri::HTML.fragment(html.to_s)
       first_block = fragment.children.find { |node| node.element? }
       return html if first_block.blank?
-
-      featured_class = first_block["class"].to_s
-      return html unless featured_class.match?(/\btd-post-featured-image\b|\b__NewsImage\b/)
 
       first_image = first_block.at_css("img[src]") || first_block.at_css("img[data-src]")
       return html if first_image.blank?
@@ -447,10 +465,43 @@ module News
       comparison_urls = image_urls.compact.map { |url| normalize_url(url, normalized_src) }.compact
       return html unless comparison_urls.include?(normalized_src)
 
+      return html unless image_only_block?(first_block)
+
       first_block.remove
       fragment.to_html
     rescue StandardError
       html
+    end
+
+    def image_only_block?(node)
+      return false unless node&.element?
+
+      text = normalize_text(node.text)
+      return true if text.blank?
+      return false if text.length > 120
+
+      node.css("img, figure").any? && node.css("p, li, blockquote, figcaption, pre, h1, h2, h3, h4, h5, h6").empty?
+    end
+
+    def excerpt_like_body?(body_html, body_text)
+      text = body_text.to_s.strip
+      return false if text.blank?
+
+      paragraph_count = Nokogiri::HTML.fragment(body_html.to_s).css("p, li, blockquote, figcaption, pre").length
+      text.length < 700 || paragraph_count <= 1 || text.match?(/\[\.\.\.\]|\.\.\.\z|…\z/)
+    end
+
+    def richer_body?(fallback_html, fallback_text, primary_html, primary_text)
+      fallback_text = fallback_text.to_s.strip
+      primary_text = primary_text.to_s.strip
+      return false if fallback_text.blank?
+      return true if primary_text.blank? && fallback_text.present?
+
+      fallback_paragraphs = Nokogiri::HTML.fragment(fallback_html.to_s).css("p, li, blockquote, figcaption, pre").length
+      primary_paragraphs = Nokogiri::HTML.fragment(primary_html.to_s).css("p, li, blockquote, figcaption, pre").length
+
+      fallback_text.length > [primary_text.length + 150, (primary_text.length * 1.4).to_i].max ||
+        fallback_paragraphs > primary_paragraphs
     end
 
     def find_existing_article(article_data)
@@ -493,6 +544,13 @@ module News
       paragraphs = [fragment.text] if paragraphs.empty?
       paragraphs = paragraphs.compact.map { |text| normalize_text(text) }.reject(&:blank?)
       filter_body_paragraphs(paragraphs).join("\n\n")
+    end
+
+    def extract_feed_text(fragment)
+      text = Nokogiri::HTML.fragment(fragment.to_html.to_s).text
+      normalize_text(text).presence
+    rescue StandardError
+      nil
     end
 
     def extract_body_html(document, base_url)
@@ -848,6 +906,13 @@ module News
 
     def feed_item_preview(node)
       extract_text(node, "description, summary")
+    end
+
+    def feed_item_preview_text(node)
+      raw_preview = node.at_css("description, summary, content")&.inner_html.to_s.presence || feed_item_preview(node)
+      return if raw_preview.blank?
+
+      extract_feed_text(Nokogiri::HTML.fragment(raw_preview)) || normalize_text(raw_preview)
     end
 
     def feed_item_preview_html(node)

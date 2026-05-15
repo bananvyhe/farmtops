@@ -64,6 +64,7 @@ class NewsIdentifyPendingGamesJobTest < ActiveSupport::TestCase
       fetched_at: Time.current,
       content_hash: "hash-1",
       raw_payload: {},
+      full_article_available: true,
       source_title: "Article 1",
       source_preview_text: "Preview 1",
       source_body_text: "Body 1",
@@ -111,6 +112,7 @@ class NewsIdentifyPendingGamesJobTest < ActiveSupport::TestCase
       fetched_at: Time.current,
       content_hash: "hash-old",
       raw_payload: {},
+      full_article_available: true,
       source_title: "Old Article",
       source_preview_text: "Old Preview",
       source_body_text: "Old Body",
@@ -147,5 +149,41 @@ class NewsIdentifyPendingGamesJobTest < ActiveSupport::TestCase
     end
 
     assert lock_manager.released
+  end
+
+  test "ignores articles without a full article" do
+    @section.news_articles.delete_all
+    feed_only_article = @section.news_articles.create!(
+      news_source: @section.news_source,
+      news_section: @section,
+      news_crawl_run: @crawl_run,
+      source_article_id: "article-feed-only",
+      canonical_url: "https://example.com/news/feed-only",
+      title: "Feed-only Article",
+      preview_text: "Preview only",
+      body_text: "Preview only",
+      body_html: "<p>Preview only</p>",
+      fetched_at: Time.current,
+      content_hash: "hash-feed-only",
+      raw_payload: {},
+      full_article_available: false,
+      source_title: "Feed-only Article",
+      source_preview_text: "Preview only",
+      source_body_text: nil,
+      translation_status: :translated,
+      translation_target_locale: "ru",
+      translation_source_locale: "en"
+    )
+
+    lock_manager = FakeLockManager.new
+
+    with_stubbed_constant(News::GameIdentification::LockManager, :new, -> { lock_manager }) do
+      with_stubbed_constant(NewsIdentifyGameJob, :perform_async, ->(*_) { flunk("should not enqueue") }) do
+        NewsIdentifyPendingGamesJob.new.perform
+      end
+    end
+
+    assert lock_manager.released
+    assert_not NewsArticle.pending_game_identification.exists?
   end
 end

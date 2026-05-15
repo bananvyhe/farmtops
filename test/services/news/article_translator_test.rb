@@ -66,24 +66,24 @@ class News::ArticleTranslatorTest < ActiveSupport::TestCase
     )
   end
 
-  def build_article(body_html: "<p>Body one</p><p>Body two</p>")
+  def build_article(body_html: "<p>Body one</p><p>Body two</p>", body_text: "Body one\n\nBody two", preview_html: "<p>Preview</p>", preview_text: "Preview")
     @section.news_articles.create!(
       news_source: @source,
       news_section: @section,
       source_article_id: "article-1",
       canonical_url: "https://example.com/news/1",
       title: "Hello",
-      preview_text: "Preview",
-      preview_html: "<p>Preview</p>",
-      body_text: "Body one\n\nBody two",
+      preview_text: preview_text,
+      preview_html: preview_html,
+      body_text: body_text,
       body_html: body_html,
       image_url: "https://example.com/image.jpg",
       fetched_at: Time.current,
       content_hash: "hash-1",
       raw_payload: {},
       source_title: "Hello",
-      source_preview_text: "Preview",
-      source_body_text: "Body one\n\nBody two",
+      source_preview_text: preview_text,
+      source_body_text: body_text,
       translation_status: :pending,
       translation_target_locale: "ru",
       translation_source_locale: "en"
@@ -136,6 +136,37 @@ class News::ArticleTranslatorTest < ActiveSupport::TestCase
     assert_equal ["Индустрия", "ММОРПГ"], translated.news_tags.order(:name).map(&:name)
     assert_equal ["Industry", "MMORPG"], translated.raw_payload["source_tag_names"]
     assert_equal ["Индустрия", "ММОРПГ"], translated.raw_payload["translated_tag_names"]
+  end
+
+  test "keeps preview html when translated body text is empty" do
+    article = build_article(
+      body_html: "",
+      body_text: "",
+      preview_html: "<div><p>Preview one</p></div>",
+      preview_text: "Preview one"
+    )
+
+    result = News::Translation::Result.new(
+      request_id: "req-empty-body",
+      translated_title: "Привет",
+      translated_preview_text: "Превью",
+      translated_body_text: "",
+      model: "fake-translator",
+      latency_ms: 10,
+      status: "ok",
+      error: nil
+    )
+
+    translated = News::ArticleTranslator.new(
+      article:,
+      translator: FakeTranslator.new(result:)
+    ).call
+
+    assert_equal "translated", translated.translation_status
+    assert_equal "Привет", translated.title
+    assert_equal "Превью", translated.preview_text
+    assert_equal "", translated.body_text
+    assert_includes translated.body_html, "Preview one"
   end
 
   test "preserves embedded media blocks in translated body html" do

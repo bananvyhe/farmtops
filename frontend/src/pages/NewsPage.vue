@@ -640,9 +640,9 @@ onBeforeUnmount(() => {
           <div class="news-card__meta">
             <NewsGameActions
               :article="article"
-            @update-bookmark="({ gameId, bookmarked, bookmarks_count, game }) => syncGameBookmarkInArticles(gameId, bookmarked, bookmarks_count, game)"
-          />
-             <v-chip size="small" variant="outlined">{{ article.section_name }}</v-chip>
+              @update-bookmark="({ gameId, bookmarked, bookmarks_count, game }) => syncGameBookmarkInArticles(gameId, bookmarked, bookmarks_count, game)"
+            />
+            <v-chip size="small" variant="outlined">{{ article.section_name }}</v-chip>
             <v-chip
               v-for="tag in article.tags || []"
               :key="tag.id"
@@ -654,6 +654,7 @@ onBeforeUnmount(() => {
               {{ tag.name }}
             </v-chip>
             <span class="news-card__time">{{ formatDate(article.published_at || article.fetched_at) }}</span>
+            <span v-if="article.full_article_available === false" class="news-card__badge news-card__badge--excerpt">Анонс</span>
             <span v-if="isUnread(article)" class="news-card__badge">Новая</span>
           </div>
 

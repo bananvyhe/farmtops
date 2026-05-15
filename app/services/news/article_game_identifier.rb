@@ -10,6 +10,7 @@ module News
 
     def call(request_id: SecureRandom.uuid)
       return article if article.news_article_game.present?
+      return article if article.full_article_available? == false
       return article if source_body_text.blank?
 
       result = client.identify_game(
@@ -31,7 +32,7 @@ module News
     attr_reader :article, :client, :logger
 
     def source_body_text
-      article.source_body_text.presence || article.body_text.to_s
+      article.source_body_text.presence
     end
 
     def source_title

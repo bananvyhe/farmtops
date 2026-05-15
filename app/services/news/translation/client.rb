@@ -134,7 +134,6 @@ module News
       def validate_result!(result)
         raise Error, result.error if result.status != "ok" && result.error.present?
         raise Error, "Translator response missing translated_title" if result.translated_title.blank?
-        raise Error, "Translator response missing translated_body_text" if result.translated_body_text.blank?
       end
 
       def logger

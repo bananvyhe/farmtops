@@ -275,6 +275,25 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
     refute_includes body_html, "hero.jpg"
   end
 
+  test "removes a duplicated leading image even without a featured image class" do
+    @article.update!(
+      image_url: "https://example.com/images/hero.jpg",
+      body_html: <<~HTML
+        <div>
+          <img src="https://example.com/images/hero.jpg" width="1200" height="675">
+        </div>
+        <p>Main body paragraph.</p>
+      HTML
+    )
+
+    get "/api/news/#{@article.id}"
+
+    assert_response :success
+    body_html = json_response.dig("article", "body_html")
+    assert_includes body_html, "Main body paragraph."
+    refute_includes body_html, "hero.jpg"
+  end
+
   test "rewrites twitch embed parents to the current host" do
     @article.update!(
       body_html: <<~HTML
