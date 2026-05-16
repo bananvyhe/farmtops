@@ -12,4 +12,17 @@ class NewsCrawlSectionJobTest < ActiveSupport::TestCase
       ENV["NEWS_CRAWL_ARTICLES_PER_SECTION"] = previous_limit
     end
   end
+
+  test "builds the polite sleeper from the source delay range" do
+    source = NewsSource.create!(
+      name: "Example",
+      base_url: "https://example.com",
+      active: true,
+      crawl_delay_min_seconds: 1,
+      crawl_delay_max_seconds: 3
+    )
+
+    sleeper = NewsCrawlSectionJob.new.send(:crawl_sleeper, source)
+    assert_instance_of News::PoliteSleeper, sleeper
+  end
 end

@@ -19,6 +19,7 @@ class NewsCrawlSectionJob
 
     result = News::SectionCrawler.new(
       section:,
+      sleeper: crawl_sleeper(section.news_source),
       crawl_run: run,
       max_articles: articles_per_section,
       max_pages: pages_per_section
@@ -60,5 +61,12 @@ class NewsCrawlSectionJob
     return override.to_i if override.present? && override.to_i > 0
 
     1
+  end
+
+  def crawl_sleeper(source)
+    News::PoliteSleeper.new(
+      min_seconds: source.crawl_delay_min_seconds,
+      max_seconds: source.crawl_delay_max_seconds
+    )
   end
 end
