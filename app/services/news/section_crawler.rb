@@ -16,7 +16,8 @@ module News
 
     def initialize(section:, client: nil, sleeper: PoliteSleeper.new, logger: Rails.logger,
       max_articles: DEFAULT_MAX_ARTICLES, max_pages: DEFAULT_MAX_PAGES, max_retries: DEFAULT_MAX_RETRIES,
-      translator: nil, source_lang: DEFAULT_SOURCE_LANG, target_lang: DEFAULT_TARGET_LANG, crawl_run: nil)
+      translator: nil, source_lang: DEFAULT_SOURCE_LANG, target_lang: DEFAULT_TARGET_LANG, crawl_run: nil,
+      crawl_throttle: nil)
       @section = section
       @source = section.news_source
       @client = client || HttpClient.new(
@@ -32,6 +33,7 @@ module News
       @source_lang = source_lang
       @target_lang = target_lang
       @crawl_run = crawl_run
+      @crawl_throttle = crawl_throttle || CrawlThrottle.new
     end
 
     def call
@@ -40,31 +42,36 @@ module News
       page_url = listing_page_url
       visited = 0
 
-      while page_url.present? && visited < max_pages && result.articles_found < max_articles
-        document = fetch_document(page_url, xml: feed_mode?)
-        result.pages_visited += 1
-        visited += 1
+      begin
+        while page_url.present? && visited < max_pages && result.articles_found < max_articles
+          document = fetch_document(page_url, xml: feed_mode?)
+          result.pages_visited += 1
+          visited += 1
 
-        candidates = extract_listing_items(document, page_url)
+          candidates = extract_listing_items(document, page_url)
 
-        candidates.each do |candidate|
-          break if result.articles_found >= max_articles
+          candidates.each do |candidate|
+            break if result.articles_found >= max_articles
 
-          result.articles_found += 1
+            result.articles_found += 1
 
-          save_result = crawl_article(candidate, page_url, seen_keys)
-          if save_result[:saved]
-            result.articles_saved += 1
-          else
-            result.articles_skipped += 1
-            result.errors << save_result[:error] if save_result[:error].present?
+            save_result = crawl_article(candidate, page_url, seen_keys)
+            if save_result[:saved]
+              result.articles_saved += 1
+            else
+              result.articles_skipped += 1
+              result.errors << save_result[:error] if save_result[:error].present?
+            end
           end
+
+          next_page = next_page_url(document, page_url, article_count: candidates.size)
+          break if next_page.blank? || next_page == page_url
+
+          page_url = next_page
         end
-
-        next_page = next_page_url(document, page_url, article_count: candidates.size)
-        break if next_page.blank? || next_page == page_url
-
-        page_url = next_page
+      rescue News::HttpClient::Error => e
+        result.errors << "#{page_url}: #{e.class} #{e.message}"
+        block_source!(page_url, e) if source_blocking_error?(e)
       end
 
       section.update_column(:last_crawled_at, Time.current)
@@ -74,7 +81,7 @@ module News
     private
 
     attr_reader :section, :source, :client, :sleeper, :logger, :max_articles, :max_pages, :max_retries,
-      :translator, :source_lang, :target_lang, :crawl_run
+      :translator, :source_lang, :target_lang, :crawl_run, :crawl_throttle
 
     Candidate = Struct.new(:url, :title, :preview_text, :preview_html, :image_url, :source_article_id, :raw_payload, keyword_init: true)
 
@@ -90,12 +97,40 @@ module News
         attempts += 1
         yield
       rescue StandardError => e
+        if source_blocking_error?(e)
+          block_source!(url, e)
+          raise e
+        end
+
+        raise unless retryable_error?(e)
         raise if attempts >= max_retries
 
         logger.warn("[News::SectionCrawler] retrying #{url}: #{e.class} #{e.message}")
         sleep((attempts * 0.4) + rand * 0.4)
         retry
       end
+    end
+
+    def retryable_error?(error)
+      return true if error.is_a?(SocketError) || error.is_a?(SystemCallError) || error.is_a?(Timeout::Error)
+
+      return false unless error.is_a?(News::HttpClient::Error)
+
+      status = error.status.to_i
+      status >= 500 && status < 600
+    end
+
+    def source_blocking_error?(error)
+      return false unless error.is_a?(News::HttpClient::Error)
+
+      [403, 429].include?(error.status.to_i)
+    end
+
+    def block_source!(url, error)
+      crawl_throttle.block!(source)
+      logger.warn("[News::SectionCrawler] blocking source #{source.name} after #{error.class} #{error.message} at #{url}")
+    rescue StandardError => block_error
+      logger.warn("[News::SectionCrawler] failed to block source #{source.name}: #{block_error.class} #{block_error.message}")
     end
 
     def sleep_between_requests
@@ -181,6 +216,10 @@ module News
           article_document = fetch_document(candidate.url)
           article_data = extract_article(article_document, candidate, page_url)
           return save_article(article_data, seen_keys, candidate)
+        rescue News::HttpClient::Error => e
+          raise if source_blocking_error?(e)
+
+          logger.warn("[News::SectionCrawler] article page fallback for #{candidate.url}: #{e.class} #{e.message}")
         rescue StandardError => e
           logger.warn("[News::SectionCrawler] article page fallback for #{candidate.url}: #{e.class} #{e.message}")
         end
@@ -192,6 +231,11 @@ module News
       article_document = fetch_document(candidate.url)
       article_data = extract_article(article_document, candidate, page_url)
       save_article(article_data, seen_keys, candidate)
+    rescue News::HttpClient::Error => e
+      raise if source_blocking_error?(e)
+
+      logger.warn("[News::SectionCrawler] skipped #{candidate.url}: #{e.class} #{e.message}")
+      { saved: false, error: "#{candidate.url}: #{e.class} #{e.message}" }
     end
 
     def save_article(article_data, seen_keys, candidate)

@@ -11,6 +11,42 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     end
   end
 
+  class TrackingClient
+    attr_reader :calls
+
+    def initialize(pages)
+      @pages = pages
+      @calls = Hash.new(0)
+    end
+
+    def fetch(url)
+      @calls[url] += 1
+      value = @pages.fetch(url)
+      raise value if value.is_a?(Exception)
+
+      value
+    end
+  end
+
+  class FakeThrottle
+    attr_reader :blocked_sources, :blocked_calls
+
+    def initialize
+      @blocked_sources = []
+      @blocked_calls = []
+    end
+
+    def block!(source)
+      @blocked_sources << source.id
+      true
+    end
+
+    def blocked?(source)
+      @blocked_calls << source.id
+      false
+    end
+  end
+
   class NullSleeper
     def pause!
     end
@@ -382,6 +418,37 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     refute_match(/\A<div>/, article.preview_text)
     assert_equal ["Industry", "MMORPG"], article.news_tags.order(:name).map(&:name)
     assert_equal ["Industry", "MMORPG"], article.raw_payload["article_tag_names"]
+  end
+
+  test "blocks the source and does not retry when the article page returns 403" do
+    throttle = FakeThrottle.new
+    client = TrackingClient.new(
+      "https://example.com/news" => listing_page(
+        [
+          { title: "Blocked", href: "/news/blocked", preview: "Preview blocked" }
+        ]
+      ),
+      "https://example.com/news/blocked" => News::HttpClient::Error.new(
+        "HTTP 403 for https://example.com/news/blocked",
+        status: 403,
+        url: "https://example.com/news/blocked"
+      )
+    )
+
+    result = News::SectionCrawler.new(
+      section: @section,
+      client: client,
+      sleeper: NullSleeper.new,
+      max_articles: 12,
+      max_pages: 5,
+      max_retries: 3,
+      crawl_throttle: throttle
+    ).call
+
+    assert_equal 1, client.calls["https://example.com/news/blocked"]
+    assert_equal [@source.id], throttle.blocked_sources
+    assert_equal 0, result.articles_saved
+    assert_operator result.errors.join(" "), :include?, "HTTP 403"
   end
 
   test "uses the full article page for feed sources when it is richer than the feed excerpt" do

@@ -6,6 +6,13 @@ class NewsCrawlSectionJob
   def perform(news_section_id)
     section = NewsSection.find_by(id: news_section_id)
     return unless section&.active? && section.news_source.active? && !section.news_source.blocked_source?
+    return if crawl_throttle.blocked?(section.news_source)
+
+    lock_token = source_lock_manager.acquire(section.news_source)
+    unless lock_token
+      self.class.perform_in(rand(180..420), news_section_id)
+      return
+    end
 
     run = section.news_crawl_runs.create!(
       news_source: section.news_source,
@@ -45,6 +52,8 @@ class NewsCrawlSectionJob
       crawl_errors: Array(run&.crawl_errors) + [{ message: e.message, class: e.class.name }]
     )
     raise
+  ensure
+    source_lock_manager.release(section.news_source, lock_token) if section&.news_source.present? && lock_token.present?
   end
 
   private
@@ -68,5 +77,13 @@ class NewsCrawlSectionJob
       min_seconds: source.crawl_delay_min_seconds,
       max_seconds: source.crawl_delay_max_seconds
     )
+  end
+
+  def source_lock_manager
+    @source_lock_manager ||= News::SourceCrawlLockManager.new
+  end
+
+  def crawl_throttle
+    @crawl_throttle ||= News::CrawlThrottle.new
   end
 end

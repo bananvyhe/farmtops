@@ -29,9 +29,20 @@ class NewsCrawlSourcesJobTest < ActiveSupport::TestCase
     )
 
     queued = []
+    throttle = Class.new do
+      def initialize(blocked_source)
+        @blocked_source = blocked_source
+      end
 
-    NewsCrawlSectionJob.stub(:perform_async, ->(section_id) { queued << section_id; "jid-1" }) do
-      NewsCrawlSourcesJob.new.perform
+      def blocked?(source)
+        source.id == @blocked_source.id
+      end
+    end.new(blocked_source)
+
+    News::CrawlThrottle.stub(:new, -> { throttle }) do
+      NewsCrawlSectionJob.stub(:perform_async, ->(section_id) { queued << section_id; "jid-1" }) do
+        NewsCrawlSourcesJob.new.perform
+      end
     end
 
     assert_equal [allowed_section.id], queued
