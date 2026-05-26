@@ -468,7 +468,7 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
     assert_equal false, json_response.dig("game", "can_create_shard")
     assert_equal 0, json_response.dig("game", "bookmarks_count")
     assert_nil ShardLayerMembership.find_by(shard_id: shard_id, user_id: user.id)
-    assert_nil Shard.find_by(id: shard_id)
+    assert_not_nil Shard.find_by(id: shard_id)
 
     post "/api/news/#{@article.id}/bookmark_game",
       headers: { "X-CSRF-Token" => csrf_token }
@@ -478,7 +478,7 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
     assert_equal true, json_response.dig("game", "can_create_shard")
     assert_equal 1, json_response.dig("game", "bookmarks_count")
     recreated_shard = Shard.find_by!(game_id: @game.id)
-    refute_equal shard_id, recreated_shard.id
+    assert_equal shard_id, recreated_shard.id
     assert_equal true, ShardLayerMembership.exists?(shard_id: recreated_shard.id, user_id: user.id)
 
     get "/api/news/#{@article.id}"

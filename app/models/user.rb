@@ -234,7 +234,7 @@ class User < ApplicationRecord
   end
 
   def current_local_date_for(time_zone)
-    Time.find_zone!(time_zone).now.to_date
+    safe_time_zone(time_zone).now.to_date
   end
 
   def current_prime_cycle_slot_local(time)
@@ -244,7 +244,7 @@ class User < ApplicationRecord
   end
 
   def convert_legacy_prime_slots_to_cycle_local(slots, time_zone)
-    zone = Time.find_zone!(time_zone)
+    zone = safe_time_zone(time_zone)
 
     normalized_prime_slots(slots).map do |slot|
       utc_time = REFERENCE_UTC_MONDAY + slot.hours
@@ -255,7 +255,7 @@ class User < ApplicationRecord
   end
 
   def preview_weekly_slots_from_cycle
-    zone = Time.find_zone!(prime_time_zone)
+    zone = safe_time_zone(prime_time_zone)
 
     prime_cycle_slots_local.filter_map do |slot|
       day_index = slot / 24
@@ -306,5 +306,9 @@ class User < ApplicationRecord
     TZInfo::Timezone.get(prime_time_zone)
   rescue TZInfo::InvalidTimezoneIdentifier
     errors.add(:prime_time_zone, "is invalid")
+  end
+
+  def safe_time_zone(time_zone)
+    Time.find_zone(time_zone) || Time.zone
   end
 end

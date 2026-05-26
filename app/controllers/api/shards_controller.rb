@@ -56,17 +56,12 @@ module Api
       end
 
       payload = world_payload(@shard).merge(left: true)
-      shard_deleted = false
       Shard.transaction do
         membership.destroy!
-        if @shard.layer_memberships.none?
-          @shard.destroy!
-          shard_deleted = true
-        end
       end
 
-      broadcast_world_snapshot(@shard, payload.except(:left)) unless shard_deleted
-      render json: payload.merge(shard_deleted: shard_deleted)
+      broadcast_world_snapshot(@shard, payload.except(:left))
+      render json: payload.merge(shard_deleted: false)
     end
 
     private

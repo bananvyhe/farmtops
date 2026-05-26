@@ -27,6 +27,7 @@ Rails.application.routes.draw do
     resource :registration, only: :create
     resource :profile, only: %i[show update] do
       get :nickname_check, on: :collection
+      get :prime_overlaps, on: :collection
     end
     resources :shards, only: %i[index create] do
       get :world, on: :member

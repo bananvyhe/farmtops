@@ -666,6 +666,7 @@ h3 {
 }
 
 .prime-grid__cell {
+  position: relative;
   min-height: 2.75rem;
   border-radius: 6px;
   border: 3px solid rgba(255, 255, 255, 0.06);
@@ -713,6 +714,90 @@ button.prime-grid__cell--active:hover {
   background: linear-gradient(180deg, rgba(255, 191, 138, 0.24), rgba(199, 89, 35, 0.18));
   border-color: rgba(255, 222, 194, 0.22);
   box-shadow: inset 0 1px 0 rgba(255, 248, 240, 0.12);
+}
+
+.prime-grid__cell--overlap {
+  border-color: rgba(112, 236, 171, 0.62);
+  background:
+    linear-gradient(180deg, rgba(112, 236, 171, var(--prime-overlap-alpha, 0.34)), rgba(22, 141, 91, var(--prime-overlap-alpha, 0.34))),
+    linear-gradient(180deg, rgba(255, 191, 138, 0.18), rgba(199, 89, 35, 0.12));
+  box-shadow:
+    inset 0 1px 0 rgba(234, 255, 244, 0.24),
+    0 0 0 1px rgba(112, 236, 171, 0.2),
+    0 8px 18px rgba(22, 141, 91, 0.18);
+}
+
+.prime-grid__overlap-count {
+  position: absolute;
+  right: 0.22rem;
+  top: 0.18rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.05rem;
+  height: 1.05rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: rgba(4, 20, 13, 0.78);
+  color: #d9ffe9;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.prime-grid__overlap-popover {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.45rem);
+  z-index: 20;
+  display: none;
+  min-width: 10rem;
+  max-width: 14rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(112, 236, 171, 0.36);
+  border-radius: 10px;
+  background: rgba(6, 12, 11, 0.96);
+  color: var(--farmspot-text-on-dark);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.34);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.prime-grid__overlap-popover::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 0;
+  height: 0;
+  border-left: 0.38rem solid transparent;
+  border-right: 0.38rem solid transparent;
+  border-top: 0.38rem solid rgba(6, 12, 11, 0.96);
+  transform: translateX(-50%);
+}
+
+.prime-grid__overlap-popover strong,
+.prime-grid__overlap-popover span {
+  display: block;
+}
+
+.prime-grid__overlap-popover strong {
+  margin-bottom: 0.35rem;
+  color: #d9ffe9;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.prime-grid__overlap-popover span {
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.prime-grid__cell--overlap:hover .prime-grid__overlap-popover,
+.prime-grid__cell--overlap:focus-within .prime-grid__overlap-popover {
+  display: block;
 }
 
 .prime-grid-pad {

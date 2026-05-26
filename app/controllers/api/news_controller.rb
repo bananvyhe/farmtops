@@ -119,9 +119,12 @@ module Api
     end
 
     def filtered_articles(scope)
+      sort_sql = "COALESCE(news_articles.published_at, news_articles.fetched_at, news_articles.created_at)"
       scope = scope.joins(:news_article_tags).where(news_article_tags: { news_tag_id: selected_tag_ids }) if selected_tag_ids.any?
       scope = scope.joins(:news_article_game).where(news_article_games: { game_id: selected_game_id }) if selected_game_id.present?
-      scope = scope.distinct if selected_tag_ids.any?
+      if selected_tag_ids.any?
+        scope = scope.select("news_articles.*, #{sort_sql} AS sort_timestamp").distinct.reorder(Arel.sql("sort_timestamp DESC"), id: :desc)
+      end
       scope = apply_cursor(scope) if params[:cursor].present?
       scope
     end
@@ -156,10 +159,7 @@ module Api
       shard = Shard.find_by(game_id: game.id)
       return if shard.blank?
 
-      Shard.transaction do
-        shard.layer_memberships.where(user_id: current_user.id).destroy_all
-        shard.destroy! if shard.layer_memberships.reload.none?
-      end
+      shard.layer_memberships.where(user_id: current_user.id).destroy_all
     end
 
     def join_news_game_shard!(game)
