@@ -7,7 +7,7 @@ module Shards
     end
 
     def self.prune_stale!(shard:, threshold: ShardLayerMembership::PRESENCE_TTL.ago)
-      shard.layer_memberships.stale(threshold).delete_all
+      shard.layer_memberships.stale(threshold)
     end
   end
 end

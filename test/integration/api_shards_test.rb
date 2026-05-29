@@ -137,7 +137,7 @@ class ApiShardsTest < ActionDispatch::IntegrationTest
     assert_not_nil Shard.find_by(id: shard_id)
   end
 
-  test "stale memberships are pruned from shard world" do
+  test "stale memberships stay visible in the shard but do not count as active" do
     game = Game.create!(name: "Perfect World", slug: "perfect-world")
 
     owner = open_session
@@ -161,6 +161,7 @@ class ApiShardsTest < ActionDispatch::IntegrationTest
     owner.get "/api/shards/#{shard_id}/world"
     assert_equal 200, owner.response.status
     assert_equal 1, owner.response.parsed_body.dig("layers", 0, "occupancy")
-    assert_nil ShardLayerMembership.find_by(id: membership.id)
+    assert_not_nil ShardLayerMembership.find_by(id: membership.id)
+    assert_equal 1, owner.response.parsed_body.dig("layers", 0, "active_occupancy")
   end
 end

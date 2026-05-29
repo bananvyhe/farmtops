@@ -299,7 +299,7 @@ module Shards
       state["progress"] = {
         "layer_index" => @layer.layer_index,
         "occupancy" => active_count,
-        "members_count" => @layer.memberships.count,
+        "members_count" => active_count,
         "capacity" => @layer.capacity,
         "energy_flow" => active_count.positive? ? 40 + active_count * 7 : 0,
         "elapsed_hours" => elapsed_hours.round(2),
@@ -341,7 +341,7 @@ module Shards
         progress: state["progress"] || {
           "layer_index" => @layer.layer_index,
           "occupancy" => active_members.size,
-          "members_count" => members.size,
+          "members_count" => active_members.size,
           "capacity" => @layer.capacity,
           "energy_flow" => active_members.any? ? 40 + active_members.size * 7 : 0,
           "elapsed_hours" => 0,

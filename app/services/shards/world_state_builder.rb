@@ -58,9 +58,9 @@ module Shards
           layer_index: layer.layer_index,
           status: layer.status,
           capacity: layer.capacity,
-          occupancy: layer.occupancy,
+          occupancy: memberships.size,
           active_occupancy: active_members_count,
-          available_capacity: layer.available_capacity,
+          available_capacity: [layer.capacity - memberships.size, 0].max,
           members: memberships.map do |membership|
             {
               id: membership.user_id,
