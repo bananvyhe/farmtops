@@ -48,58 +48,31 @@ module Api
     end
 
     def prime_overlap_payload
-      horizon_days = [[params[:days].to_i, 1].max, User::PRIME_CYCLE_DAYS_RANGE.max].min
-      horizon_days = User::PRIME_CYCLE_DAYS_RANGE.max if params[:days].blank?
-      zone = Time.find_zone(current_user.prime_time_zone) || Time.zone
-      local_start = zone.now.beginning_of_day
-      shards = prime_overlap_shards.to_a
-      shards_by_id = shards.index_by(&:id)
-      cells = {}
+      slots = current_user.prime_cycle_slots_local
+      return [] if slots.empty?
 
-      users_by_shard = shards.each_with_object({}) do |shard, result|
-        result[shard.id] = shard.layer_memberships.map(&:user).uniq { |user| user.id }.reject { |user| user.id == current_user.id }
-      end
-
-      horizon_days.times do |day_offset|
-        HOURS_IN_DAY.times do |hour|
-          local_time = local_start + day_offset.days + hour.hours
-          utc_time = local_time.utc
-          next unless current_user.prime_schedule_active?(utc_time)
-
-          matched_users = []
-          matched_shards = []
-
-          users_by_shard.each do |shard_id, users|
-            shard_matches = users.select { |user| user.prime_schedule_active?(utc_time) }
-            next if shard_matches.empty?
-
-            matched_users.concat(shard_matches)
-            matched_shards << shards_by_id[shard_id]
-          end
-
-          unique_users = matched_users.uniq { |user| user.id }
-          next if unique_users.empty?
-
-          cells[[day_offset, hour]] = {
-            day_offset:,
-            hour:,
-            users_count: unique_users.size,
-            users: unique_users.sort_by(&:nickname).map { |user| { id: user.id, nickname: user.nickname } },
-            shards: matched_shards.compact.uniq { |shard| shard.id }.map { |shard| { id: shard.id, name: shard.name, game_name: shard.game.name } }
-          }
+      candidates = User.where.not(id: current_user.id).with_prime_cycle_overlap(slots).to_a
+      users_by_slot = Hash.new { |hash, slot| hash[slot] = [] }
+      candidates.each do |user|
+        user.prime_cycle_slots_local.each do |slot|
+          users_by_slot[slot] << user if slots.include?(slot)
         end
       end
 
-      cells.values.sort_by { |cell| [cell[:day_offset], cell[:hour]] }
+      slots.filter_map do |slot|
+        users = users_by_slot[slot].uniq { |user| user.id }
+        next if users.empty?
+
+        {
+          slot_index: slot,
+          day_index: slot / HOURS_IN_DAY,
+          hour: slot % HOURS_IN_DAY,
+          users_count: users.size,
+          users: users.sort_by(&:nickname).map { |user| { id: user.id, nickname: user.nickname } }
+        }
+      end
     end
 
     HOURS_IN_DAY = 24
-
-    def prime_overlap_shards
-      scope = Shard.visible_to_user(current_user).active.includes(:game, layer_memberships: :user)
-      return scope.where(id: params[:shard_id]) if params[:shard_id].present?
-
-      scope
-    end
   end
 end

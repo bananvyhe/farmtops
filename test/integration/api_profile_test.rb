@@ -117,7 +117,7 @@ class ApiProfileTest < ActionDispatch::IntegrationTest
     assert_equal [0, 1, 24, 25, 48, 50], user.prime_cycle_slots_local
   end
 
-  test "returns prime overlaps with users on selected shard" do
+  test "returns prime overlaps from saved prime cycle slots in the database" do
     current_user = User.create!(
       email: "prime-overlap-current@example.com",
       password: "Password123!",
@@ -127,7 +127,7 @@ class ApiProfileTest < ActionDispatch::IntegrationTest
       nickname: "overlap_me",
       prime_time_zone: "UTC",
       prime_cycle_days: 1,
-      prime_cycle_slots_local: [12]
+      prime_cycle_slots_local: [12, 13]
     )
     other_user = User.create!(
       email: "prime-overlap-other@example.com",
@@ -140,6 +140,17 @@ class ApiProfileTest < ActionDispatch::IntegrationTest
       prime_cycle_days: 1,
       prime_cycle_slots_local: [12]
     )
+    second_user = User.create!(
+      email: "prime-overlap-second@example.com",
+      password: "Password123!",
+      password_confirmation: "Password123!",
+      role: :client,
+      active: true,
+      nickname: "overlap_second",
+      prime_time_zone: "UTC",
+      prime_cycle_days: 1,
+      prime_cycle_slots_local: [12, 13]
+    )
     quiet_user = User.create!(
       email: "prime-overlap-quiet@example.com",
       password: "Password123!",
@@ -151,35 +162,23 @@ class ApiProfileTest < ActionDispatch::IntegrationTest
       prime_cycle_days: 1,
       prime_cycle_slots_local: [18]
     )
-    game = Game.create!(name: "Prime Overlap Game", slug: "prime-overlap-game")
-    shard = Shard.create!(
-      user: current_user,
-      game:,
-      name: "Prime shard",
-      world_seed: "primeoverlapseed",
-      status: :active
-    )
-    layer = shard.default_layer
-    [current_user, other_user, quiet_user].each do |user|
-      ShardLayerMembership.create!(
-        shard:,
-        shard_layer: layer,
-        user:,
-        joined_at: Time.current,
-        last_seen_at: Time.current
-      )
-    end
 
     login_as(current_user)
 
-    get "/api/profile/prime_overlaps", params: { shard_id: shard.id, days: 2 }
+    get "/api/profile/prime_overlaps"
 
     assert_response :success
     overlaps = json_response.fetch("overlaps")
     assert_equal 2, overlaps.size
-    assert overlaps.all? { |overlap| overlap["hour"] == 12 }
-    assert overlaps.all? { |overlap| overlap["users_count"] == 1 }
-    assert overlaps.all? { |overlap| overlap.fetch("users").pluck("nickname") == ["overlap_friend"] }
+    assert_equal [12, 13], overlaps.map { |overlap| overlap["hour"] }
+    assert_equal 12, overlaps.first["hour"]
+    assert_equal 12, overlaps.first["slot_index"]
+    assert_equal 2, overlaps.first["users_count"]
+    assert_equal ["overlap_friend", "overlap_second"], overlaps.first.fetch("users").pluck("nickname")
+    assert_equal 13, overlaps.second["hour"]
+    assert_equal 13, overlaps.second["slot_index"]
+    assert_equal 1, overlaps.second["users_count"]
+    assert_equal ["overlap_second"], overlaps.second.fetch("users").pluck("nickname")
   end
 
   test "rejects invalid timezone values" do

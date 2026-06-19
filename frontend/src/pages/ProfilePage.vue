@@ -283,15 +283,10 @@ async function loadShards() {
 }
 
 async function loadPrimeOverlaps() {
-  if (!activeShardId.value) {
-    primeOverlaps.value = []
-    return
-  }
-
   loadingPrimeOverlaps.value = true
 
   try {
-    const data = await api.primeOverlaps({ shard_id: activeShardId.value, days: MAX_CYCLE_DAYS })
+    const data = await api.primeOverlaps()
     primeOverlaps.value = data.overlaps || []
   } catch (err) {
     error.value = err.message
@@ -467,31 +462,47 @@ const activeShard = computed(() => shards.value.find((shard) => String(shard.id)
 const primeOverlapMap = computed(() => {
   const map = new Map()
   primeOverlaps.value.forEach((overlap) => {
-    map.set(`${Number(overlap.day_offset)}:${Number(overlap.hour)}`, overlap)
+    map.set(Number(overlap.slot_index), overlap)
   })
   return map
 })
+
+const primeOverlapCount = computed(() => primeOverlaps.value.length)
 
 const maxPrimeOverlapCount = computed(() => {
   return primeOverlaps.value.reduce((max, overlap) => Math.max(max, Number(overlap.users_count) || 0), 0)
 })
 
 function primeOverlapFor(dayOffset, hour) {
-  return primeOverlapMap.value.get(`${Number(dayOffset)}:${Number(hour)}`) || null
+  return primeOverlapMap.value.get(cycleSlotIndex(dayOffset, hour)) || null
 }
 
 function primeOverlapStyle(overlap) {
   if (!overlap) return null
   const count = Number(overlap.users_count) || 1
   const max = Math.max(maxPrimeOverlapCount.value, 1)
-  const strength = Math.min(0.74, 0.22 + (count / max) * 0.42)
+  const strength = Math.min(0.9, 0.28 + (count / max) * 0.5)
   return { "--prime-overlap-alpha": strength.toFixed(2) }
 }
 
 function primeOverlapTitle(overlap) {
   if (!overlap) return ""
   const nicknames = (overlap.users || []).map((user) => user.nickname).join(", ")
-  return `Совпадает: ${nicknames}`
+  const count = Number(overlap.users_count) || 0
+  return count ? `Совпадает ${count}: ${nicknames}` : `Совпадает: ${nicknames}`
+}
+
+function primeOverlapVisibleUsers(overlap) {
+  return (overlap?.users || []).slice(0, 3)
+}
+
+function primeOverlapHiddenCount(overlap) {
+  return Math.max((overlap?.users || []).length - 3, 0)
+}
+
+function primeOverlapBadgeLabel(overlap) {
+  const count = Number(overlap?.users_count) || 0
+  return count ? `+${count}` : ""
 }
 
 function shardStatusLabel(status) {
@@ -545,10 +556,6 @@ watch(nicknameDraft, (nextValue) => {
   }, 250)
 })
 
-watch(activeShardId, () => {
-  if (!profileHydrated.value) return
-  loadPrimeOverlaps()
-})
 </script>
 
 <template>
@@ -627,6 +634,7 @@ watch(activeShardId, () => {
           <h2>Почасовой цикл</h2>
           <p class="muted">
             Первый столбец всегда означает сегодня. Добавляйте дни до 14, а фантомная сетка ниже покажет повторение цикла.
+            Зеленый слой в фантомном прогнозе показывает совпадения с праймами других игроков выбранного шарда.
           </p>
         </div>
         <div class="profile-grid-card__actions">
@@ -639,6 +647,7 @@ watch(activeShardId, () => {
       <div class="profile-cycle-summary">
         <strong>{{ cycleSummary }}</strong>
         <span class="muted">Сохранение идет автоматически. Текущий день всегда пересобирается первым при новом заходе в профиль.</span>
+        <span class="profile-pill profile-pill--inline">Совпадающих слотов: {{ primeOverlapCount }}</span>
       </div>
 
       <div ref="primeGridWrapperRef" class="prime-grid-wrapper">
@@ -721,7 +730,7 @@ watch(activeShardId, () => {
         <div>
           <h3>Фантомный прогноз на 14 дней</h3>
           <p class="muted">
-            Плотная подсветка — текущий цикл. Легкая подсветка — повтор. Зеленый слой показывает совпадения с игроками выбранного шарда.
+            Плотная подсветка — текущий цикл. Легкая подсветка — повтор. Зеленые ячейки — пересечения праймов.
           </p>
           <p v-if="loadingPrimeOverlaps" class="muted">Проверяем совпадения прайма...</p>
         </div>
@@ -749,16 +758,19 @@ watch(activeShardId, () => {
                 :class="{
                   'prime-grid__cell--active': selectedCycleSlots.has(cycleSlotIndex(day.cycleIndex, hour)) && !day.repeated,
                   'prime-grid__cell--ghost': selectedCycleSlots.has(cycleSlotIndex(day.cycleIndex, hour)) && day.repeated,
-                  'prime-grid__cell--overlap': primeOverlapFor(day.index, hour)
+                  'prime-grid__cell--overlap': primeOverlapFor(day.cycleIndex, hour)
                 }"
-                :style="primeOverlapStyle(primeOverlapFor(day.index, hour))"
-                :title="primeOverlapTitle(primeOverlapFor(day.index, hour))"
+                :style="primeOverlapStyle(primeOverlapFor(day.cycleIndex, hour))"
+                :title="primeOverlapTitle(primeOverlapFor(day.cycleIndex, hour)) || `${day.shortLabel} ${String(hour).padStart(2, '0')}:00`"
+                :aria-label="primeOverlapTitle(primeOverlapFor(day.cycleIndex, hour)) || `${day.shortLabel} ${String(hour).padStart(2, '0')}:00`"
+                role="img"
               >
-                <template v-if="primeOverlapFor(day.index, hour)">
-                  <span class="prime-grid__overlap-count">{{ primeOverlapFor(day.index, hour).users_count }}</span>
-                  <span class="prime-grid__overlap-popover">
-                    <strong>Совпадает прайм</strong>
-                    <span v-for="user in primeOverlapFor(day.index, hour).users" :key="user.id">{{ user.nickname }}</span>
+                <template v-if="primeOverlapFor(day.cycleIndex, hour)">
+                  <span class="prime-grid__overlap-count">{{ primeOverlapBadgeLabel(primeOverlapFor(day.cycleIndex, hour)) }}</span>
+                  <span class="prime-grid__overlap-popover prime-grid__overlap-popover--static">
+                    <strong>{{ primeOverlapFor(day.cycleIndex, hour).users_count }} совпадений</strong>
+                    <span v-for="user in primeOverlapVisibleUsers(primeOverlapFor(day.cycleIndex, hour))" :key="user.id">{{ user.nickname }}</span>
+                    <span v-if="primeOverlapHiddenCount(primeOverlapFor(day.cycleIndex, hour))">+ещё {{ primeOverlapHiddenCount(primeOverlapFor(day.cycleIndex, hour)) }}</span>
                   </span>
                 </template>
               </div>

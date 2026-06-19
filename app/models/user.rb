@@ -38,6 +38,7 @@ class User < ApplicationRecord
 
   scope :billable, -> { where(active: true).where("COALESCE(hourly_rate_cents, 0) > 0 OR tariff_id IS NOT NULL") }
   scope :with_prime_overlap, ->(slots) { where("prime_slots_utc && ARRAY[?]::integer[]", Array(slots).map(&:to_i).uniq) }
+  scope :with_prime_cycle_overlap, ->(slots) { where("prime_cycle_slots_local && ARRAY[?]::integer[]", Array(slots).map(&:to_i).uniq) }
 
   before_validation :ensure_generated_nickname, on: :create
   before_validation :normalize_profile_fields!
@@ -103,7 +104,15 @@ class User < ApplicationRecord
   end
 
   def prime_schedule_active?(time = Time.current)
-    prime_cycle_slots_local.include?(current_prime_cycle_slot_local(time))
+    prime_cycle_active_at?(time)
+  end
+
+  def prime_cycle_slot_local_at(time = Time.current)
+    current_prime_cycle_slot_local(time)
+  end
+
+  def prime_cycle_active_at?(time = Time.current)
+    prime_cycle_slots_local.include?(prime_cycle_slot_local_at(time))
   end
 
   def prime_slots_utc_preview
