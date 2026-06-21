@@ -29,11 +29,12 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
   end
 
   class FakeThrottle
-    attr_reader :blocked_sources, :blocked_calls
+    attr_reader :blocked_sources, :blocked_calls, :full_article_disabled_sources
 
     def initialize
       @blocked_sources = []
       @blocked_calls = []
+      @full_article_disabled_sources = []
     end
 
     def block!(source)
@@ -44,6 +45,15 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     def blocked?(source)
       @blocked_calls << source.id
       false
+    end
+
+    def disable_full_article_fetch!(source)
+      @full_article_disabled_sources << source.id
+      true
+    end
+
+    def full_article_fetch_disabled?(source)
+      @full_article_disabled_sources.include?(source.id)
     end
   end
 
@@ -420,7 +430,7 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     assert_equal ["Industry", "MMORPG"], article.raw_payload["article_tag_names"]
   end
 
-  test "blocks the source and does not retry when the article page returns 403" do
+  test "falls back to feed preview and disables full article fetch when the article page returns 403" do
     throttle = FakeThrottle.new
     client = TrackingClient.new(
       "https://example.com/news" => listing_page(
@@ -446,9 +456,11 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     ).call
 
     assert_equal 1, client.calls["https://example.com/news/blocked"]
-    assert_equal [@source.id], throttle.blocked_sources
-    assert_equal 0, result.articles_saved
-    assert_operator result.errors.join(" "), :include?, "HTTP 403"
+    assert_equal [@source.id], throttle.full_article_disabled_sources
+    assert_equal 0, throttle.blocked_sources.size
+    assert_equal 1, result.articles_saved
+    assert_equal "Preview blocked", @section.news_articles.find_by!(canonical_url: "https://example.com/news/blocked").preview_text
+    refute_includes result.errors.join(" "), "HTTP 403"
   end
 
   test "uses the full article page for feed sources when it is richer than the feed excerpt" do

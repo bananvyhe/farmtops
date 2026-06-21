@@ -126,6 +126,10 @@ module News
       [403, 429].include?(error.status.to_i)
     end
 
+    def full_article_blocking_error?(error)
+      source_blocking_error?(error)
+    end
+
     def block_source!(url, error)
       crawl_throttle.block!(source)
       logger.warn("[News::SectionCrawler] blocking source #{source.name} after #{error.class} #{error.message} at #{url}")
@@ -212,12 +216,22 @@ module News
 
     def crawl_article(candidate, page_url, seen_keys)
       if feed_mode? && candidate.raw_payload[:feed_description_html].present?
+        if crawl_throttle.full_article_fetch_disabled?(source)
+          article_data = extract_feed_article(candidate, page_url)
+          return save_article(article_data, seen_keys, candidate)
+        end
+
         begin
           article_document = fetch_document(candidate.url)
           article_data = extract_article(article_document, candidate, page_url)
           return save_article(article_data, seen_keys, candidate)
         rescue News::HttpClient::Error => e
-          raise if source_blocking_error?(e)
+          if full_article_blocking_error?(e)
+            crawl_throttle.disable_full_article_fetch!(source)
+            logger.warn("[News::SectionCrawler] disabled full article fetch for #{source.name} after #{e.class} #{e.message} at #{candidate.url}")
+            article_data = extract_feed_article(candidate, page_url)
+            return save_article(article_data, seen_keys, candidate)
+          end
 
           logger.warn("[News::SectionCrawler] article page fallback for #{candidate.url}: #{e.class} #{e.message}")
         rescue StandardError => e
