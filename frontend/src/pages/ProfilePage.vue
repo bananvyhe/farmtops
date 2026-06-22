@@ -169,7 +169,15 @@ function hydrateSchedule(user) {
     return
   }
 
-  setSelectionFromLegacyUtc(user?.prime_slots_utc || [])
+  const legacySlots = Array.isArray(user?.prime_slots_utc) ? user.prime_slots_utc : []
+  if (legacySlots.length) {
+    setSelectionFromLegacyUtc(legacySlots)
+    return
+  }
+
+  cycleDays.value = nextCycleDays
+  selectedCycleSlots.value = new Set()
+  displayAnchorIso.value = todayIso()
 }
 
 function selectedCycleSlotsArray() {
