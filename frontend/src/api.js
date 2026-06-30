@@ -63,6 +63,7 @@ export const api = {
   primeOverlaps: (params = {}) => request(withQuery("/api/profile/prime_overlaps", params)),
   shards: () => request("/api/shards"),
   shardWorld: (id) => request(`/api/shards/${id}/world`),
+  shardGroupForecast: (id) => request(`/api/shards/${id}/group_search_forecast`),
   enterShard: (id, layerId = null) =>
     request(withQuery(`/api/shards/${id}/enter`, { layer_id: layerId }), { method: "POST" }),
   leaveShard: (id) => request(`/api/shards/${id}/leave`, { method: "DELETE" }),

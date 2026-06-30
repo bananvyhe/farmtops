@@ -137,6 +137,49 @@ class ApiShardsTest < ActionDispatch::IntegrationTest
     assert_not_nil Shard.find_by(id: shard_id)
   end
 
+  test "returns a phantom group forecast for shard members with matching prime slots" do
+    game = Game.create!(name: "Guild Wars 2", slug: "guild-wars-2")
+
+    owner = open_session
+    owner_csrf_token = register_user!(owner, "forecast-owner@example.com")
+    owner_user = User.find_by!(email: "forecast-owner@example.com")
+    owner_user.update!(
+      prime_cycle_days: 7,
+      prime_cycle_anchor_on: User::REFERENCE_LOCAL_MONDAY,
+      prime_cycle_slots_local: [12, 13, 14]
+    )
+    NewsGameBookmark.create!(game: game, user: owner_user, bookmarked_at: Time.current)
+    owner.post "/api/games/#{game.id}/shard", headers: { "X-CSRF-Token" => owner_csrf_token }
+    assert_equal 201, owner.response.status
+    shard_id = owner.response.parsed_body.dig("shard", "id")
+
+    friend = open_session
+    friend_csrf_token = register_user!(friend, "forecast-friend@example.com")
+    friend_user = User.find_by!(email: "forecast-friend@example.com")
+    friend_user.update!(
+      prime_cycle_days: 7,
+      prime_cycle_anchor_on: User::REFERENCE_LOCAL_MONDAY,
+      prime_cycle_slots_local: [13, 14, 15]
+    )
+    NewsGameBookmark.create!(game: game, user: friend_user, bookmarked_at: Time.current)
+    friend.post "/api/games/#{game.id}/shard", headers: { "X-CSRF-Token" => friend_csrf_token }
+    assert_equal 201, friend.response.status
+    assert_equal shard_id, friend.response.parsed_body.dig("shard", "id")
+
+    owner.get "/api/shards/#{shard_id}/group_search_forecast"
+
+    assert_response :success
+    forecast = json_response.fetch("forecast")
+    assert_equal true, forecast["ready"]
+    assert_equal 2, forecast["members_count"]
+    assert_equal 2, forecast["bookmarked_members_count"]
+    assert_equal 1, forecast["matched_members_count"]
+    assert_equal 2, forecast["total_shared_hours"]
+    assert_equal "forecast-friend", forecast.dig("users", 0, "nickname")
+    assert_equal 2, forecast.dig("users", 0, "shared_prime_hours")
+    assert_equal 2, forecast.dig("users", 0, "slots").size
+  end
+
   test "stale memberships stay visible in the shard but do not count as active" do
     game = Game.create!(name: "Perfect World", slug: "perfect-world")
 
