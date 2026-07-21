@@ -181,6 +181,23 @@ class ApiProfileTest < ActionDispatch::IntegrationTest
     assert_equal ["overlap_second"], overlaps.second.fetch("users").pluck("nickname")
   end
 
+  test "updates prime visibility and excludes hidden users from overlaps" do
+    current_user = User.create!(email: "visibility-current@example.com", password: "Password123!", password_confirmation: "Password123!", role: :client, active: true, nickname: "visibility_me", prime_cycle_days: 1, prime_cycle_slots_local: [12])
+    hidden_user = User.create!(email: "visibility-hidden@example.com", password: "Password123!", password_confirmation: "Password123!", role: :client, active: true, nickname: "visibility_hidden", prime_cycle_days: 1, prime_cycle_slots_local: [12], show_in_prime_search: false)
+    csrf_token = login_as(current_user)
+
+    get "/api/profile"
+    assert_equal true, json_response.dig("user", "show_in_prime_search")
+
+    get "/api/profile/prime_overlaps"
+    assert_empty json_response.fetch("overlaps")
+
+    patch "/api/profile", params: { show_in_prime_search: false }.to_json, headers: { "CONTENT_TYPE" => "application/json", "X-CSRF-Token" => csrf_token }
+    assert_response :success
+    assert_equal false, json_response.dig("user", "show_in_prime_search")
+    assert_equal false, hidden_user.reload.show_in_prime_search
+  end
+
   test "rejects invalid timezone values" do
     user = User.create!(
       email: "profile-invalid@example.com",

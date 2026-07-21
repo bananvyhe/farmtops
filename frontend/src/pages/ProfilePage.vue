@@ -26,6 +26,7 @@ const nicknameChecking = ref(false)
 const nicknameStatus = ref("")
 const nicknameStatusKind = ref("muted")
 const nicknameSaving = ref(false)
+const showInPrimeSearch = ref(true)
 const shards = ref([])
 const loadingShards = ref(false)
 const activeShardId = ref(null)
@@ -259,6 +260,7 @@ async function loadProfile() {
     nicknameStatus.value = data.user.can_change_nickname ? "Ник можно изменить один раз." : "Ник уже менялся."
     nicknameStatusKind.value = data.user.can_change_nickname ? "muted" : "error"
     hydrateSchedule(data.user)
+    showInPrimeSearch.value = data.user.show_in_prime_search !== false
     lastSavedSignature.value = scheduleSignature.value
     profileHydrated.value = true
   } catch (err) {
@@ -381,7 +383,8 @@ async function saveProfile({ silent = false } = {}) {
       prime_time_zone: browserTimeZone.value,
       prime_cycle_days: cycleDays.value,
       prime_cycle_anchor_on: displayAnchorIso.value,
-      prime_cycle_slots_local: selectedCycleSlotsArray()
+      prime_cycle_slots_local: selectedCycleSlotsArray(),
+      show_in_prime_search: showInPrimeSearch.value
     })
     sessionState.user = data.user
     hydrateSchedule(data.user)
@@ -397,7 +400,7 @@ async function saveProfile({ silent = false } = {}) {
 
 const selectedLocalCount = computed(() => selectedCycleSlots.value.size)
 const selectedSlotsSignature = computed(() => selectedCycleSlotsArray().join(","))
-const scheduleSignature = computed(() => `${browserTimeZone.value}|${displayAnchorIso.value}|${cycleDays.value}|${selectedSlotsSignature.value}`)
+const scheduleSignature = computed(() => `${browserTimeZone.value}|${displayAnchorIso.value}|${cycleDays.value}|${selectedSlotsSignature.value}|${showInPrimeSearch.value}`)
 
 const visibleCycleDays = computed(() => {
   const start = parseIsoDate(displayAnchorIso.value) || todayLocalDate()
@@ -740,6 +743,10 @@ watch(nicknameDraft, (nextValue) => {
           <p class="muted">
             Плотная подсветка — текущий цикл. Легкая подсветка — повтор. Зеленые ячейки — пересечения праймов.
           </p>
+          <label class="checkbox prime-visibility-checkbox">
+            <input v-model="showInPrimeSearch" type="checkbox">
+            <span>Показывать меня в выдаче пересечений праймов</span>
+          </label>
           <p v-if="loadingPrimeOverlaps" class="muted">Проверяем совпадения прайма...</p>
         </div>
 

@@ -882,6 +882,32 @@ button.prime-grid__cell--active:hover {
   gap: var(--space-xs);
 }
 
+.prime-visibility-checkbox,
+.game-prime-toggle {
+  margin-top: var(--space-s);
+}
+
+.game-prime-card {
+  display: grid;
+  gap: var(--space-s);
+  margin-top: var(--space-m);
+  padding-top: var(--space-m);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.game-prime-preview {
+  margin-top: var(--space-xs);
+}
+
+.game-prime-grid-shell {
+  min-height: 66rem;
+}
+
+.game-prime-grid-status {
+  min-height: 1.5rem;
+  margin: 0;
+}
+
 .profile-shard-card--summary {
   padding-top: var(--space-xs);
   border-top: 1px solid rgba(255, 255, 255, 0.08);

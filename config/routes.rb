@@ -31,11 +31,11 @@ Rails.application.routes.draw do
     end
     resources :shards, only: %i[index create] do
       get :world, on: :member
-      get :group_search_forecast, on: :member
       post :enter, on: :member
       delete :leave, on: :member
       resources :chat_messages, only: %i[index create], controller: "shard_chat_messages"
     end
+    get "games/:game_id/prime_overlaps", to: "games#prime_overlaps"
     post "games/:game_id/shard", to: "shards#create"
     get "games/search", to: "games#search"
     resource :dashboard, only: :show, controller: :dashboard

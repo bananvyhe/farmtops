@@ -39,6 +39,7 @@ class User < ApplicationRecord
   scope :billable, -> { where(active: true).where("COALESCE(hourly_rate_cents, 0) > 0 OR tariff_id IS NOT NULL") }
   scope :with_prime_overlap, ->(slots) { where("prime_slots_utc && ARRAY[?]::integer[]", Array(slots).map(&:to_i).uniq) }
   scope :with_prime_cycle_overlap, ->(slots) { where("prime_cycle_slots_local && ARRAY[?]::integer[]", Array(slots).map(&:to_i).uniq) }
+  scope :visible_in_prime_search, -> { where(show_in_prime_search: true) }
 
   before_validation :ensure_generated_nickname, on: :create
   before_validation :normalize_profile_fields!
@@ -123,7 +124,7 @@ class User < ApplicationRecord
     return [] if other_user.blank?
 
     start_time = from.utc.beginning_of_hour
-    Array.new(horizon_days * 24).filter_map do |offset|
+    (horizon_days * 24).times.filter_map do |offset|
       slot_time = start_time + offset.hours
       slot_time.iso8601 if prime_schedule_active?(slot_time) && other_user.prime_schedule_active?(slot_time)
     end

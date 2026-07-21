@@ -6,6 +6,7 @@ import { useNewsUiStore } from "../stores/newsUi"
 import { sessionState } from "../useSession"
 import { setSeo } from "../seo"
 import NewsGameActions from "../components/NewsGameActions.vue"
+import PrimeOverlapGrid from "../components/PrimeOverlapGrid.vue"
 
 const route = useRoute()
 const router = useRouter()
@@ -13,6 +14,25 @@ const article = ref(null)
 const loading = ref(false)
 const error = ref("")
 const newsUi = useNewsUiStore()
+const showGamePrimeOverlaps = ref(false)
+const gamePrimeOverlaps = ref([])
+const loadingGamePrimeOverlaps = ref(false)
+const gamePrimeError = ref("")
+
+async function toggleGamePrimeOverlaps() {
+  if (!showGamePrimeOverlaps.value || !article.value?.game?.id) return
+  loadingGamePrimeOverlaps.value = true
+  gamePrimeError.value = ""
+  try {
+    const data = await api.gamePrimeOverlaps(article.value.game.id)
+    gamePrimeOverlaps.value = data.overlaps || []
+  } catch (err) {
+    gamePrimeError.value = err.message
+    gamePrimeOverlaps.value = []
+  } finally {
+    loadingGamePrimeOverlaps.value = false
+  }
+}
 
 const formatDate = (value) => {
   if (!value) return "—"
@@ -136,10 +156,18 @@ function syncGameBookmarkInArticle(bookmarked, bookmarksCount, game = null) {
 async function loadArticle() {
   loading.value = true
   error.value = ""
+  showGamePrimeOverlaps.value = false
+  gamePrimeOverlaps.value = []
+  gamePrimeError.value = ""
 
   try {
     const data = await api.newsArticle(route.params.id)
     article.value = data.article
+
+    if (sessionState.authenticated && data.article?.game?.id) {
+      showGamePrimeOverlaps.value = true
+      toggleGamePrimeOverlaps()
+    }
 
     if (data.article?.id) {
       api.markNewsReads({ article_ids: [data.article.id] }).catch(() => {})
@@ -211,8 +239,20 @@ onMounted(() => {
             :article="article"
             @update-bookmark="({ bookmarked, bookmarks_count, game }) => syncGameBookmarkInArticle(bookmarked, bookmarks_count, game)"
           />
+          <label v-if="article.game && sessionState.authenticated" class="checkbox game-prime-toggle">
+            <input v-model="showGamePrimeOverlaps" type="checkbox" @change="toggleGamePrimeOverlaps">
+            <span>Показать пересечения праймов для этой игры</span>
+          </label>
           <v-btn color="primary" variant="flat" class="news-article-close" @click="closeArticle">Закрыть</v-btn>
         </div>
+        <section v-if="showGamePrimeOverlaps" class="game-prime-card">
+          <h2>Прайм-пересечения для {{ article.game.name }}</h2>
+          <p class="muted">Здесь показаны только пользователи, которые следят за этой игрой и разрешили показывать себя.</p>
+          <p v-if="loadingGamePrimeOverlaps" class="muted">Загружаем пересечения...</p>
+          <p v-else-if="gamePrimeError" class="error">{{ gamePrimeError }}</p>
+          <p v-else-if="!gamePrimeOverlaps.length" class="muted">Совпадений пока нет — сетка ниже показывает ваш текущий цикл.</p>
+          <PrimeOverlapGrid v-if="!loadingGamePrimeOverlaps && !gamePrimeError" :overlaps="gamePrimeOverlaps" :cycle-days="sessionState.user?.prime_cycle_days || 7" :slots="sessionState.user?.prime_cycle_slots_local || []" />
+        </section>
       </div>
 
       <div v-else class="news-article-empty">

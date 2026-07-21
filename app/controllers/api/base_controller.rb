@@ -46,6 +46,7 @@ module Api
         prime_cycle_days: user.prime_cycle_days,
         prime_cycle_anchor_on: user.prime_cycle_anchor_on,
         prime_cycle_slots_local: user.prime_cycle_slots_local,
+        show_in_prime_search: user.show_in_prime_search,
         world_level: user.world_level,
         world_xp_total: user.world_xp_total,
         world_xp_to_next_level: user.world_xp_to_next_level,

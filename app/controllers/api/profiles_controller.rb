@@ -40,6 +40,7 @@ module Api
       attrs[:prime_cycle_days] = params[:prime_cycle_days] if params.key?(:prime_cycle_days)
       attrs[:prime_cycle_anchor_on] = params[:prime_cycle_anchor_on] if params.key?(:prime_cycle_anchor_on)
       attrs[:prime_cycle_slots_local] = Array(params[:prime_cycle_slots_local]) if params.key?(:prime_cycle_slots_local)
+      attrs[:show_in_prime_search] = params[:show_in_prime_search] if params.key?(:show_in_prime_search)
       attrs
     end
 
@@ -51,7 +52,7 @@ module Api
       slots = current_user.prime_cycle_slots_local
       return [] if slots.empty?
 
-      candidates = User.where.not(id: current_user.id).with_prime_cycle_overlap(slots).to_a
+      candidates = User.visible_in_prime_search.where.not(id: current_user.id).with_prime_cycle_overlap(slots).to_a
       users_by_slot = Hash.new { |hash, slot| hash[slot] = [] }
       candidates.each do |user|
         user.prime_cycle_slots_local.each do |slot|

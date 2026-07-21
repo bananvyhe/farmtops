@@ -61,9 +61,9 @@ export const api = {
   updateProfile: (payload) => request("/api/profile", { method: "PATCH", body: JSON.stringify(payload) }),
   checkProfileNickname: (nickname) => request(withQuery("/api/profile/nickname_check", { nickname })),
   primeOverlaps: (params = {}) => request(withQuery("/api/profile/prime_overlaps", params)),
+  gamePrimeOverlaps: (gameId) => request(`/api/games/${gameId}/prime_overlaps`),
   shards: () => request("/api/shards"),
   shardWorld: (id) => request(`/api/shards/${id}/world`),
-  shardGroupForecast: (id) => request(`/api/shards/${id}/group_search_forecast`),
   enterShard: (id, layerId = null) =>
     request(withQuery(`/api/shards/${id}/enter`, { layer_id: layerId }), { method: "POST" }),
   leaveShard: (id) => request(`/api/shards/${id}/leave`, { method: "DELETE" }),

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_05_15_072000) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_21_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -112,8 +112,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_05_15_072000) do
     t.datetime "translation_started_at"
     t.string "translation_request_id"
     t.integer "translation_attempts", default: 0, null: false
-    t.boolean "full_article_available", default: false, null: false
     t.bigint "news_crawl_run_id"
+    t.boolean "full_article_available", default: false, null: false
     t.index ["canonical_url"], name: "index_news_articles_on_canonical_url"
     t.index ["full_article_available"], name: "index_news_articles_on_full_article_available"
     t.index ["news_crawl_run_id"], name: "index_news_articles_on_news_crawl_run_id"
@@ -214,6 +214,23 @@ ActiveRecord::Schema[8.0].define(version: 2026_05_15_072000) do
     t.index ["user_id"], name: "index_payment_transactions_on_user_id"
   end
 
+  create_table "shard_bot_chat_messages", force: :cascade do |t|
+    t.bigint "shard_id", null: false
+    t.bigint "user_id", null: false
+    t.text "content", null: false
+    t.datetime "planned_at", null: false
+    t.datetime "sent_at"
+    t.integer "status", default: 0, null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["shard_id", "planned_at"], name: "index_shard_bot_chat_messages_on_shard_id_and_planned_at"
+    t.index ["shard_id"], name: "index_shard_bot_chat_messages_on_shard_id"
+    t.index ["status", "planned_at"], name: "index_shard_bot_chat_messages_on_status_and_planned_at"
+    t.index ["user_id", "planned_at"], name: "index_shard_bot_chat_messages_on_user_id_and_planned_at"
+    t.index ["user_id"], name: "index_shard_bot_chat_messages_on_user_id"
+  end
+
   create_table "shard_chat_messages", force: :cascade do |t|
     t.bigint "shard_id", null: false
     t.bigint "user_id", null: false
@@ -306,11 +323,17 @@ ActiveRecord::Schema[8.0].define(version: 2026_05_15_072000) do
     t.integer "prime_cycle_days", default: 7, null: false
     t.integer "prime_cycle_slots_local", default: [], null: false, array: true
     t.date "prime_cycle_anchor_on", default: "2026-01-05", null: false
+    t.uuid "guest_uuid"
+    t.string "gameplay_role", default: "", null: false
+    t.text "gameplay_goals", default: "", null: false
+    t.boolean "show_in_prime_search", default: true, null: false
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["external_id"], name: "index_users_on_external_id"
+    t.index ["guest_uuid"], name: "index_users_on_guest_uuid", unique: true
     t.index ["nickname"], name: "index_users_on_nickname", unique: true
     t.index ["prime_cycle_slots_local"], name: "index_users_on_prime_cycle_slots_local", using: :gin
     t.index ["prime_slots_utc"], name: "index_users_on_prime_slots_utc", using: :gin
+    t.index ["show_in_prime_search"], name: "index_users_on_show_in_prime_search"
     t.index ["tariff_id"], name: "index_users_on_tariff_id"
   end
 
@@ -331,6 +354,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_05_15_072000) do
   add_foreign_key "news_game_bookmarks", "users", on_delete: :cascade
   add_foreign_key "news_sections", "news_sources"
   add_foreign_key "payment_transactions", "users", on_delete: :cascade
+  add_foreign_key "shard_bot_chat_messages", "shards"
+  add_foreign_key "shard_bot_chat_messages", "users"
   add_foreign_key "shard_chat_messages", "shards"
   add_foreign_key "shard_chat_messages", "users"
   add_foreign_key "shard_layer_memberships", "shard_layers"

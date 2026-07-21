@@ -3,21 +3,22 @@ import { Application, Container, Graphics, Text } from "pixi.js"
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useRoute } from "vue-router"
 import { api } from "../api"
+import { sessionState } from "../useSession"
+import PrimeOverlapGrid from "../components/PrimeOverlapGrid.vue"
 
 const route = useRoute()
 const loading = ref(true)
 const refreshing = ref(false)
 const error = ref("")
+const showGamePrimeOverlaps = ref(true)
+const gamePrimeOverlaps = ref([])
+const loadingGamePrimeOverlaps = ref(false)
+const gamePrimeError = ref("")
 const worldResponse = ref(null)
 const selectedLayerId = ref(null)
 const chatMessages = ref([])
 const chatDraft = ref("")
 const chatSending = ref(false)
-const groupSearchEnabled = ref(false)
-const groupForecastLoading = ref(false)
-const groupForecastError = ref("")
-const groupForecast = ref(null)
-const groupForecastRequestId = ref(0)
 const pixiHostRef = ref(null)
 const chatMessagesRef = ref(null)
 const sceneSummary = ref("")
@@ -39,25 +40,12 @@ const renderState = {
   mobs: new Map(),
   boss: null
 }
-const GROUP_SEARCH_STORAGE_KEY = "farmspot:world:group-search-enabled"
 
 const shard = computed(() => worldResponse.value?.shard || null)
 const layers = computed(() => worldResponse.value?.layers || [])
 const world = computed(() => worldResponse.value?.world || null)
 const activeLayer = computed(() => layers.value.find((layer) => String(layer.id) === String(selectedLayerId.value)) || null)
 const canSendChat = computed(() => Boolean(chatDraft.value.trim()) && !chatSending.value)
-const groupForecastUsers = computed(() => groupForecast.value?.users || [])
-const groupForecastSummary = computed(() => {
-  if (!groupSearchEnabled.value) return "Включите чекбокс, чтобы построить фантомный прогноз по этому шару."
-  if (groupForecastLoading.value) return "Собираем праймы участников шарда..."
-  if (!groupForecast.value) return "Фантомный прогноз пока не построен."
-  if (!groupForecast.value.ready) return groupForecast.value.reason || "Настройте прайм-цикл, чтобы увидеть прогноз."
-  if (!groupForecastUsers.value.length) return "Совпадений по праймам пока нет."
-
-  const matches = Number(groupForecast.value.matched_members_count) || 0
-  const hours = Number(groupForecast.value.total_shared_hours) || 0
-  return `Найдено ${matches} участников с совпадениями и ${hours} ч суммарного overlap.`
-})
 
 function formatDate(value) {
   if (!value) return "—"
@@ -143,48 +131,6 @@ function mergeWorldResponse(payload) {
   }
 }
 
-function loadGroupSearchPreference() {
-  if (typeof window === "undefined") return false
-
-  try {
-    return window.localStorage.getItem(GROUP_SEARCH_STORAGE_KEY) === "1"
-  } catch (_) {
-    return false
-  }
-}
-
-function saveGroupSearchPreference(enabled) {
-  if (typeof window === "undefined") return
-
-  try {
-    if (enabled) window.localStorage.setItem(GROUP_SEARCH_STORAGE_KEY, "1")
-    else window.localStorage.removeItem(GROUP_SEARCH_STORAGE_KEY)
-  } catch (_) {
-    // Ignore storage failures in private browsing / restricted environments.
-  }
-}
-
-async function loadGroupSearchForecast() {
-  const shardId = route.params.id
-  if (!shardId) return
-
-  const requestId = groupForecastRequestId.value + 1
-  groupForecastRequestId.value = requestId
-  groupForecastLoading.value = true
-  groupForecastError.value = ""
-
-  try {
-    const data = await api.shardGroupForecast(shardId)
-    if (groupForecastRequestId.value !== requestId || !groupSearchEnabled.value) return
-    groupForecast.value = data.forecast || null
-  } catch (err) {
-    if (groupForecastRequestId.value !== requestId || !groupSearchEnabled.value) return
-    groupForecast.value = null
-    groupForecastError.value = err.message
-  } finally {
-    if (groupForecastRequestId.value === requestId) groupForecastLoading.value = false
-  }
-}
 
 function smoothPosition(current, target, factor = 0.12) {
   return current + (target - current) * factor
@@ -278,6 +224,36 @@ async function loadWorld() {
   } finally {
     loading.value = false
   }
+}
+
+async function loadGamePrimeOverlaps(gameId) {
+  if (!gameId || !sessionState.authenticated) return
+
+  loadingGamePrimeOverlaps.value = true
+  gamePrimeError.value = ""
+  try {
+    const data = await api.gamePrimeOverlaps(gameId)
+    gamePrimeOverlaps.value = data.overlaps || []
+  } catch (err) {
+    gamePrimeError.value = err.message
+    gamePrimeOverlaps.value = []
+  } finally {
+    loadingGamePrimeOverlaps.value = false
+  }
+}
+
+watch(
+  () => [sessionState.authenticated, shard.value?.game_id],
+  ([authenticated, gameId]) => {
+    if (!authenticated || !gameId) return
+    showGamePrimeOverlaps.value = true
+    loadGamePrimeOverlaps(gameId)
+  },
+  { immediate: true }
+)
+
+function toggleGamePrimeOverlaps() {
+  if (showGamePrimeOverlaps.value) loadGamePrimeOverlaps(shard.value?.game_id)
 }
 
 async function refreshWorld() {
@@ -619,7 +595,6 @@ function animationLoop(timestamp) {
 onMounted(async () => {
   await nextTick()
   await mountPixiScene()
-  groupSearchEnabled.value = loadGroupSearchPreference()
   await loadWorld()
   await enterLayer()
   connectShardCable()
@@ -636,18 +611,6 @@ onMounted(async () => {
     if (!sendCableCommand("tick")) refreshWorld()
   }
   document.addEventListener("visibilitychange", visibilityHandler)
-})
-
-watch(groupSearchEnabled, (enabled) => {
-  saveGroupSearchPreference(enabled)
-  if (!enabled) {
-    groupForecastRequestId.value += 1
-    groupForecast.value = null
-    groupForecastError.value = ""
-    return
-  }
-
-  loadGroupSearchForecast()
 })
 
 onBeforeUnmount(() => {
@@ -685,6 +648,30 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
+    <section v-if="sessionState.authenticated && shard?.game_id" class="card game-prime-card">
+      <div class="world-canvas-card__header">
+        <div>
+          <h2>Фантомный прогноз для {{ shard.game_name }}</h2>
+          <p class="muted">Пересечения праймов пользователей, которые следят за этой игрой и разрешили показывать себя.</p>
+        </div>
+        <label class="checkbox game-prime-toggle">
+          <input v-model="showGamePrimeOverlaps" type="checkbox" @change="toggleGamePrimeOverlaps">
+          <span>Показывать сетку</span>
+        </label>
+      </div>
+      <div v-show="showGamePrimeOverlaps" class="game-prime-grid-shell" :aria-busy="loadingGamePrimeOverlaps">
+        <p v-if="loadingGamePrimeOverlaps" class="muted game-prime-grid-status">Обновляем пересечения...</p>
+        <p v-else-if="gamePrimeError" class="error game-prime-grid-status">{{ gamePrimeError }}</p>
+        <p v-else-if="!gamePrimeOverlaps.length" class="muted game-prime-grid-status">Совпадений пока нет — сетка показывает ваш текущий цикл.</p>
+        <PrimeOverlapGrid
+          v-memo="[gamePrimeOverlaps, sessionState.user?.prime_cycle_days, sessionState.user?.prime_cycle_slots_local]"
+          :overlaps="gamePrimeOverlaps"
+          :cycle-days="sessionState.user?.prime_cycle_days || 7"
+          :slots="sessionState.user?.prime_cycle_slots_local || []"
+        />
+      </div>
+    </section>
+
     <section class="card world-canvas-card card--dark">
       <div class="world-canvas-card__header">
         <div>
@@ -694,81 +681,6 @@ onBeforeUnmount(() => {
         <button class="ghost" type="button" :disabled="refreshing" @click="refreshWorld">
           {{ refreshing ? "Обновляем..." : "Обновить" }}
         </button>
-      </div>
-
-      <div class="world-forecast-toggle">
-        <v-checkbox
-          v-model="groupSearchEnabled"
-          class="world-forecast-toggle__checkbox"
-          color="primary"
-          density="compact"
-          hide-details
-          label="Поиск группы"
-        />
-        <p class="muted">
-          Фантомный прогноз показывает участников этого шарда, у которых уже есть bookmark на ту же игру и совпадает
-          прайм.
-        </p>
-      </div>
-
-      <div v-if="groupSearchEnabled" class="world-forecast-panel">
-        <div class="world-forecast-panel__header">
-          <div>
-            <h3>Фантомный прогноз</h3>
-            <p class="muted">{{ groupForecastSummary }}</p>
-          </div>
-          <button class="ghost" type="button" :disabled="groupForecastLoading" @click="loadGroupSearchForecast">
-            {{ groupForecastLoading ? "..." : "Обновить" }}
-          </button>
-        </div>
-
-        <div v-if="groupForecastLoading" class="world-forecast-panel__empty muted">
-          Строим прогноз по праймам участников шарда...
-        </div>
-        <div v-else-if="groupForecastUsers.length" class="world-forecast-list">
-          <article v-for="user in groupForecastUsers" :key="user.id" class="world-forecast-item">
-            <div class="world-forecast-item__main">
-              <strong>{{ user.nickname }}</strong>
-              <span>
-                {{ user.prime_slots_count }} слотов прайма ·
-                {{ user.shared_prime_hours ? `${user.shared_prime_hours} ч совпадения` : "совпадение не найдено" }}
-              </span>
-            </div>
-            <div class="world-forecast-slots">
-              <v-chip
-                v-for="slot in user.prime_windows"
-                :key="`${user.id}-prime-${slot}`"
-                size="small"
-                variant="tonal"
-                color="primary"
-              >
-                {{ slot }}
-              </v-chip>
-            </div>
-            <div v-if="user.overlap_slots?.length" class="world-forecast-slots">
-              <v-chip
-                v-for="slot in user.overlap_slots"
-                :key="`${user.id}-overlap-${slot.at}`"
-                size="small"
-                variant="tonal"
-                color="secondary"
-              >
-                {{ slot.label }}
-              </v-chip>
-            </div>
-          </article>
-        </div>
-        <div v-else class="world-forecast-panel__empty muted">
-          {{ groupForecast?.ready === false ? groupForecast?.reason : "Совпадений по праймам пока нет." }}
-        </div>
-
-        <p v-if="groupForecastError" class="error">{{ groupForecastError }}</p>
-
-        <div v-if="groupForecast" class="world-forecast-stats">
-          <span class="profile-pill">Участники в шарде: {{ groupForecast.members_count }}</span>
-          <span class="profile-pill">С bookmark игры: {{ groupForecast.bookmarked_members_count }}</span>
-          <span class="profile-pill">Совпадения: {{ groupForecast.matched_members_count }}</span>
-        </div>
       </div>
 
       <div class="world-scene-hud world-scene-hud--top" v-if="world">
@@ -965,81 +877,6 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: var(--space-s);
   align-items: flex-start;
-}
-
-.world-forecast-toggle {
-  display: grid;
-  gap: var(--space-3xs);
-  padding: var(--space-xs);
-  border-radius: var(--radius-l);
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.world-forecast-toggle__checkbox {
-  margin-top: -0.15rem;
-  margin-inline-start: -0.35rem;
-}
-
-.world-forecast-panel {
-  display: grid;
-  gap: var(--space-s);
-  padding: var(--space-s);
-  border-radius: var(--radius-l);
-  background:
-    linear-gradient(180deg, rgba(15, 20, 30, 0.96), rgba(10, 13, 20, 0.92)),
-    radial-gradient(circle at top left, rgba(125, 211, 252, 0.12), transparent 34%);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.world-forecast-panel__header {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-s);
-  align-items: flex-start;
-}
-
-.world-forecast-panel__empty {
-  padding: var(--space-xs) 0;
-}
-
-.world-forecast-list {
-  display: grid;
-  gap: var(--space-xs);
-}
-
-.world-forecast-item {
-  display: grid;
-  gap: var(--space-xs);
-  padding: var(--space-xs);
-  border-radius: var(--radius-m);
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.world-forecast-item__main {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2xs) var(--space-xs);
-  align-items: baseline;
-  justify-content: space-between;
-}
-
-.world-forecast-item__main span {
-  color: var(--farmspot-text-on-dark-muted);
-  font-size: var(--step--1);
-}
-
-.world-forecast-slots {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3xs);
-}
-
-.world-forecast-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2xs);
 }
 
 .world-canvas-shell {
