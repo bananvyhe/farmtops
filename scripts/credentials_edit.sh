@@ -12,10 +12,16 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
+if [[ ! -f "$ROOT_DIR/config/master.key" ]]; then
+  echo "Missing $ROOT_DIR/config/master.key." >&2
+  exit 1
+fi
+
 exec docker --context "$DOCKER_CONTEXT" compose \
   --env-file "$ENV_FILE" \
   -f "$COMPOSE_FILE" \
   run --rm --no-deps \
   -e "EDITOR=$EDITOR_COMMAND" \
+  -e "RAILS_MASTER_KEY=$(tr -d '\r\n' < "$ROOT_DIR/config/master.key")" \
   -v "$ROOT_DIR:/rails" \
   web bundle exec rails credentials:edit "$@"
