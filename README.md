@@ -1,13 +1,14 @@
 # Farmspot
 
-Канонический компактный вход в контекст проекта:
-[docs/index.md](/Users/rufus/workspace/projects/farmspot/docs/index.md)
+Rails API + Sidekiq backend and Vue/Vuetify frontend for the Farmspot game platform.
 
-Для локального стека и версий:
-[docs/STACK.md](/Users/rufus/workspace/projects/farmspot/docs/STACK.md)
+Start the supported development environment with Docker Compose:
 
-Для UI-конвенций:
-[docs/vuetify.md](/Users/rufus/workspace/projects/farmspot/docs/vuetify.md)
+```bash
+cp .env.development.example .env.development
+docker compose --env-file .env.development -f docker-compose.dev.yml up --build
+```
 
-Для сетевой модели шарда, realtime и чата:
-[docs/netcode/overview.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/overview.md)
+Open http://localhost:8082. The Rails health endpoint is http://localhost:3002/up.
+
+Project context: [docs/index.md](docs/index.md). Development commands and troubleshooting: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). Stack and deployment boundaries: [docs/STACK.md](docs/STACK.md).

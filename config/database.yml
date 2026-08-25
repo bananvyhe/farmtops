@@ -19,19 +19,19 @@ default: &default
 
 development:
   <<: *default
-  host: <%= ENV.fetch("PGHOST", Rails.application.credentials.dig(:postgres, :host) || "127.0.0.1") %>
-  port: <%= ENV.fetch("PGPORT", Rails.application.credentials.dig(:postgres, :port) || 5432) %>
-  username: <%= ENV.fetch("PGUSER", Rails.application.credentials.dig(:postgres, :username) || ENV.fetch("USER", "postgres")) %>
+  host: <%= ENV["PGHOST"] || Rails.application.credentials.dig(:postgres, :host) || "127.0.0.1" %>
+  port: <%= ENV["PGPORT"] || Rails.application.credentials.dig(:postgres, :port) || 5432 %>
+  username: <%= ENV["PGUSER"] || Rails.application.credentials.dig(:postgres, :username) || ENV.fetch("USER", "postgres") %>
   password: <%= ENV["PGPASSWORD"] || Rails.application.credentials.dig(:postgres, :password) %>
-  database: <%= ENV.fetch("PGDATABASE", Rails.application.credentials.dig(:postgres, :development_database) || "farmspot_development") %>
+  database: <%= ENV["PGDATABASE"] || Rails.application.credentials.dig(:postgres, :development_database) || "farmspot_development" %>
 
 test:
   <<: *default
-  host: <%= ENV.fetch("PGHOST", Rails.application.credentials.dig(:postgres, :host) || "127.0.0.1") %>
-  port: <%= ENV.fetch("PGPORT", Rails.application.credentials.dig(:postgres, :port) || 5432) %>
-  username: <%= ENV.fetch("PGUSER", Rails.application.credentials.dig(:postgres, :username) || ENV.fetch("USER", "postgres")) %>
+  host: <%= ENV["PGHOST"] || Rails.application.credentials.dig(:postgres, :host) || "127.0.0.1" %>
+  port: <%= ENV["PGPORT"] || Rails.application.credentials.dig(:postgres, :port) || 5432 %>
+  username: <%= ENV["PGUSER"] || Rails.application.credentials.dig(:postgres, :username) || ENV.fetch("USER", "postgres") %>
   password: <%= ENV["PGPASSWORD"] || Rails.application.credentials.dig(:postgres, :password) %>
-  database: <%= ENV.fetch("PGDATABASE", Rails.application.credentials.dig(:postgres, :test_database) || "farmspot_test") %>
+  database: <%= ENV["PGDATABASE"] || Rails.application.credentials.dig(:postgres, :test_database) || "farmspot_test" %>
 
 production:
   primary: &primary_production

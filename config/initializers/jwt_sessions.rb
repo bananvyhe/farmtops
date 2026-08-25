@@ -2,8 +2,8 @@ redis_url = RuntimeConfig.redis_url
 
 JWTSessions.algorithm = "HS256"
 JWTSessions.signing_key =
-  Rails.application.credentials.dig(:jwt, :signing_key) ||
   ENV["JWT_SIGNING_KEY"] ||
+  Rails.application.credentials.dig(:jwt, :signing_key) ||
   (Rails.env.production? ? raise("JWT signing key is not configured") : "change-me-in-production")
 
 JWTSessions.access_cookie = "farmspot_access"

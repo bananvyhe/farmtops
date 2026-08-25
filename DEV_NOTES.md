@@ -1,9 +1,10 @@
 # Dev Notes
 
-- Canonical context entry: [docs/index.md](/Users/rufus/workspace/projects/farmspot/docs/index.md).
+- Canonical context entry: [docs/index.md](docs/index.md).
+- Supported local workflow: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 - Keep this file operational, not encyclopedic. Do not repeat material that already lives in the docs tree.
 - Treat user edits in the workspace as intentional unless they directly block the current task.
-- Keep local dev runnable end to end: PostgreSQL, Redis, Rails, Sidekiq, Vite frontend.
+- Keep local dev runnable end to end in Docker: PostgreSQL, Redis, Rails, Sidekiq, Vite frontend.
 - Production deploy is Docker-only; use `./scripts/deploy_prod.sh` for VPS deploys.
 - News translation depends on host-to-container access to `NEWS_TRANSLATOR_BASE_URL`; if Sidekiq times out, check UFW and allow Docker bridge traffic to `19191/tcp`.
 - Translation is a lock-guarded one-article chain and should advance only on job completion or the one-shot boot recovery.

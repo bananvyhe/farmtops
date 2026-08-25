@@ -3,8 +3,8 @@ require "sidekiq/web"
 Rails.application.routes.draw do
   protected_sidekiq_web = Rack::Builder.new do
     use Rack::Auth::Basic, "Sidekiq" do |username, password|
-      sidekiq_web_username = Rails.application.credentials.dig(:sidekiq, :web_username) || ENV["SIDEKIQ_WEB_USERNAME"]
-      sidekiq_web_password = Rails.application.credentials.dig(:sidekiq, :web_password) || ENV["SIDEKIQ_WEB_PASSWORD"]
+      sidekiq_web_username = ENV["SIDEKIQ_WEB_USERNAME"] || Rails.application.credentials.dig(:sidekiq, :web_username)
+      sidekiq_web_password = ENV["SIDEKIQ_WEB_PASSWORD"] || Rails.application.credentials.dig(:sidekiq, :web_password)
 
       next false if sidekiq_web_username.blank? || sidekiq_web_password.blank?
 

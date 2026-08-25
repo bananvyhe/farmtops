@@ -15,6 +15,7 @@
 /.env
 /.env.*
 !/.env.production.example
+!/.env.development.example
 /.idea/
 /.vscode/
 /coverage/

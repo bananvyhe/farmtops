@@ -10,43 +10,43 @@
 
 ## 00-core
 
-- [vision.md](/Users/rufus/workspace/projects/farmspot/docs/vision.md)
+- [vision.md](vision.md)
   Продуктовое видение Farmspot как async-coop auto-farm game поверх каталога игр и подписок.
-- [glossary.md](/Users/rufus/workspace/projects/farmspot/docs/glossary.md)
+- [glossary.md](glossary.md)
   Единый словарь терминов: шард, прайм, вход в мир, уникальный ресурс, энергия, мировой босс.
-- [architecture.md](/Users/rufus/workspace/projects/farmspot/docs/architecture.md)
+- [architecture.md](architecture.md)
   Целевые bounded contexts, основные сервисы и поэтапное расширение текущего Rails + Vue проекта.
-- [decisions/0001-renderer-choice.md](/Users/rufus/workspace/projects/farmspot/docs/decisions/0001-renderer-choice.md)
+- [decisions/0001-renderer-choice.md](decisions/0001-renderer-choice.md)
   Почему рендер мира строится на PixiJS, а GSAP ограничивается UI и переходами.
 
 ## 10-systems
 
-- [worldgen/overview.md](/Users/rufus/workspace/projects/farmspot/docs/worldgen/overview.md)
+- [worldgen/overview.md](worldgen/overview.md)
   Процедурная генерация шардов, карты, спавнов игроков, мобов, босса, ресурсов и pixel-art ассетов.
-- [worldgen/asset_prompts.md](/Users/rufus/workspace/projects/farmspot/docs/worldgen/asset_prompts.md)
+- [worldgen/asset_prompts.md](worldgen/asset_prompts.md)
   Список того, что нужно генерировать, и шаблоны промтов для нейросетевого пайплайна по спрайтам, тайлам и UI-ассетам.
-- [gameplay/combat.md](/Users/rufus/workspace/projects/farmspot/docs/gameplay/combat.md)
+- [gameplay/combat.md](gameplay/combat.md)
   Боевая модель, scaling по числу игроков, XP-кривая, бот-симуляция и условия победы в шарде.
-- [gameplay/resources.md](/Users/rufus/workspace/projects/farmspot/docs/gameplay/resources.md)
+- [gameplay/resources.md](gameplay/resources.md)
   Энергия, глобальные и шардовые ресурсы, восстановление HP, лут и tempo 2-5 часовой сессии.
 
 ## 20-implementation
 
-- [netcode/overview.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/overview.md)
+- [netcode/overview.md](netcode/overview.md)
   Реализация shard lifecycle, presence, prime-time matching, sync loop, authoritative backend и клиентское состояние.
-- [netcode/server_simulation.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/server_simulation.md)
+- [netcode/server_simulation.md](netcode/server_simulation.md)
   Отдельный узкий план серверной симуляции: spawn, movement, combat, resource gathering, respawn, logs и snapshot delivery.
-- [netcode/shard_layers.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/shard_layers.md)
+- [netcode/shard_layers.md](netcode/shard_layers.md)
   Правила слоев внутри шарда, лимит 10 активных участников на слой, выбор свободного слоя и ограничения изоляции.
-- [runbooks/news_translation.md](/Users/rufus/workspace/projects/farmspot/docs/runbooks/news_translation.md)
+- [runbooks/news_translation.md](runbooks/news_translation.md)
   Короткий runbook по очереди перевода новостей, повторным job'ам, lock/recovery и проверке окружения Sidekiq.
 
 ## Рекомендуемый узкий вход по задачам
 
-- Если задача про общий смысл продукта: открыть [vision.md](/Users/rufus/workspace/projects/farmspot/docs/vision.md) и [glossary.md](/Users/rufus/workspace/projects/farmspot/docs/glossary.md).
-- Если задача про генерацию мира и контент: открыть [worldgen/overview.md](/Users/rufus/workspace/projects/farmspot/docs/worldgen/overview.md).
-- Если задача про баланс, XP, мобов и босса: открыть [gameplay/combat.md](/Users/rufus/workspace/projects/farmspot/docs/gameplay/combat.md) и [gameplay/resources.md](/Users/rufus/workspace/projects/farmspot/docs/gameplay/resources.md).
-- Если задача про API, БД, presence, синхронизацию, прайм-сетку и слои шарда: открыть [architecture.md](/Users/rufus/workspace/projects/farmspot/docs/architecture.md), [netcode/overview.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/overview.md), [netcode/server_simulation.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/server_simulation.md) и [netcode/shard_layers.md](/Users/rufus/workspace/projects/farmspot/docs/netcode/shard_layers.md).
+- Если задача про общий смысл продукта: открыть [vision.md](vision.md) и [glossary.md](glossary.md).
+- Если задача про генерацию мира и контент: открыть [worldgen/overview.md](worldgen/overview.md).
+- Если задача про баланс, XP, мобов и босса: открыть [gameplay/combat.md](gameplay/combat.md) и [gameplay/resources.md](gameplay/resources.md).
+- Если задача про API, БД, presence, синхронизацию, прайм-сетку и слои шарда: открыть [architecture.md](architecture.md), [netcode/overview.md](netcode/overview.md), [netcode/server_simulation.md](netcode/server_simulation.md) и [netcode/shard_layers.md](netcode/shard_layers.md).
 
 ## Текущий статус репозитория
 

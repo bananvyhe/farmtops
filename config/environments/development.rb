@@ -12,6 +12,9 @@ Rails.application.configure do
   # Show full error reports.
   config.consider_all_requests_local = true
 
+  # Vite proxies API requests through the Compose service name in Docker dev.
+  config.hosts << "web"
+
   # Enable server timing.
   config.server_timing = true
 
