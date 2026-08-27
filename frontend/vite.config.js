@@ -11,7 +11,9 @@ export default defineConfig({
     vuetify({ autoImport: true })
   ],
   server: {
-    host: "127.0.0.1",
+    // The dev server runs inside Docker and must listen on the container
+    // interface so the published host port can reach it.
+    host: "0.0.0.0",
     port: 5173,
     allowedHosts: ["localhost", "127.0.0.1"],
     proxy: {

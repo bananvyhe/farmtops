@@ -98,6 +98,12 @@ services:
       web:
         condition: service_healthy
     command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:5173/ >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
 
 volumes:
   bundle_dev_data:
