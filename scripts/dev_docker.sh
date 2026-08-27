@@ -6,6 +6,12 @@ COMPOSE_FILE="${COMPOSE_FILE:-$ROOT_DIR/docker-compose.dev.yml}"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env.development}"
 DOCKER_CONTEXT="${DOCKER_CONTEXT:-default}"
 
+# Pass the local credentials key to development containers at runtime.
+# It is intentionally not copied into the image or committed to Git.
+if [[ -f "$ROOT_DIR/config/master.key" ]]; then
+  export RAILS_MASTER_KEY="$(tr -d '\r\n' < "$ROOT_DIR/config/master.key")"
+fi
+
 if docker --context "$DOCKER_CONTEXT" compose version >/dev/null 2>&1; then
   compose() {
     docker --context "$DOCKER_CONTEXT" compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
