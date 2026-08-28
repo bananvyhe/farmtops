@@ -83,7 +83,7 @@ module News
     attr_reader :section, :source, :client, :sleeper, :logger, :max_articles, :max_pages, :max_retries,
       :translator, :source_lang, :target_lang, :crawl_run, :crawl_throttle
 
-    Candidate = Struct.new(:url, :title, :preview_text, :preview_html, :image_url, :source_article_id, :raw_payload, keyword_init: true)
+    Candidate = Struct.new(:url, :title, :preview_text, :preview_html, :image_url, :source_article_id, :rss_game_name, :raw_payload, keyword_init: true)
 
     def fetch_document(url, xml: false)
       html = with_retry(url) { client.fetch(url) }
@@ -187,6 +187,7 @@ module News
           preview_html: feed_item_preview_html(node),
           image_url: feed_item_image_url(node, page_url),
           source_article_id: feed_item_id(node, href, page_url),
+          rss_game_name: feed_game_name(node),
           raw_payload: {
             feed_title: extract_text(node, "title"),
             feed_link: href,
@@ -194,10 +195,24 @@ module News
             feed_preview_html: feed_item_preview_html(node),
             feed_description_html: node.at_css("description")&.inner_html.to_s,
             published_at: feed_item_published_at(node),
+            feed_categories: feed_categories(node),
+            rss_game_name: feed_game_name(node),
             tags: article_tag_names(node)
           }
         )
       end
+    end
+
+    def feed_categories(node)
+      node.xpath(".//*[local-name() = 'category' or local-name() = 'subject']")
+        .filter_map { |category| category.text.to_s.strip.presence }.uniq
+    end
+
+    def feed_game_name(node)
+      categories = feed_categories(node)
+      normalized_names = categories.map { |name| Game.normalize_identified_name(name) }
+      game = Game.where(normalized_name: normalized_names).order(:created_at, :id).first
+      game&.name && categories.find { |name| Game.normalize_identified_name(name) == game.normalized_name }
     end
 
     def extract_image_url(node, selector, page_url)
@@ -269,6 +284,7 @@ module News
       NewsArticle.transaction do
         article.save!
         article.replace_news_tags!(tag_names) if tag_names.present?
+        News::RssGameLinker.new(article: article, game_name: candidate.rss_game_name, logger: logger).call
       end
       unique_keys.each { |key| seen_keys << key }
       { saved: true, article: }
@@ -357,6 +373,8 @@ module News
           title: title,
           preview_text: preview_text,
           preview_html: candidate.preview_html,
+          feed_categories: candidate.raw_payload[:feed_categories],
+          rss_game_name: candidate.rss_game_name,
           article_tag_names: article_tag_names(fragment)
         }.compact
       }
@@ -421,6 +439,7 @@ module News
           title: title,
           preview_text: preview_text,
           preview_html: preview_html,
+          rss_game_name: candidate.rss_game_name,
           article_tag_names: article_tag_names(document)
         }.compact
       }

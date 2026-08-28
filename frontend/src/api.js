@@ -92,6 +92,7 @@ export const api = {
   updateNewsSource: (id, payload) => request(`/api/admin/news_sources/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteNewsSource: (id) => request(`/api/admin/news_sources/${id}`, { method: "DELETE" }),
   crawlNewsSource: (id) => request(`/api/admin/news_sources/${id}/crawl`, { method: "POST" }),
+  kickNewsQueue: () => request("/api/admin/news_queue/kick", { method: "POST" }),
   createNewsSection: (sourceId, payload) =>
     request(`/api/admin/news_sources/${sourceId}/news_sections`, { method: "POST", body: JSON.stringify(payload) }),
   updateNewsSection: (sourceId, id, payload) =>

@@ -118,4 +118,21 @@ class ApiAdminNewsSourcesTest < ActionDispatch::IntegrationTest
 
     assert_response :not_found
   end
+
+  test "admin can kick stalled news pipelines" do
+    csrf = login_as(@admin)
+    translation_result = { cleared_lock: true, enqueued: true }
+    game_result = { cleared_lock: true, ready: true, enqueued: true }
+
+    News::Translation::Recovery.any_instance.stub(:call, translation_result) do
+      News::GameIdentification::Recovery.any_instance.stub(:call, game_result) do
+        post "/api/admin/news_queue/kick", headers: { "CONTENT_TYPE" => "application/json", "X-CSRF-Token" => csrf }
+      end
+    end
+
+    assert_response :success
+    assert_equal true, json_response["kicked"]
+    assert_equal translation_result.stringify_keys, json_response["translation"]
+    assert_equal game_result.stringify_keys, json_response["games"]
+  end
 end

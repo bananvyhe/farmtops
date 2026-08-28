@@ -49,6 +49,7 @@ Rails.application.routes.draw do
     end
 
     namespace :admin do
+      post "news_queue/kick", to: "news_queue#kick"
       resources :users, only: %i[index update destroy]
       resources :tariffs, only: %i[index create update destroy]
       resources :news_sources do

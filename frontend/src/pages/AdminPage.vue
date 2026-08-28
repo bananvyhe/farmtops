@@ -6,6 +6,8 @@ import { sessionState } from "../useSession"
 const users = ref([])
 const tariffs = ref([])
 const error = ref("")
+const queueMessage = ref("")
+const queueBusy = ref(false)
 const tariffForm = reactive({
   name: "",
   monthly_price_rubles: "",
@@ -80,11 +82,29 @@ async function deleteTariff(tariff) {
   }
 }
 
+async function kickNewsQueue() {
+  queueBusy.value = true
+  queueMessage.value = ""
+  try {
+    await api.kickNewsQueue()
+    queueMessage.value = "Очередь запущена"
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    queueBusy.value = false
+  }
+}
+
 onMounted(loadAdmin)
 </script>
 
 <template>
   <main class="page-grid" v-if="sessionState.user?.role === 'admin'">
+    <section class="card card-wide">
+      <h2>Новости</h2>
+      <button :disabled="queueBusy" @click="kickNewsQueue">{{ queueBusy ? "Запуск…" : "Пинок очереди" }}</button>
+      <span v-if="queueMessage">{{ queueMessage }}</span>
+    </section>
     <section class="card">
       <h2>Месячные тарифы</h2>
       <table>
