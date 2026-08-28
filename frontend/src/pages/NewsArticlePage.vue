@@ -219,9 +219,9 @@ onMounted(() => {
 
         <h1 class="news-article-title">{{ article.title }}</h1>
 
-        <div v-if="article.full_article_available === false" class="news-article-note">
+        <!--  <div v-if="article.full_article_available === false" class="news-article-note">
           Доступен только анонс статьи. Полный текст у источника сейчас недоступен.
-        </div>
+        </div> -->
 
         <img
           v-if="article.image_url"

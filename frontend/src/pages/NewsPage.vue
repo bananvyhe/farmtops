@@ -654,7 +654,7 @@ onBeforeUnmount(() => {
               {{ tag.name }}
             </v-chip>
             <span class="news-card__time">{{ formatDate(article.published_at || article.fetched_at) }}</span>
-            <span v-if="article.full_article_available === false" class="news-card__badge news-card__badge--excerpt">Анонс</span>
+            <!-- <span v-if="article.full_article_available === false" class="news-card__badge news-card__badge--excerpt">Анонс</span>  -->
             <span v-if="isUnread(article)" class="news-card__badge">Новая</span>
           </div>
 
