@@ -13,7 +13,7 @@ class Shard < ApplicationRecord
 
   scope :visible_to_user, lambda { |user|
     left_outer_joins(:layer_memberships)
-      .where("shards.user_id = :user_id OR shard_layer_memberships.user_id = :user_id", user_id: user.id)
+      .where(shard_layer_memberships: { user_id: user.id })
       .distinct
   }
 

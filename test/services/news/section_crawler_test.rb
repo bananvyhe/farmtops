@@ -403,6 +403,18 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     assert_equal "new-game", article.news_article_game.game.slug
   end
 
+  test "does not treat an existing generic rss category as a game" do
+    source = NewsSource.create!(name: "RSS Generic Category", base_url: "https://feed.example.com", active: true, crawl_delay_min_seconds: 0, crawl_delay_max_seconds: 0, config: { "pagination_mode" => "feed" })
+    section = source.news_sections.create!(name: "Feed", url: "https://feed.example.com/news", active: true, config: { "pagination_mode" => "feed" })
+    Game.create!(name: "MMORPG", slug: "mmorpg", normalized_name: "mmorpg")
+    pages = { "https://feed.example.com/news/feed/" => feed_page([{ title: "Generic news", link: "https://feed.example.com/generic", description: "Feed body", guid: "generic", categories: ["MMORPG"] }]) }
+
+    News::SectionCrawler.new(section:, client: FakeClient.new(pages), sleeper: NullSleeper.new, max_articles: 1, max_pages: 1, max_retries: 1).call
+
+    article = section.news_articles.find_by!(canonical_url: "https://feed.example.com/generic")
+    assert_nil article.news_article_game
+  end
+
   test "preserves tags from feed descriptions when the article page is unavailable" do
     source = NewsSource.create!(
       name: "Feed Tags Example",

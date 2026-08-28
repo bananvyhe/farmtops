@@ -163,6 +163,7 @@ module Api
     end
 
     def join_news_game_shard!(game)
+      game = Game.canonical_for(game)
       shard = Shard.find_or_initialize_by(game_id: game.id)
       shard.assign_attributes(
         user_id: shard.user_id || current_user.id,
@@ -172,6 +173,9 @@ module Api
       )
       shard.save! if shard.new_record? || shard.changed?
 
+      Shards::LayerAllocator.new(shard:, user: current_user).call
+    rescue ActiveRecord::RecordNotUnique
+      shard = Shard.find_by!(game_id: game.id)
       Shards::LayerAllocator.new(shard:, user: current_user).call
     end
 

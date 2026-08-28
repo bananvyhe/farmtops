@@ -35,6 +35,15 @@ class Game < ApplicationRecord
     find_by(external_game_id: external_game_id)
   end
 
+  def self.canonical_for(game)
+    return game if game.blank?
+
+    normalized = game.normalized_name.presence || normalize_identified_name(game.name)
+    matches = where(normalized_name: normalized)
+    matches = where("LOWER(TRIM(name)) = ?", normalized) if matches.none? && normalized.present?
+    matches.order(:created_at, :id).first || game
+  end
+
   def followers_count
     news_game_bookmarks.count
   end

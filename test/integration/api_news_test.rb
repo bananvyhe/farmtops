@@ -469,6 +469,9 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
     assert_equal 0, json_response.dig("game", "bookmarks_count")
     assert_nil ShardLayerMembership.find_by(shard_id: shard_id, user_id: user.id)
     assert_not_nil Shard.find_by(id: shard_id)
+    get "/api/shards"
+    assert_response :success
+    assert_empty json_response.fetch("shards")
 
     post "/api/news/#{@article.id}/bookmark_game",
       headers: { "X-CSRF-Token" => csrf_token }

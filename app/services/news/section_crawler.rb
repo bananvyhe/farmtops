@@ -209,12 +209,12 @@ module News
     end
 
     def feed_game_name(node)
-      categories = feed_categories(node)
+      categories = feed_categories(node).reject { |name| generic_feed_category?(name) }
       normalized_names = categories.map { |name| Game.normalize_identified_name(name) }
       game = Game.where(normalized_name: normalized_names).order(:created_at, :id).first
       return categories.find { |name| Game.normalize_identified_name(name) == game.normalized_name } if game
 
-      categories.find { |name| !generic_feed_category?(name) }
+      categories.first
     end
 
     def generic_feed_category?(name)

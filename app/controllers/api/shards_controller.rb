@@ -9,7 +9,7 @@ module Api
     end
 
     def create
-      game = Game.find(params[:game_id])
+      game = Game.canonical_for(Game.find(params[:game_id]))
       return render_error("Game not available", status: :not_found) if game.followers_count.zero?
 
       shard = Shard.find_or_initialize_by(game_id: game.id)
@@ -28,6 +28,12 @@ module Api
       else
         render json: { errors: shard.errors.full_messages }, status: :unprocessable_entity
       end
+    rescue ActiveRecord::RecordNotUnique
+      shard = Shard.find_by!(game_id: game.id)
+      Shards::LayerAllocator.new(shard:, user: current_user).call
+      payload = world_payload(shard)
+      broadcast_world_snapshot(shard, payload)
+      render json: payload, status: :created
     end
 
     def world

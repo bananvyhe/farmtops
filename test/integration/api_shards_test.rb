@@ -137,6 +137,48 @@ class ApiShardsTest < ActionDispatch::IntegrationTest
     assert_not_nil Shard.find_by(id: shard_id)
   end
 
+  test "same-named duplicate game records still use one canonical shared shard" do
+    first_game = Game.create!(name: "Duplicate Name Game", slug: "duplicate-name-game", normalized_name: "duplicate name game")
+    duplicate_game = Game.create!(name: "Duplicate Name Game", slug: "duplicate-name-game-2", normalized_name: "duplicate name game")
+
+    first = open_session
+    first_csrf_token = register_user!(first, "canonical-shard-first@example.com")
+    first_user = User.find_by!(email: "canonical-shard-first@example.com")
+    NewsGameBookmark.create!(game: first_game, user: first_user, bookmarked_at: Time.current)
+    first.post "/api/games/#{first_game.id}/shard", headers: { "X-CSRF-Token" => first_csrf_token }
+    shard_id = first.response.parsed_body.dig("shard", "id")
+
+    second = open_session
+    second_csrf_token = register_user!(second, "canonical-shard-second@example.com")
+    second_user = User.find_by!(email: "canonical-shard-second@example.com")
+    NewsGameBookmark.create!(game: duplicate_game, user: second_user, bookmarked_at: Time.current)
+    second.post "/api/games/#{duplicate_game.id}/shard", headers: { "X-CSRF-Token" => second_csrf_token }
+
+    assert_equal 201, second.response.status
+    assert_equal shard_id, second.response.parsed_body.dig("shard", "id")
+    assert_equal 1, Shard.where(game_id: [first_game.id, duplicate_game.id]).count
+  end
+
+  test "a user who leaves is no longer shown the shared shard in profile" do
+    game = Game.create!(name: "Profile Visibility Game", slug: "profile-visibility-game")
+    csrf_token = register_user!(self, "profile-visibility@example.com")
+    user = User.find_by!(email: "profile-visibility@example.com")
+    NewsGameBookmark.create!(game: game, user: user, bookmarked_at: Time.current)
+
+    post "/api/games/#{game.id}/shard", headers: { "X-CSRF-Token" => csrf_token }
+    shard_id = json_response.dig("shard", "id")
+    get "/api/shards"
+    assert_response :success
+    assert_includes json_response.fetch("shards").map { |shard| shard["id"] }, shard_id
+
+    delete "/api/shards/#{shard_id}/leave", headers: { "X-CSRF-Token" => csrf_token }
+    assert_response :success
+    get "/api/shards"
+    assert_response :success
+    assert_empty json_response.fetch("shards")
+    assert_not_nil Shard.find_by(id: shard_id)
+  end
+
   test "returns game prime overlaps only for visible followers of that game" do
     game = Game.create!(name: "Prime Game", slug: "prime-game")
     current_user = User.create!(email: "game-prime-current@example.com", password: "Password123!", password_confirmation: "Password123!", role: :client, active: true, nickname: "game_prime_me", prime_cycle_days: 1, prime_cycle_slots_local: [12, 13])
