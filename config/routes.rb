@@ -37,6 +37,7 @@ Rails.application.routes.draw do
     end
     get "games/:game_id/prime_overlaps", to: "games#prime_overlaps"
     post "games/:game_id/shard", to: "shards#create"
+    delete "games/:game_id/follow", to: "games#unfollow"
     get "games/search", to: "games#search"
     resource :dashboard, only: :show, controller: :dashboard
     resources :payment_transactions, path: "payments", only: %i[create show]

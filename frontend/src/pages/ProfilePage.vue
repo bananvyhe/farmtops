@@ -292,6 +292,21 @@ async function loadShards() {
   }
 }
 
+async function unfollowShardGame(shard) {
+  if (!shard?.game_id) return
+  if (!window.confirm(`Отменить слежение за игрой «${shard.game_name}»? Шард останется общим для других участников.`)) return
+
+  try {
+    await api.unfollowGame(shard.game_id)
+    shards.value = shards.value.filter((candidate) => candidate.game_id !== shard.game_id)
+    if (!shards.value.some((candidate) => String(candidate.id) === String(activeShardId.value))) {
+      activeShardId.value = shards.value[0] ? String(shards.value[0].id) : null
+    }
+  } catch (err) {
+    error.value = err.message
+  }
+}
+
 async function loadPrimeOverlaps() {
   loadingPrimeOverlaps.value = true
 
@@ -614,6 +629,7 @@ watch(nicknameDraft, (nextValue) => {
                 <div><span>Seed</span><strong>{{ shardSeedShort(shard.world_seed) }}</strong></div>
                 <div><span>Создан</span><strong>{{ new Date(shard.created_at).toLocaleString("ru-RU") }}</strong></div>
               </div>
+              <button type="button" class="ghost" @click="unfollowShardGame(shard)">Отменить слежение</button>
             </article>
           </v-window-item>
         </v-window>

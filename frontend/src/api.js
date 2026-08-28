@@ -71,6 +71,7 @@ export const api = {
   createShardChatMessage: (id, payload) =>
     request(`/api/shards/${id}/chat_messages`, { method: "POST", body: JSON.stringify(payload) }),
   createShard: (gameId) => request(`/api/games/${gameId}/shard`, { method: "POST" }),
+  unfollowGame: (gameId) => request(`/api/games/${gameId}/follow`, { method: "DELETE" }),
   searchGames: (params = {}) => request(withQuery("/api/games/search", params)),
   dashboard: () => request("/api/dashboard"),
   createPayment: (payload) => request("/api/payments", { method: "POST", body: JSON.stringify(payload) }),

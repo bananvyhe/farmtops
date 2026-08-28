@@ -1,6 +1,6 @@
 module Api
   class GamesController < BaseController
-    before_action :ensure_authenticated!, only: :prime_overlaps
+    before_action :ensure_authenticated!, only: %i[prime_overlaps unfollow]
 
     def search
       pinned_games = pinned_game_scope
@@ -46,6 +46,19 @@ module Api
       end
 
       render json: { game: game_payload(game), overlaps: }
+    end
+
+    def unfollow
+      requested_game = Game.find(params[:game_id])
+      game = Game.canonical_for(requested_game)
+      game_ids = [requested_game.id, game.id].uniq
+      NewsGameBookmark.where(user_id: current_user.id, game_id: game_ids).delete_all
+
+      Shard.where(game_id: game_ids).find_each do |shard|
+        shard.layer_memberships.where(user_id: current_user.id).destroy_all
+      end
+
+      render json: { ok: true, game: game_payload(game).merge(bookmarked: false) }
     end
 
     private
