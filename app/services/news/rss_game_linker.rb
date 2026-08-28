@@ -1,3 +1,5 @@
+require "digest"
+
 module News
   class RssGameLinker
     def initialize(article:, game_name:, logger: Rails.logger)
@@ -13,7 +15,7 @@ module News
       normalized = Game.normalize_identified_name(game_name)
       game = Game.find_by(normalized_name: normalized)
       game ||= Game.where("LOWER(TRIM(name)) = ?", normalized).order(:created_at, :id).first
-      return unless game
+      game ||= Game.find_or_match_by_identified_name!(identified_game_name: game_name, slug: game_slug(game_name))
 
       article.create_news_article_game!(
         game: game,
@@ -32,5 +34,12 @@ module News
     private
 
     attr_reader :article, :game_name, :logger
+
+    def game_slug(name)
+      base = name.to_s.parameterize.presence || "rss-game-#{Digest::SHA256.hexdigest(name.to_s)[0, 12]}"
+      return base unless Game.exists?(slug: base)
+
+      "#{base}-#{Digest::SHA256.hexdigest(name.to_s)[0, 8]}"
+    end
   end
 end

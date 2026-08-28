@@ -1,9 +1,10 @@
-#!/bin/zsh
+#!/usr/bin/env bash
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 RAILS_ENV="${RAILS_ENV:-development}"
 SITES_FILE="${SITES_FILE:-sites.txt}"
+export RAILS_ENV
 
 cd "$ROOT_DIR"
 

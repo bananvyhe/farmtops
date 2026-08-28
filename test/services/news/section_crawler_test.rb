@@ -391,6 +391,18 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     assert_equal "Elden Ring", article.raw_payload["rss_game_name"]
   end
 
+  test "creates and links a game when the rss category is new" do
+    source = NewsSource.create!(name: "RSS New Game", base_url: "https://feed.example.com", active: true, crawl_delay_min_seconds: 0, crawl_delay_max_seconds: 0, config: { "pagination_mode" => "feed" })
+    section = source.news_sections.create!(name: "Feed", url: "https://feed.example.com/news", active: true, config: { "pagination_mode" => "feed" })
+    pages = { "https://feed.example.com/news/feed/" => feed_page([{ title: "New game news", link: "https://feed.example.com/new", description: "Feed body", guid: "new", categories: ["New Game", "News"] }]) }
+
+    News::SectionCrawler.new(section:, client: FakeClient.new(pages), sleeper: NullSleeper.new, max_articles: 1, max_pages: 1, max_retries: 1).call
+
+    article = section.news_articles.find_by!(canonical_url: "https://feed.example.com/new")
+    assert_equal "New Game", article.news_article_game.game.name
+    assert_equal "new-game", article.news_article_game.game.slug
+  end
+
   test "preserves tags from feed descriptions when the article page is unavailable" do
     source = NewsSource.create!(
       name: "Feed Tags Example",

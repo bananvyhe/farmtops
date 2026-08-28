@@ -212,7 +212,16 @@ module News
       categories = feed_categories(node)
       normalized_names = categories.map { |name| Game.normalize_identified_name(name) }
       game = Game.where(normalized_name: normalized_names).order(:created_at, :id).first
-      game&.name && categories.find { |name| Game.normalize_identified_name(name) == game.normalized_name }
+      return categories.find { |name| Game.normalize_identified_name(name) == game.normalized_name } if game
+
+      categories.find { |name| !generic_feed_category?(name) }
+    end
+
+    def generic_feed_category?(name)
+      %w[
+        news opinion editorial industry interviews features mmorpg gaming games
+        podcasts podcast giveaways guide guides community events
+      ].include?(Game.normalize_identified_name(name))
     end
 
     def extract_image_url(node, selector, page_url)
