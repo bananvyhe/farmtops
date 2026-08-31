@@ -60,7 +60,7 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
     assert_equal "Example", json_response["sections"].first["source_name"]
   end
 
-  test "hides playtoearn articles from the default feed but keeps source filtering available" do
+  test "includes playtoearn articles in the default feed" do
     playtoearn_source = NewsSource.create!(
       name: "PlayToEarn",
       base_url: "https://playtoearn.com",
@@ -91,7 +91,7 @@ class ApiNewsTest < ActionDispatch::IntegrationTest
     get "/api/news"
 
     assert_response :success
-    refute_includes json_response["articles"].map { |article| article["title"] }, "PlayToEarn story"
+    assert_includes json_response["articles"].map { |article| article["title"] }, "PlayToEarn story"
     assert_includes json_response["sources"].map { |source| source["name"] }, "PlayToEarn"
 
     get "/api/news", params: { source_id: playtoearn_source.id }

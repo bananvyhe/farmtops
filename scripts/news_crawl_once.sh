@@ -14,6 +14,9 @@ bundle exec rails runner - <<'RUBY'
 puts "Running one-shot news crawl..."
 
 NewsSource.active.find_each do |source|
+  throttle = News::CrawlThrottle.new
+  throttle.clear!(source)
+  throttle.clear_full_article_fetch!(source)
   source.news_sections.active.find_each do |section|
     puts "Crawling #{source.name} / #{section.name}"
     begin

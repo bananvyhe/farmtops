@@ -556,7 +556,8 @@ onBeforeUnmount(() => {
 
     <section class="news-filters card card--dark news-filters--bare">
       <div class="news-filters__grid">
-        <v-select
+       
+          <v-select
           v-model="selectedSourceId"
           :items="sourceItems"
           item-title="title"
@@ -565,7 +566,7 @@ onBeforeUnmount(() => {
           variant="outlined"
           density="comfortable"
           hide-details
-        />
+        /> 
         <v-select
           v-model="selectedSectionId"
           :items="sectionItems"

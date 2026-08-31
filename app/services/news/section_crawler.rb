@@ -220,6 +220,7 @@ module News
     def generic_feed_category?(name)
       %w[
         news opinion editorial industry interviews features mmorpg gaming games
+        alphas & betas alphas and betas 
         podcasts podcast giveaways guide guides community events
       ].include?(Game.normalize_identified_name(name))
     end

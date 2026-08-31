@@ -34,6 +34,7 @@ module Api
       end
 
       def crawl
+        reset_crawl_throttle!
         @news_source.news_sections.active.find_each do |section|
           NewsCrawlSectionJob.perform_async(section.id)
         end
@@ -57,6 +58,14 @@ module Api
           :crawl_delay_max_seconds,
           config: {}
         )
+      end
+
+      def reset_crawl_throttle!
+        throttle = News::CrawlThrottle.new
+        throttle.clear!(@news_source)
+        throttle.clear_full_article_fetch!(@news_source)
+      rescue StandardError => e
+        Rails.logger.warn("[Api::Admin::NewsSourcesController] failed to reset crawl throttle: #{e.class} #{e.message}")
       end
     end
   end

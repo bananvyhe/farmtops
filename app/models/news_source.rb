@@ -2,7 +2,7 @@ require "uri"
 
 class NewsSource < ApplicationRecord
   BLOCKED_SOURCE_HOSTS = %w[theblock.co].freeze
-  GENERAL_FEED_HIDDEN_SOURCE_HOSTS = %w[playtoearn.com].freeze
+  GENERAL_FEED_HIDDEN_SOURCE_HOSTS = [].freeze
 
   has_many :news_sections, dependent: :destroy
   has_many :news_articles, dependent: :destroy
