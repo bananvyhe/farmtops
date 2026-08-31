@@ -19,7 +19,7 @@ namespace :news do
 
       source = NewsSource.find_or_initialize_by(name: host)
       source.base_url = source_base_url_for(host)
-      source.active = true if source.new_record?
+      source.active = true
       source.crawl_delay_min_seconds = source.crawl_delay_min_seconds.presence || 1
       source.crawl_delay_max_seconds = source.crawl_delay_max_seconds.presence || 3
       source.config = (source.config || {}).merge(source_config_for(host))
@@ -32,7 +32,7 @@ namespace :news do
 
       section = source.news_sections.find_or_initialize_by(url: normalized_url)
       section.name = section_name
-      section.active = true if section.new_record?
+      section.active = true
       section.config = (section.config || {}).merge(section_config_for(host))
       section.save!
     end
@@ -43,7 +43,14 @@ namespace :news do
   desc "Import source and section URLs when the news catalog is empty"
   task bootstrap_sites: :environment do
     if NewsSource.exists?
-      puts "News sources already exist; skipping bootstrap."
+      source = NewsSource.find_by(name: "playtoearn.com")
+      if source
+        source.update!(active: true)
+        source.news_sections.update_all(active: true)
+        puts "Re-enabled playtoearn.com crawling."
+      else
+        puts "News sources already exist; skipping bootstrap."
+      end
       next
     end
 

@@ -81,6 +81,10 @@ function filtersFromRoute() {
   }
 }
 
+function massivelySourceId(sourceList = sources.value) {
+  return sourceList.find((source) => /massivelyop\.com/i.test(String(source.base_url || source.name)))?.id ?? null
+}
+
 function routeQueryForFilters() {
   const query = {}
   if (selectedSourceId.value !== null && selectedSourceId.value !== undefined) query.source_id = String(selectedSourceId.value)
@@ -198,6 +202,14 @@ function restoreFeedSnapshot() {
   selectedSectionId.value = state.selectedSectionId ?? null
   selectedTagIds.value = Array.isArray(state.selectedTagIds) ? state.selectedTagIds : []
   selectedGameId.value = state.selectedGameId ?? null
+
+  if (!route.query.source_id && selectedSourceId.value === null) {
+    const defaultSourceId = massivelySourceId(sources.value)
+    if (defaultSourceId !== null) {
+      selectedSourceId.value = defaultSourceId
+      return false
+    }
+  }
   gameItems.value = state.gameItems || []
   gameSearch.value = state.gameSearch || ""
   nextCursor.value = state.nextCursor || null
@@ -388,6 +400,14 @@ async function loadFeed() {
     nextCursor.value = data.next_cursor || null
     hasMore.value = Boolean(data.has_more)
 
+    if (!route.query.source_id && selectedSourceId.value === null) {
+      const defaultSourceId = massivelySourceId(data.sources)
+      if (defaultSourceId !== null) {
+        selectedSourceId.value = defaultSourceId
+        return
+      }
+    }
+
     if (selectedSectionId.value && !sectionItems.value.some((item) => item.value === selectedSectionId.value)) {
       selectedSectionId.value = null
     }
@@ -569,6 +589,7 @@ onBeforeUnmount(() => {
         /> 
         <v-select
           v-model="selectedSectionId"
+          v-if="false"
           :items="sectionItems"
           item-title="title"
           item-value="value"
@@ -579,6 +600,7 @@ onBeforeUnmount(() => {
         />
           <v-select
           v-model="selectedTagIds"
+          v-if="false"
           :items="tagItems"
           item-title="title"
           item-value="value"
