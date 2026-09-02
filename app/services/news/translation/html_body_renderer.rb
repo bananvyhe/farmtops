@@ -20,8 +20,7 @@ module News
         return build_plain_html if source_html.nil? || source_html.empty?
 
         fragment = Nokogiri::HTML.fragment(source_html)
-        unwrap_inline_block_wrappers!(fragment)
-        rendered_nodes = fragment.children.filter_map { |child| render_node(child) }
+        rendered_nodes = fragment.children.flat_map { |child| Array(render_node(child)) }.compact
         return build_plain_html if rendered_nodes.empty?
 
         output = Nokogiri::HTML::DocumentFragment.parse("")
@@ -36,6 +35,9 @@ module News
       def render_node(node)
         return node.dup if node.text?
         return node.dup if media_only_block?(node)
+        if inline_block_wrapper?(node)
+          return node.children.flat_map { |child| Array(render_node(child)) }.compact
+        end
 
         if text_block_node?(node)
           translated_paragraph = next_translated_paragraph
@@ -50,21 +52,13 @@ module News
 
         copy = node.dup
         copy.children.remove
-        node.children.each do |child|
-          rendered_child = render_node(child)
-          copy.add_child(rendered_child) if rendered_child
-        end
+        node.children.flat_map { |child| Array(render_node(child)) }.compact.each { |child| copy.add_child(child) }
         copy
       end
 
-      def unwrap_inline_block_wrappers!(fragment)
-        fragment.css(INLINE_FORMATTING_TAGS.join(", ")).reverse_each do |wrapper|
-          next unless wrapper.element_children.any? { |child| BLOCK_TAGS.include?(child.name) }
-
-          children = wrapper.children.to_a
-          children.each { |child| wrapper.add_previous_sibling(child) }
-          wrapper.remove
-        end
+      def inline_block_wrapper?(node)
+        INLINE_FORMATTING_TAGS.include?(node.name) &&
+          node.element_children.any? { |child| BLOCK_TAGS.include?(child.name) }
       end
 
       def embed_node?(node)
