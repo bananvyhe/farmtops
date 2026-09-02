@@ -6,6 +6,8 @@ module News
     class HtmlBodyRenderer
       TEXT_BLOCK_SELECTOR = "p, li, blockquote, figcaption, pre, h2, h3, h4, h5, h6"
       EMBED_SELECTOR = "iframe, video, source, object, embed, blockquote.twitter-tweet, blockquote.instagram-media"
+      INLINE_FORMATTING_TAGS = %w[strong b em i u s].freeze
+      BLOCK_TAGS = %w[p li blockquote figcaption pre h1 h2 h3 h4 h5 h6 div ul ol figure].freeze
 
       def initialize(source_html:)
         @source_html = source_html.to_s
@@ -18,6 +20,7 @@ module News
         return build_plain_html if source_html.nil? || source_html.empty?
 
         fragment = Nokogiri::HTML.fragment(source_html)
+        unwrap_inline_block_wrappers!(fragment)
         rendered_nodes = fragment.children.filter_map { |child| render_node(child) }
         return build_plain_html if rendered_nodes.empty?
 
@@ -52,6 +55,16 @@ module News
           copy.add_child(rendered_child) if rendered_child
         end
         copy
+      end
+
+      def unwrap_inline_block_wrappers!(fragment)
+        fragment.css(INLINE_FORMATTING_TAGS.join(", ")).reverse_each do |wrapper|
+          next unless wrapper.element_children.any? { |child| BLOCK_TAGS.include?(child.name) }
+
+          children = wrapper.children.to_a
+          children.each { |child| wrapper.add_previous_sibling(child) }
+          wrapper.remove
+        end
       end
 
       def embed_node?(node)
