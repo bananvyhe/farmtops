@@ -90,6 +90,20 @@ class NewsTranslatePendingArticlesJobTest < ActiveSupport::TestCase
     assert lock_manager.released
   end
 
+  test "retries when another translation chain owns the lock" do
+    lock_manager = FakeLockManager.new(acquired: false)
+    retry_args = nil
+
+    News::Translation::LockManager.stub(:new, lock_manager) do
+      NewsTranslatePendingArticlesJob.stub(:perform_in, ->(delay, crawl_run_id = nil) { retry_args = [delay, crawl_run_id]; "jid-retry" }) do
+        NewsTranslatePendingArticlesJob.new.perform(@crawl_run.id)
+      end
+    end
+
+    assert_equal [30.seconds, @crawl_run.id], retry_args
+    refute lock_manager.released
+  end
+
   test "chooses the latest crawl run when no crawl run is provided" do
     newer_run = @section.news_crawl_runs.create!(
       news_source: @section.news_source,

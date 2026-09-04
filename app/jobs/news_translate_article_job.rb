@@ -60,6 +60,9 @@ class NewsTranslateArticleJob
       NewsTranslateArticleJob.perform_async(next_article_id, lock_token, crawl_run_id)
     else
       lock_manager.release(lock_token)
+      # The lock is global, while crawl runs are source-specific. Once this
+      # chain finishes, pick up a pending run from another source as well.
+      NewsTranslatePendingArticlesJob.perform_async
       begin
         News::GameIdentification::Recovery.new.call
       rescue StandardError => e

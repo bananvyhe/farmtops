@@ -49,7 +49,9 @@ namespace :news do
         source.news_sections.update_all(active: true)
         puts "Re-enabled playtoearn.com crawling."
       else
-        puts "News sources already exist; skipping bootstrap."
+        # Keep the bootstrap idempotent, but do not leave the built-in source
+        # missing just because another source was imported earlier.
+        Rake::Task["news:import_sites"].invoke
       end
       next
     end
