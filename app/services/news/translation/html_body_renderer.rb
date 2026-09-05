@@ -4,7 +4,10 @@ require "nokogiri"
 module News
   module Translation
     class HtmlBodyRenderer
-      TEXT_BLOCK_SELECTOR = "p, li, blockquote, figcaption, pre, h2, h3, h4, h5, h6"
+      # The crawler keeps the article's h1 inside body_html and includes its
+      # text in body_text, so it must participate in the same translation
+      # sequence as the remaining block elements.
+      TEXT_BLOCK_SELECTOR = "p, li, blockquote, figcaption, pre, h1, h2, h3, h4, h5, h6"
       EMBED_SELECTOR = "iframe, video, source, object, embed, blockquote.twitter-tweet, blockquote.instagram-media"
       INLINE_FORMATTING_TAGS = %w[strong b em i u s].freeze
       BLOCK_TAGS = %w[p li blockquote figcaption pre h1 h2 h3 h4 h5 h6 div ul ol figure].freeze
