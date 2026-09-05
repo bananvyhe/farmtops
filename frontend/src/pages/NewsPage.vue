@@ -622,6 +622,7 @@ onBeforeUnmount(() => {
           label="Игра"
           placeholder="Начните вводить название"
           clearable
+          menu-icon=""
           no-filter
           hide-no-data
           :loading="gamesLoading"
@@ -629,7 +630,6 @@ onBeforeUnmount(() => {
           density="comfortable"
           hide-details
         />
-        <v-btn color="primary" size="large" variant="flat" @click="loadFeed">Обновить</v-btn>
       </div>
     </section>
 
@@ -757,7 +757,7 @@ onBeforeUnmount(() => {
 }
 .news-filters__grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(16rem, 1.3fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 1.3fr);
   gap: var(--space-s);
   align-items: center;
 }

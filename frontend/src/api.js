@@ -84,7 +84,7 @@ export const api = {
   updateTariff: (id, payload) => request(`/api/admin/tariffs/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteTariff: (id) => request(`/api/admin/tariffs/${id}`, { method: "DELETE" }),
   news: (params = {}) => request(withQuery("/api/news", params)),
-  newsArticle: (id) => request(`/api/news/${id}`),
+  newsArticle: (id) => request(`/api/news/${id}`, { cache: "no-store" }),
   markNewsReads: (payload) => request("/api/news/reads", { method: "POST", body: JSON.stringify(payload) }),
   bookmarkNewsGame: (articleId) => request(`/api/news/${articleId}/bookmark_game`, { method: "POST" }),
   unbookmarkNewsGame: (articleId) => request(`/api/news/${articleId}/unbookmark_game`, { method: "DELETE" }),
