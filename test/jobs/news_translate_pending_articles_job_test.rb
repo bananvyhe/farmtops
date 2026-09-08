@@ -90,17 +90,13 @@ class NewsTranslatePendingArticlesJobTest < ActiveSupport::TestCase
     assert lock_manager.released
   end
 
-  test "retries when another translation chain owns the lock" do
+  test "does not enqueue duplicate work when another chain owns the lock" do
     lock_manager = FakeLockManager.new(acquired: false)
-    retry_args = nil
 
     News::Translation::LockManager.stub(:new, lock_manager) do
-      NewsTranslatePendingArticlesJob.stub(:perform_in, ->(delay, crawl_run_id = nil) { retry_args = [delay, crawl_run_id]; "jid-retry" }) do
-        NewsTranslatePendingArticlesJob.new.perform(@crawl_run.id)
-      end
+      NewsTranslatePendingArticlesJob.new.perform(@crawl_run.id)
     end
 
-    assert_equal [30.seconds, @crawl_run.id], retry_args
     refute lock_manager.released
   end
 

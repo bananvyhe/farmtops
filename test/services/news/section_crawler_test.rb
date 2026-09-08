@@ -714,6 +714,7 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
         canonical_url: "https://playtoearn.com/news/footer-article",
         article_body_html: <<~HTML
           <article>
+            <h1>Footer article</h1>
             <p>Intro</p>
             <div class="__Info">
               <a href="/news/category/News">News on PlayToEarn</a>
@@ -737,6 +738,7 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     assert_equal 1, result.articles_saved
     article = section.news_articles.find_by!(canonical_url: "https://playtoearn.com/news/footer-article")
     refute_includes article.body_html, "News on PlayToEarn"
+    refute_includes article.body_html, "<h1>Footer article</h1>"
     refute_includes article.body_html, "/about"
     assert_includes article.body_text, "Intro"
     assert_includes article.body_text, "Outro"

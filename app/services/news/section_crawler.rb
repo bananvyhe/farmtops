@@ -594,6 +594,7 @@ module News
     def find_existing_article(article_data)
       scope = source.news_articles
       scope.find_by(source_article_id: article_data[:source_article_id]) ||
+        scope.find_by(canonical_url: article_data[:canonical_url]) ||
         scope.find_by(content_hash: article_data[:content_hash])
     end
 
@@ -645,6 +646,7 @@ module News
       node = best_body_node(document, selector)
       if node.present?
         html = sanitize_news_html(normalize_lazy_images(strip_article_noise(node.inner_html), base_url))
+        html = remove_playtoearn_body_title(html)
         return html if html.present?
       end
 
@@ -701,9 +703,21 @@ module News
     end
 
     def block_texts_from_fragment(fragment)
-      block_selector = "p, li, h1, h2, h3, h4, h5, h6, blockquote, figcaption, pre"
-      paragraphs = fragment.css(block_selector).map(&:text)
-      paragraphs += fragment.css("div").map(&:text) if fragment.css("p").empty? && fragment.css("div").any?
+      # The article title is translated separately and is rendered outside
+      # body_html. Including an embedded h1 here shifts every following
+      # translation block by one position.
+      block_selector = "p, li, h2, h3, h4, h5, h6, blockquote, figcaption, pre"
+      # A few sources (notably PlayToEarn variants) use an inline-only div as
+      # a heading. Include it in document order, but never include a wrapper
+      # that already contains a real block or the same text would be counted
+      # twice.
+      paragraphs = fragment.css("#{block_selector}, div, span, strong, b, em, i, u, s").select do |node|
+        next true unless %w[div span strong b em i u s].include?(node.name)
+        next false if node.ancestors.any? { |ancestor| ("#{block_selector}, div, span, strong, b, em, i, u, s").split(", ").include?(ancestor.name) }
+
+        node.text.to_s.strip.present? &&
+          node.css("p, li, h1, h2, h3, h4, h5, h6, blockquote, figcaption, pre, div").empty?
+      end.map(&:text)
       paragraphs = fragment.children.map(&:text) if paragraphs.empty?
       paragraphs
     end
@@ -772,6 +786,20 @@ module News
 
     def massivelyop_source?
       URI.parse(source.base_url.to_s).host.to_s.sub(/\Awww\./, "") == "massivelyop.com"
+    rescue URI::InvalidURIError, URI::Error
+      false
+    end
+
+    def remove_playtoearn_body_title(html)
+      return html unless playtoearn_source?
+
+      fragment = Nokogiri::HTML.fragment(html.to_s)
+      fragment.css("h1").each(&:remove)
+      fragment.to_html
+    end
+
+    def playtoearn_source?
+      URI.parse(source.base_url.to_s).host.to_s.sub(/\Awww\./, "") == "playtoearn.com"
     rescue URI::InvalidURIError, URI::Error
       false
     end

@@ -3,13 +3,7 @@ class NewsTranslatePendingArticlesJob
 
   def perform(crawl_run_id = nil)
     token = lock_manager.acquire
-    unless token
-      # A crawl can enqueue its translation job while another source is being
-      # translated. Do not lose that job: retry after the current chain has
-      # had time to release the global lock.
-      self.class.perform_in(30.seconds, crawl_run_id)
-      return
-    end
+    return unless token
 
     article = next_pending_article(crawl_run_id)
     if article.blank?

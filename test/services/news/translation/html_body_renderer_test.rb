@@ -13,16 +13,50 @@ class News::Translation::HtmlBodyRendererTest < ActiveSupport::TestCase
     assert_includes html, "<p>Translated paragraph</p>"
   end
 
-  test "keeps the translation sequence when the source body contains h1" do
+  test "unwraps formatting tags when a nested wrapper contains block elements" do
+    renderer = News::Translation::HtmlBodyRenderer.new(
+      source_html: "<strong><span><p>Source heading</p><p>Source paragraph</p></span></strong>"
+    )
+
+    html = renderer.call("Translated heading\n\nTranslated paragraph")
+
+    refute_match(/<strong[^>]*>.*<p>/m, html)
+    assert_includes html, "<p>Translated heading</p>"
+    assert_includes html, "<p>Translated paragraph</p>"
+  end
+
+  test "does not let a body h1 consume the first translated paragraph" do
     renderer = News::Translation::HtmlBodyRenderer.new(
       source_html: "<h1>Source title</h1><p>Source paragraph</p>"
     )
 
-    html = renderer.call("Translated title\n\nTranslated paragraph")
+    html = renderer.call("Translated paragraph")
 
-    assert_includes html, "<h1>Translated title</h1>"
     assert_includes html, "<p>Translated paragraph</p>"
-    refute_includes html, "Source title"
+    assert_includes html, "<h1>Source title</h1>"
     refute_includes html, "Source paragraph"
+  end
+
+  test "keeps an inline-only div heading as one translated block" do
+    renderer = News::Translation::HtmlBodyRenderer.new(
+      source_html: '<div><strong>Source heading</strong></div><p>Source paragraph</p>'
+    )
+
+    html = renderer.call("Translated heading\n\nTranslated paragraph")
+
+    assert_includes html, "<div><strong>Translated heading</strong></div>"
+    assert_includes html, "<p>Translated paragraph</p>"
+    refute_includes html, "Source heading"
+  end
+
+  test "keeps inline formatting inside a regular heading block" do
+    renderer = News::Translation::HtmlBodyRenderer.new(
+      source_html: "<p><strong>Source heading</strong></p><p>Source paragraph</p>"
+    )
+
+    html = renderer.call("Translated heading\n\nTranslated paragraph")
+
+    assert_includes html, "<p><strong>Translated heading</strong></p>"
+    assert_includes html, "<p>Translated paragraph</p>"
   end
 end

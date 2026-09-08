@@ -33,7 +33,6 @@ class NewsTranslateArticleJob
 
       if should_advance && request_id.present? && article.translating?
         News::ArticleTranslator.new(article: article).call(request_id: request_id)
-        enqueue_translation_watchdog
         next_article_id = next_pending_article_id(crawl_run_id)
       end
       next_article_id ||= next_pending_article_id(crawl_run_id) if should_advance
@@ -69,12 +68,6 @@ class NewsTranslateArticleJob
         Rails.logger.warn("[NewsTranslateArticleJob] failed to enqueue game identification recovery: #{e.class} #{e.message}")
       end
     end
-  end
-
-  def enqueue_translation_watchdog
-    NewsTranslatePendingArticlesJob.perform_in(1.minute)
-  rescue StandardError => e
-    Rails.logger.warn("[NewsTranslateArticleJob] failed to enqueue translation watchdog: #{e.class} #{e.message}")
   end
 
   def mark_article_failed(article, error)

@@ -1,3 +1,4 @@
+require "nokogiri"
 require Rails.root.join("app/services/news/translation/lock_manager")
 
 module News
@@ -74,7 +75,9 @@ module News
           source_html = article.raw_payload.to_h["source_body_html"].to_s
           next if source_html.blank? || article.body_text.blank?
 
-          rebuilt_html = News::Translation::HtmlBodyRenderer.new(source_html:).call(article.body_text)
+          rebuilt_html = News::Translation::HtmlBodyRenderer.new(source_html:).call(
+            body_text_without_embedded_title(article, source_html)
+          )
           next if rebuilt_html.blank? || rebuilt_html == article.body_html.to_s
 
           article.update_columns(body_html: rebuilt_html, updated_at: Time.current)
@@ -84,6 +87,15 @@ module News
       rescue StandardError => e
         logger.warn("[News::Translation::Recovery] failed to repair PlayToEarn HTML: #{e.class} #{e.message}")
         0
+      end
+
+      def body_text_without_embedded_title(article, source_html)
+        source_fragment = Nokogiri::HTML.fragment(source_html)
+        source_title = source_fragment.at_css("h1")&.text.to_s.strip
+        source_body_text = article.source_body_text.to_s.split(/\n{2,}/, 2).first.to_s.strip
+        return article.body_text unless source_title.present? && source_title == source_body_text
+
+        article.body_text.to_s.split(/\n{2,}/, 2).last.to_s.presence || article.body_text
       end
 
       def pending_translation_crawl_run_id

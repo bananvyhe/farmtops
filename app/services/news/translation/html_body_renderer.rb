@@ -4,12 +4,12 @@ require "nokogiri"
 module News
   module Translation
     class HtmlBodyRenderer
-      # The crawler keeps the article's h1 inside body_html and includes its
-      # text in body_text, so it must participate in the same translation
-      # sequence as the remaining block elements.
-      TEXT_BLOCK_SELECTOR = "p, li, blockquote, figcaption, pre, h1, h2, h3, h4, h5, h6"
+      # The article title is translated separately and rendered outside the
+      # body. An h1 inside the body must not consume a body translation block.
+      TEXT_BLOCK_SELECTOR = "p, li, blockquote, figcaption, pre, h2, h3, h4, h5, h6"
       EMBED_SELECTOR = "iframe, video, source, object, embed, blockquote.twitter-tweet, blockquote.instagram-media"
       INLINE_FORMATTING_TAGS = %w[strong b em i u s].freeze
+      INLINE_CONTAINER_TAGS = %w[div span].freeze
       BLOCK_TAGS = %w[p li blockquote figcaption pre h1 h2 h3 h4 h5 h6 div ul ol figure].freeze
 
       def initialize(source_html:)
@@ -23,7 +23,7 @@ module News
         return build_plain_html if source_html.nil? || source_html.empty?
 
         fragment = Nokogiri::HTML.fragment(source_html)
-        rendered_nodes = fragment.children.flat_map { |child| Array(render_node(child)) }.compact
+        rendered_nodes = render_children(fragment.children)
         return build_plain_html if rendered_nodes.empty?
 
         output = Nokogiri::HTML::DocumentFragment.parse("")
@@ -37,9 +37,9 @@ module News
 
       def render_node(node)
         return node.dup if node.text?
-        return node.dup if media_only_block?(node)
+        return node.dup(1) if media_only_block?(node)
         if inline_block_wrapper?(node)
-          return node.children.flat_map { |child| Array(render_node(child)) }.compact
+          return render_children(node.children)
         end
 
         if text_block_node?(node)
@@ -47,21 +47,28 @@ module News
           return node.dup if translated_paragraph.nil? || translated_paragraph.empty?
 
           copy = node.dup
-          copy.inner_html = paragraph_to_html(translated_paragraph)
+          replace_block_text(copy, translated_paragraph)
           return copy
         end
 
-        return node.dup if embed_node?(node)
+        return node.dup(1) if embed_node?(node)
 
         copy = node.dup
         copy.children.remove
-        node.children.flat_map { |child| Array(render_node(child)) }.compact.each { |child| copy.add_child(child) }
+        render_children(node.children).each { |child| copy.add_child(child) }
         copy
+      end
+
+      def render_children(children)
+        children.to_a.flat_map do |child|
+          rendered = render_node(child)
+          rendered.is_a?(Array) ? rendered.flatten : rendered
+        end.compact
       end
 
       def inline_block_wrapper?(node)
         INLINE_FORMATTING_TAGS.include?(node.name) &&
-          node.element_children.any? { |child| BLOCK_TAGS.include?(child.name) }
+          node.css(BLOCK_TAGS.join(", ")).any?
       end
 
       def embed_node?(node)
@@ -69,7 +76,46 @@ module News
       end
 
       def text_block_node?(node)
-        node.matches?(TEXT_BLOCK_SELECTOR) || (node.name == "div" && node.element_children.empty? && !node.text.to_s.strip.empty?)
+        return true if node.matches?(TEXT_BLOCK_SELECTOR)
+        return false unless node.element?
+        return false if node.text.to_s.strip.empty?
+
+        # Some publishers mark headings as a div/strong/span instead of an
+        # actual h2-h6. Treat an inline-only container as one block; otherwise
+        # its text is left in the source and the first translation is assigned
+        # to the following paragraph.
+        inline_text_container?(node)
+      end
+
+      def inline_text_container?(node)
+        return false unless (INLINE_CONTAINER_TAGS + INLINE_FORMATTING_TAGS).include?(node.name)
+
+        node.css(BLOCK_TAGS.join(", ")).empty?
+      end
+
+      def replace_block_text(copy, translated_paragraph)
+        text_nodes = copy.xpath(".//text()").reject { |text| text.text.to_s.strip.empty? }
+
+        # Preserve the author's inline emphasis for the common case of a
+        # heading wrapped in <strong>/<span>. For mixed inline content (for
+        # example text + a link), replacing the whole block is safer than
+        # leaving source-language fragments behind.
+        if text_nodes.length == 1 && copy.element_children.all? { |child| inline_only_node?(child) }
+          text_nodes.first.content = translated_paragraph
+          copy.xpath(".//text()").each do |text|
+            text.remove if text != text_nodes.first && !text.text.to_s.strip.empty?
+          end
+        else
+          copy.inner_html = paragraph_to_html(translated_paragraph)
+        end
+      end
+
+      def inline_only_node?(node)
+        return true if node.text?
+        return false unless node.element?
+        return false if node.matches?(BLOCK_TAGS.join(", "))
+
+        node.element_children.all? { |child| inline_only_node?(child) }
       end
 
       def media_only_block?(node)
