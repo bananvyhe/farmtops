@@ -576,6 +576,35 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     refute_includes article.body_text, "Short feed preview"
   end
 
+  test "extracts body text from the same best container as body html" do
+    document = Nokogiri::HTML(<<~HTML)
+      <html>
+        <body>
+          <h1>Article title</h1>
+          <div class="story-body">
+            <div class="story-body">
+              <h2>Section heading</h2>
+              <p>First paragraph.</p>
+              <p>Second paragraph.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    HTML
+
+    crawler = News::SectionCrawler.new(
+      section: @section,
+      client: FakeClient.new({}),
+      sleeper: NullSleeper.new,
+      max_articles: 1,
+      max_pages: 1,
+      max_retries: 1
+    )
+
+    assert_equal "Section heading\n\nFirst paragraph.\n\nSecond paragraph.", crawler.send(:extract_body_text, document)
+    assert_equal 1, crawler.send(:extract_body_html, document, "https://example.com/news/article").scan("Section heading").length
+  end
+
   test "captures listing preview html while deriving card preview text from the full article body" do
     pages = {
       "https://example.com/news" => <<~HTML,

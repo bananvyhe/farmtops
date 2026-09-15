@@ -23,6 +23,9 @@ module News
         return build_plain_html if source_html.nil? || source_html.empty?
 
         fragment = Nokogiri::HTML.fragment(source_html)
+        # h1 is the article title and is translated/rendered separately. Do
+        # not let an old stored body_html reintroduce it into the body layout.
+        fragment.css("h1").each(&:remove)
         rendered_nodes = render_children(fragment.children)
         return build_plain_html if rendered_nodes.empty?
 

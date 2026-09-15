@@ -1,4 +1,5 @@
 require "securerandom"
+require "nokogiri"
 
 module News
   class ArticleTranslator
@@ -52,7 +53,16 @@ module News
     end
 
     def source_body_text
-      article.source_body_text.presence || article.body_text.to_s
+      body_text = article.source_body_text.presence || article.body_text.to_s
+      source_h1 = Nokogiri::HTML.fragment(article.body_html.to_s).at_css("h1")&.text.to_s.strip
+      blocks = body_text.to_s.split(/\n\s*\n+/).map(&:strip).reject(&:blank?)
+
+      # Older articles stored the title in source_body_text even though the
+      # title is translated separately. Drop only an exact first h1 block so
+      # the following heading/paragraph sequence remains aligned.
+      return blocks.drop(1).join("\n\n") if source_h1.present? && blocks.first == source_h1
+
+      body_text
     end
 
     def source_tag_names_for_translation

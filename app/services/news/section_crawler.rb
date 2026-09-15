@@ -613,10 +613,12 @@ module News
 
     def extract_body_text(document)
       selector = config_value("article_body_selector", "[itemprop='articleBody'], .article-body, article")
-      nodes = document.css(selector)
-      paragraphs = nodes.flat_map do |node|
-        block_texts_from_node(node)
-      end
+      # Keep body_text and body_html sourced from the exact same container.
+      # Collecting every matching article/.article-body node here while
+      # extract_body_html picks only best_body_node duplicates nested content
+      # and shifts every translated block after the duplicate.
+      body_node = best_body_node(document, selector)
+      paragraphs = body_node.present? ? block_texts_from_node(body_node) : []
       paragraphs = [extract_text(document, selector)] if paragraphs.empty?
       paragraphs = paragraphs.compact.map { |text| normalize_text(text) }.reject(&:blank?)
       filter_body_paragraphs(paragraphs).join("\n\n")
@@ -646,17 +648,19 @@ module News
       node = best_body_node(document, selector)
       if node.present?
         html = sanitize_news_html(normalize_lazy_images(strip_article_noise(node.inner_html), base_url))
-        html = remove_playtoearn_body_title(html)
+        html = remove_embedded_body_title(html)
         return html if html.present?
       end
 
       fallback_html = extract_body_html_from_document(document, base_url)
-      return fallback_html if fallback_html.present?
+      return remove_embedded_body_title(fallback_html) if fallback_html.present?
 
       json_ld_body = extract_json_ld_article_body(document)
       return "" if json_ld_body.blank?
 
-      sanitize_news_html(normalize_lazy_images(strip_article_noise(json_ld_body), base_url))
+      remove_embedded_body_title(
+        sanitize_news_html(normalize_lazy_images(strip_article_noise(json_ld_body), base_url))
+      )
     end
 
     def article_image_url(document, candidate)
@@ -790,9 +794,7 @@ module News
       false
     end
 
-    def remove_playtoearn_body_title(html)
-      return html unless playtoearn_source?
-
+    def remove_embedded_body_title(html)
       fragment = Nokogiri::HTML.fragment(html.to_s)
       fragment.css("h1").each(&:remove)
       fragment.to_html

@@ -19,19 +19,19 @@ module News
       def call(crawl_run_id = nil)
         cleared_lock = clear_stale_lock
         reset_count = reset_stalled_articles
-        repaired_html_count = repair_playtoearn_html
+        repaired_html_count = repair_embedded_title_html
         crawl_run_id ||= pending_translation_crawl_run_id
         enqueued = enqueue_translation_job(crawl_run_id) if crawl_run_id.present? && pending_articles_exist_for?(crawl_run_id)
 
         logger.info(
-          "[News::Translation::Recovery] cleared_lock=#{cleared_lock} crawl_run_id=#{crawl_run_id.inspect} reset_recent_failed=#{reset_count} repaired_playtoearn_html=#{repaired_html_count} enqueued=#{enqueued}"
+          "[News::Translation::Recovery] cleared_lock=#{cleared_lock} crawl_run_id=#{crawl_run_id.inspect} reset_recent_failed=#{reset_count} repaired_embedded_title_html=#{repaired_html_count} enqueued=#{enqueued}"
         )
 
         {
           cleared_lock: cleared_lock,
           crawl_run_id: crawl_run_id,
           reset_recent_failed: reset_count,
-          repaired_playtoearn_html: repaired_html_count,
+          repaired_embedded_title_html: repaired_html_count,
           enqueued: enqueued
         }
       end
@@ -64,18 +64,19 @@ module News
         failed_count + translating_count
       end
 
-      def repair_playtoearn_html
-        scope = NewsArticle
-          .joins(:news_source)
-          .where(news_sources: { base_url: ["https://playtoearn.com", "https://www.playtoearn.com"] })
-          .where(translation_status: :translated)
+      def repair_embedded_title_html
+        scope = NewsArticle.where(translation_status: :translated)
 
         repaired = 0
         scope.find_each do |article|
           source_html = article.raw_payload.to_h["source_body_html"].to_s
-          next if source_html.blank? || article.body_text.blank?
+          next if source_html.blank? || article.body_text.blank? || !source_html.match?(%r{<h1(?:\s|>)}i)
 
-          rebuilt_html = News::Translation::HtmlBodyRenderer.new(source_html:).call(
+          source_html_without_title = Nokogiri::HTML.fragment(source_html).tap do |fragment|
+            fragment.css("h1").each(&:remove)
+          end.to_html
+
+          rebuilt_html = News::Translation::HtmlBodyRenderer.new(source_html: source_html_without_title).call(
             body_text_without_embedded_title(article, source_html)
           )
           next if rebuilt_html.blank? || rebuilt_html == article.body_html.to_s
@@ -85,7 +86,7 @@ module News
         end
         repaired
       rescue StandardError => e
-        logger.warn("[News::Translation::Recovery] failed to repair PlayToEarn HTML: #{e.class} #{e.message}")
+        logger.warn("[News::Translation::Recovery] failed to repair embedded-title HTML: #{e.class} #{e.message}")
         0
       end
 

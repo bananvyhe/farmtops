@@ -25,7 +25,7 @@ class News::Translation::HtmlBodyRendererTest < ActiveSupport::TestCase
     assert_includes html, "<p>Translated paragraph</p>"
   end
 
-  test "does not let a body h1 consume the first translated paragraph" do
+  test "removes a body h1 without consuming the first translated paragraph" do
     renderer = News::Translation::HtmlBodyRenderer.new(
       source_html: "<h1>Source title</h1><p>Source paragraph</p>"
     )
@@ -33,7 +33,7 @@ class News::Translation::HtmlBodyRendererTest < ActiveSupport::TestCase
     html = renderer.call("Translated paragraph")
 
     assert_includes html, "<p>Translated paragraph</p>"
-    assert_includes html, "<h1>Source title</h1>"
+    refute_includes html, "Source title"
     refute_includes html, "Source paragraph"
   end
 

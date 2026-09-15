@@ -268,7 +268,7 @@ class News::ArticleTranslatorTest < ActiveSupport::TestCase
       translator: FakeTranslator.new(result:)
     ).call
 
-    assert_includes translated.body_html, "Body title"
+    refute_includes translated.body_html, "Body title"
     assert_includes translated.body_html, "Тело один"
     assert_includes translated.body_html, "Тело два"
     assert_operator translated.body_html.index("Body title"), :<, translated.body_html.index("Тело один")
