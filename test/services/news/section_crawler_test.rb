@@ -605,6 +605,31 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     assert_equal 1, crawler.send(:extract_body_html, document, "https://example.com/news/article").scan("Section heading").length
   end
 
+  test "keeps RSS heading and paragraph blocks aligned" do
+    candidate = Struct.new(:title, :url, :image_url, :source_article_id, :preview_html, :preview_text, :raw_payload).new(
+      "RSS article",
+      "https://example.com/news/rss-article",
+      nil,
+      "rss-article",
+      "",
+      "",
+      { feed_description_html: '<h1>RSS title</h1><h2>Section heading</h2><p>First paragraph.</p><p>Second paragraph.</p>' }
+    )
+    crawler = News::SectionCrawler.new(
+      section: @section,
+      client: FakeClient.new({}),
+      sleeper: NullSleeper.new,
+      max_articles: 1,
+      max_pages: 1,
+      max_retries: 1
+    )
+
+    article_data = crawler.send(:extract_feed_article, candidate, "https://example.com/news")
+
+    assert_equal "Section heading\n\nFirst paragraph.\n\nSecond paragraph.", article_data[:body_text]
+    refute_includes article_data[:body_html], "RSS title"
+  end
+
   test "captures listing preview html while deriving card preview text from the full article body" do
     pages = {
       "https://example.com/news" => <<~HTML,

@@ -341,9 +341,13 @@ module News
 
     def extract_feed_article(candidate, page_url)
       fragment = Nokogiri::HTML.fragment(candidate.raw_payload[:feed_description_html].to_s)
+      fragment.css("h1").each(&:remove)
       title = candidate.title
       body_html = sanitize_news_html(rewrite_fragment_urls(fragment.to_html, candidate.url))
-      body_text = extract_feed_text(fragment).presence || extract_fragment_body_text(Nokogiri::HTML.fragment(body_html))
+      # RSS descriptions can already contain separate heading/paragraph
+      # blocks. Flattening them first destroys the one-to-one mapping used by
+      # HtmlBodyRenderer and shifts formatting onto the following paragraph.
+      body_text = extract_fragment_body_text(fragment).presence || extract_feed_text(fragment)
       preview_text = preview_excerpt(body_text, candidate.preview_text)
       body_text = body_text.presence || preview_text
       image_url = image_node_url(fragment.at_css("img")).presence || candidate.image_url
