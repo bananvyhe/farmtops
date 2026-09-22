@@ -115,4 +115,44 @@ class News::ArticleGameIdentifierTest < ActiveSupport::TestCase
     assert_equal "Hello", client.captured.first[:title]
     assert_equal "Preview", client.captured.first[:preview_text]
   end
+
+  test "stores an uncertain result without linking the article to a game" do
+    article = build_article
+    result = News::GameIdentification::Result.new(
+      request_id: "req-3",
+      article_id: article.id,
+      status: "ok",
+      identified_game_name: "Elden Ring",
+      confidence: 0.79,
+      model: "model-path",
+      external_game_id: "game-1",
+      slug: "elden-ring",
+      error: nil
+    )
+
+    News::ArticleGameIdentifier.new(article: article, client: FakeClient.new(result)).call(request_id: "req-3")
+
+    article_game = article.reload.news_article_game
+    assert_nil article_game.game
+    assert_equal "Elden Ring", article_game.identified_game_name
+  end
+
+  test "sends feed-only article text when source body is unavailable" do
+    article = build_article
+    article.update!(full_article_available: false, source_body_text: nil, body_text: "Feed preview mentions Elden Ring.")
+    result = News::GameIdentification::Result.new(
+      request_id: "req-4",
+      article_id: article.id,
+      status: "ok",
+      identified_game_name: "unknown",
+      confidence: 0.0,
+      model: "model-path",
+      error: nil
+    )
+    client = FakeClient.new(result)
+
+    News::ArticleGameIdentifier.new(article: article, client: client).call(request_id: "req-4")
+
+    assert_equal article.body_text, client.captured.first[:body_text]
+  end
 end

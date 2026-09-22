@@ -10,15 +10,14 @@ module News
 
     def call(request_id: SecureRandom.uuid)
       return article if article.news_article_game.present?
-      return article if article.full_article_available? == false
-      return article if source_body_text.blank?
+      return article if identification_text.blank?
 
       result = client.identify_game(
         request_id: request_id,
         article_id: article.id,
         title: source_title,
         preview_text: source_preview_text,
-        body_text: source_body_text
+        body_text: identification_body_text
       )
       apply_result!(result)
       article
@@ -35,6 +34,14 @@ module News
       article.source_body_text.presence
     end
 
+    def identification_text
+      [source_title, source_preview_text, source_body_text.presence || article.body_text.to_s].filter_map(&:presence).join("\n\n")
+    end
+
+    def identification_body_text
+      source_body_text.presence || article.body_text.to_s.presence || [source_title, source_preview_text].filter_map(&:presence).join("\n\n")
+    end
+
     def source_title
       article.source_title.presence || article.title.to_s
     end
@@ -46,7 +53,7 @@ module News
     def apply_result!(result)
       identified_game_name = result.identified_game_name.to_s.strip.presence || "unknown"
       slug = result.slug.to_s.strip.presence || normalized_slug(identified_game_name)
-      game = game_for_result(identified_game_name, slug, result.external_game_id)
+      game = game_for_result(identified_game_name, slug, result.external_game_id) if confident_result?(result, identified_game_name)
 
       article_game = article.news_article_game || article.build_news_article_game
       article_game.update!(
@@ -59,6 +66,19 @@ module News
         slug: slug,
         raw_response: result_to_raw_response(result)
       )
+    end
+
+    def confident_result?(result, identified_game_name)
+      return false if identified_game_name.casecmp("unknown").zero?
+      return false unless result.status.to_s == "ok"
+
+      confidence = Float(result.confidence, exception: false)
+      confidence.present? && confidence >= minimum_confidence
+    end
+
+    def minimum_confidence
+      value = ENV.fetch("NEWS_GAME_ID_MIN_CONFIDENCE", "0.8").to_f
+      value.clamp(0.0, 1.0)
     end
 
     def game_for_result(identified_game_name, slug, external_game_id)

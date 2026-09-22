@@ -374,7 +374,7 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     assert_includes section.news_articles.find_by!(canonical_url: "https://feed.example.com/posts/one").body_text, "significantly more context"
   end
 
-  test "links an existing game when an rss category matches its name" do
+  test "does not link an rss category without neural identification" do
     source = NewsSource.create!(name: "RSS Games", base_url: "https://feed.example.com", active: true, crawl_delay_min_seconds: 0, crawl_delay_max_seconds: 0, config: { "pagination_mode" => "feed" })
     section = source.news_sections.create!(name: "Feed", url: "https://feed.example.com/news", active: true, config: { "pagination_mode" => "feed" })
     game = Game.create!(name: "Elden Ring", slug: "elden-ring", normalized_name: "elden ring")
@@ -386,12 +386,11 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     News::SectionCrawler.new(section:, client: FakeClient.new(pages), sleeper: NullSleeper.new, max_articles: 1, max_pages: 1, max_retries: 1).call
 
     article = section.news_articles.find_by!(canonical_url: "https://feed.example.com/elden")
-    assert_equal game.id, article.news_article_game.game_id
-    assert_equal "rss", article.news_article_game.model
+    assert_nil article.news_article_game
     assert_equal "Elden Ring", article.raw_payload["rss_game_name"]
   end
 
-  test "creates and links a game when the rss category is new" do
+  test "does not create a game from a new rss category" do
     source = NewsSource.create!(name: "RSS New Game", base_url: "https://feed.example.com", active: true, crawl_delay_min_seconds: 0, crawl_delay_max_seconds: 0, config: { "pagination_mode" => "feed" })
     section = source.news_sections.create!(name: "Feed", url: "https://feed.example.com/news", active: true, config: { "pagination_mode" => "feed" })
     pages = { "https://feed.example.com/news/feed/" => feed_page([{ title: "New game news", link: "https://feed.example.com/new", description: "Feed body", guid: "new", categories: ["New Game", "News"] }]) }
@@ -399,8 +398,7 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     News::SectionCrawler.new(section:, client: FakeClient.new(pages), sleeper: NullSleeper.new, max_articles: 1, max_pages: 1, max_retries: 1).call
 
     article = section.news_articles.find_by!(canonical_url: "https://feed.example.com/new")
-    assert_equal "New Game", article.news_article_game.game.name
-    assert_equal "new-game", article.news_article_game.game.slug
+    assert_nil article.news_article_game
   end
 
   test "does not treat an existing generic rss category as a game" do

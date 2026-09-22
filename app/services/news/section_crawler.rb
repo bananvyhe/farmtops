@@ -294,7 +294,6 @@ module News
       NewsArticle.transaction do
         article.save!
         article.replace_news_tags!(tag_names) if tag_names.present?
-        News::RssGameLinker.new(article: article, game_name: candidate.rss_game_name, logger: logger).call
       end
       unique_keys.each { |key| seen_keys << key }
       { saved: true, article: }

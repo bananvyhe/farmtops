@@ -151,7 +151,7 @@ class NewsIdentifyPendingGamesJobTest < ActiveSupport::TestCase
     assert lock_manager.released
   end
 
-  test "ignores articles without a full article" do
+  test "queues feed-only articles for identification" do
     @section.news_articles.delete_all
     feed_only_article = @section.news_articles.create!(
       news_source: @section.news_source,
@@ -176,14 +176,18 @@ class NewsIdentifyPendingGamesJobTest < ActiveSupport::TestCase
     )
 
     lock_manager = FakeLockManager.new
+    captured = nil
 
     with_stubbed_constant(News::GameIdentification::LockManager, :new, -> { lock_manager }) do
-      with_stubbed_constant(NewsIdentifyGameJob, :perform_async, ->(*_) { flunk("should not enqueue") }) do
+      with_stubbed_constant(NewsIdentifyGameJob, :perform_async, ->(article_id, token, crawl_run_id = nil) {
+        captured = [article_id, token, crawl_run_id]
+        "jid-1"
+      }) do
         NewsIdentifyPendingGamesJob.new.perform
       end
     end
 
-    assert lock_manager.released
-    assert_not NewsArticle.pending_game_identification.exists?
+    assert_equal [feed_only_article.id, "lock-token", nil], captured
+    refute lock_manager.released
   end
 end
