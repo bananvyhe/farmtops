@@ -1,5 +1,5 @@
 <template>
-  <div ref="hatRef" class="hat" aria-hidden="true">
+  <div ref="hatRef" class="hat pb-2" aria-hidden="true">
     <div class="hat__container">
       <div class="hat__fog"></div>
       <div class="hat__flash"></div>

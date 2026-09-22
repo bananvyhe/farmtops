@@ -568,11 +568,11 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="news-page">
-    <section class="news-hero card card--dark ">
+   <!--  <section class="news-hero card card--dark ">
       <div class="news-hero__eyebrow">отслеживание проектов</div>
       <h1>Сбор группы</h1>
       <p>Далекие контуры в туманностях кажутся спящими башнями, но едва разум касается предела дозволенного — и древние пробуждаются, чтобы дать понять: в бесконечности нет места тем, кто считает себя исходной точкой.</p>
-    </section>
+    </section> -->
 
     <section class="news-filters card card--dark news-filters--bare">
       <div class="news-filters__grid">
