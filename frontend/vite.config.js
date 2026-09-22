@@ -16,6 +16,12 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5173,
     allowedHosts: ["localhost", "127.0.0.1"],
+    // File events from Windows/WSL bind mounts are not always propagated to
+    // the container, so polling keeps HMR reliable in the Docker dev setup.
+    watch: {
+      usePolling: true,
+      interval: 300
+    },
     proxy: {
       "/api": apiProxyTarget,
       "/cable": {

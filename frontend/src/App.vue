@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, watch } from "vue"
 import { useRouter } from "vue-router"
 import { clearSession, loadSession, logout, sessionState } from "./useSession"
 import { useNewsUiStore } from "./stores/newsUi"
+import Hat from "./components/Hat.vue"
 
 const router = useRouter()
 const newsUi = useNewsUiStore()
@@ -62,11 +63,12 @@ async function handleLogout() {
 
 <template>
   <div class="app-shell">
-    <header class="app-topbar  ">
+    <Hat class="app-hat" />
+    <header class="app-topbar">
       <div class="app-brand">
         <div class="eyebrow">farmspot.ru</div>
       </div>
-      <nav class="nav">
+      <nav class="nav"> 
         <RouterLink to="/news" class="ghost">Новости</RouterLink>
         <RouterLink v-if="!sessionState.authenticated" to="/login" class="ghost">Войти</RouterLink>
         <RouterLink v-if="sessionState.authenticated" to="/profile" class="ghost">Профиль</RouterLink>

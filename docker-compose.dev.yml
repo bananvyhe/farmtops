@@ -45,6 +45,7 @@ services:
       NEWS_TRANSLATOR_BASE_URL: ${NEWS_TRANSLATOR_BASE_URL:-http://host.docker.internal:19191}
       NEWS_GAME_ID_BASE_URL: ${NEWS_GAME_ID_BASE_URL:-http://host.docker.internal:19192}
     volumes:
+      - .:/rails
       - bundle_dev_data:/usr/local/bundle
     ports:
       - "${WEB_PORT:-3002}:3000"
@@ -79,6 +80,7 @@ services:
       NEWS_TRANSLATOR_BASE_URL: ${NEWS_TRANSLATOR_BASE_URL:-http://host.docker.internal:19191}
       NEWS_GAME_ID_BASE_URL: ${NEWS_GAME_ID_BASE_URL:-http://host.docker.internal:19192}
     volumes:
+      - .:/rails
       - bundle_dev_data:/usr/local/bundle
     depends_on:
       postgres:
@@ -96,6 +98,9 @@ services:
       dockerfile: frontend/Dockerfile.dev
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-8082}:5173"
+    volumes:
+      - ./frontend:/app/frontend
+      - frontend_node_modules:/app/frontend/node_modules
     depends_on:
       web:
         condition: service_healthy
@@ -109,5 +114,6 @@ services:
 
 volumes:
   bundle_dev_data:
+  frontend_node_modules:
   postgres_dev_data:
   redis_dev_data:

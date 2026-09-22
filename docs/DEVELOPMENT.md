@@ -69,9 +69,9 @@ docker compose -f docker-compose.dev.yml exec frontend npm run build
 docker compose --env-file .env.development -f docker-compose.dev.yml down
 ```
 
-Dev-образы содержат копию исходников, поэтому после изменения Ruby или frontend-кода повторяй `up --build`. При изменении только env-переменных пересборка не нужна.
+Исходники подключаются в dev-контейнеры через bind mount. Поэтому изменения Ruby подхватываются Rails автоматически, а изменения frontend-кода — через Vite HMR без пересборки образов. После изменения Dockerfile, Compose или frontend-зависимостей используй `up --build`.
 
-Dev-контейнеры намеренно не используют Rails production entrypoint: `db:prepare` выполняется непосредственно командой `web`. Исходники запекаются в dev-образы, потому что bind mount `/mnt/c/...` может не передавать файлы Docker daemon при смешанном WSL/Docker Desktop окружении.
+Dev-контейнеры намеренно не используют Rails production entrypoint: `db:prepare` выполняется непосредственно командой `web`. Для Windows/WSL Vite использует polling, чтобы надежно обнаруживать изменения в bind mount.
 
 ## Правила конфигурации
 
