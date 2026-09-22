@@ -1,5 +1,5 @@
 <template>
-  <div ref="hatRef" class="hat pb-2" aria-hidden="true">
+  <div ref="hatRef" class="hat pb-1" aria-hidden="true">
     <div class="hat__container">
       <div class="hat__fog"></div>
       <div class="hat__flash"></div>
@@ -62,17 +62,44 @@ onMounted(() => {
       repeat: -1
     })
 
-    gsap.timeline({ repeat: -1 })
-      .to(".hat__warriors", { filter: "brightness(0.7)", duration: 0.05, delay: 1.1 })
-      .to(".hat__warriors", { filter: "brightness(1)", duration: 1.4, ease: "sine.out" })
-      .to(".hat__warriors", { filter: "brightness(0.7)", duration: 0.05, delay: 1.4 })
-      .to(".hat__warriors", { filter: "brightness(1)", duration: 2, ease: "sine.out" })
-
-    gsap.timeline({ repeat: -1 })
-      .to(".hat__flash", { opacity: 1, duration: 0.05, delay: 1.1 })
-      .to(".hat__flash", { opacity: 0, duration: 1.4, ease: "sine.out" })
-      .to(".hat__flash", { opacity: 1, duration: 0.05, delay: 1.4 })
-      .to(".hat__flash", { opacity: 0, duration: 2 })
+gsap.timeline({ repeat: -1 })
+  .to(".hat__warriors", {
+    filter: "brightness(0.7)",
+    duration: 0.05,
+    delay: 1.1
+  })
+  .to(".hat__flash", {
+    opacity: 1,
+    duration: 0.05
+  }, "<")
+  .to(".hat__warriors", {
+    filter: "brightness(1)",
+    duration: 1.4,
+    ease: "sine.out"
+  })
+  .to(".hat__flash", {
+    opacity: 0,
+    duration: 1.4,
+    ease: "sine.out"
+  }, "<")
+  .to(".hat__warriors", {
+    filter: "brightness(0.7)",
+    duration: 0.05,
+    delay: 1.4
+  })
+  .to(".hat__flash", {
+    opacity: 1,
+    duration: 0.05
+  }, "<")
+  .to(".hat__warriors", {
+    filter: "brightness(1)",
+    duration: 2,
+    ease: "sine.out"
+  })
+  .to(".hat__flash", {
+    opacity: 0,
+    duration: 2
+  }, "<")
   }, hatRef.value)
 })
 
@@ -81,7 +108,7 @@ onUnmounted(() => animationContext?.revert())
 
 <style scoped>
 .hat {
-  height: 186px;
+  height: 146px;
   overflow: hidden;
   pointer-events: none;
 }
@@ -96,19 +123,21 @@ onUnmounted(() => animationContext?.revert())
 
 .hat__warriors {
   position: relative;
-  z-index: 1;
+  z-index: 11;
   display: flex;
   justify-content: center;
   height: 100%;
   width: 100%;
   background-position: center bottom;
   background-repeat: no-repeat;
+  
 }
 
 .hat__warrior {
   height: 100%;
   background-repeat: no-repeat;
   background-size: auto 145%;
+  
 }
 
 .hat__warrior--one {
