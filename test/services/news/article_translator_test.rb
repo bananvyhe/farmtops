@@ -241,6 +241,44 @@ class News::ArticleTranslatorTest < ActiveSupport::TestCase
     assert_includes translated.body_html, "twitter-tweet"
   end
 
+  test "does not let a twitter embed consume a translated body block" do
+    article = build_article(
+      body_html: <<~HTML
+        <div class="articleBody">
+          <h2>Heading one</h2>
+          <p>Body one</p>
+          <blockquote class="twitter-tweet">
+            <p lang="en">A tweet that should remain readable.</p>
+            <a href="https://twitter.com/example/status/1">https://twitter.com/example/status/1</a>
+          </blockquote>
+          <h2>Heading two</h2>
+          <p>Body two</p>
+        </div>
+      HTML
+    )
+
+    result = News::Translation::Result.new(
+      request_id: "req-embed-order",
+      translated_title: "Title",
+      translated_preview_text: "Preview",
+      translated_body_text: "Heading one translated\n\nBody one translated\n\nHeading two translated\n\nBody two translated",
+      model: "fake-translator",
+      latency_ms: 10,
+      status: "ok",
+      error: nil
+    )
+
+    translated = News::ArticleTranslator.new(
+      article:,
+      translator: FakeTranslator.new(result:)
+    ).call
+
+    assert_includes translated.body_html, "Heading two translated"
+    assert_includes translated.body_html, "Body two translated"
+    assert_includes translated.body_html, "A tweet that should remain readable."
+    assert_includes translated.body_html, "twitter.com/example/status/1"
+  end
+
   test "keeps a body h1 as-is so it does not consume the first translated paragraph" do
     article = build_article(
       body_html: <<~HTML

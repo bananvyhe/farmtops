@@ -41,6 +41,12 @@ module News
       def render_node(node)
         return node.dup if node.text?
         return node.dup(1) if media_only_block?(node)
+        # Embeds are content blocks, not translatable paragraphs. In
+        # particular, blockquote.twitter-tweet also matches TEXT_BLOCK_SELECTOR;
+        # handling it first prevents the tweet from consuming the translation
+        # intended for the next heading or paragraph.
+        return node.dup(1) if embed_node?(node)
+
         if inline_block_wrapper?(node)
           return render_children(node.children)
         end
@@ -53,8 +59,6 @@ module News
           replace_block_text(copy, translated_paragraph)
           return copy
         end
-
-        return node.dup(1) if embed_node?(node)
 
         copy = node.dup
         copy.children.remove

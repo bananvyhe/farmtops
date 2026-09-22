@@ -720,6 +720,11 @@ module News
       # that already contains a real block or the same text would be counted
       # twice.
       paragraphs = fragment.css("#{block_selector}, div, span, strong, b, em, i, u, s").select do |node|
+        # A tweet is rendered as a blockquote with nested paragraphs/links.
+        # Keep the tweet as one readable block and do not count its children a
+        # second time, otherwise translation blocks drift after the embed.
+        next false if node.ancestors.any? { |ancestor| ancestor.matches?(block_selector) }
+
         next true unless %w[div span strong b em i u s].include?(node.name)
         next false if node.ancestors.any? { |ancestor| ("#{block_selector}, div, span, strong, b, em, i, u, s").split(", ").include?(ancestor.name) }
 

@@ -487,6 +487,25 @@ onMounted(() => {
   line-height: var(--leading-body);
 }
 
+.news-article-content :deep(blockquote.twitter-tweet),
+.news-article-content :deep(blockquote.instagram-media) {
+  max-width: 550px;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.news-article-content :deep(blockquote.twitter-tweet p),
+.news-article-content :deep(blockquote.instagram-media p) {
+  margin-block-end: var(--space-xs);
+}
+
+.news-article-content :deep(blockquote.twitter-tweet a),
+.news-article-content :deep(blockquote.instagram-media a) {
+  color: var(--farmspot-link);
+}
+
 .news-article-content :deep(img),
 .news-article-content :deep(video),
 .news-article-content :deep(iframe) {
