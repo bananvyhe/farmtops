@@ -63,7 +63,8 @@ async function handleLogout() {
 
 <template>
   <div class="app-shell">
-    <Hat class="app-hat" />
+     
+    <Hat class="app-hat" /> 
     <header class="app-topbar">
       <div class="app-brand">
         <div class="eyebrow">farmspot.ru</div>

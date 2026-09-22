@@ -81,7 +81,7 @@ onUnmounted(() => animationContext?.revert())
 
 <style scoped>
 .hat {
-  height: 140px;
+  height: 186px;
   overflow: hidden;
   pointer-events: none;
 }
