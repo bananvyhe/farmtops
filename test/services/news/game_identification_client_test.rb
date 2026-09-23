@@ -102,4 +102,26 @@ class News::GameIdentificationClientTest < ActiveSupport::TestCase
     assert_equal "unknown", result.identified_game_name
     assert_equal 0.0, result.confidence
   end
+
+  test "client turns an upstream EOF into a game identification error" do
+    client = News::GameIdentification::Client.new(
+      base_url: "http://identifier.example",
+      token: "secret",
+      open_timeout: 1,
+      read_timeout: 1
+    )
+
+    fake_http = Object.new
+    fake_http.define_singleton_method(:request) do |_request|
+      raise EOFError, "end of file reached"
+    end
+
+    with_redefined_constant(Net::HTTP, :start, ->(*_, &block) { block.call(fake_http) }) do
+      error = assert_raises(News::GameIdentification::Error) do
+        client.identify_game(article_id: 11, body_text: "An article body")
+      end
+
+      assert_match "Game identification unavailable", error.message
+    end
+  end
 end

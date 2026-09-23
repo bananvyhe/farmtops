@@ -44,6 +44,10 @@ module News
           raise Error, "HTTP #{response.code} for #{url}"
         end
       end
+    rescue EOFError, IOError, SystemCallError, Timeout::Error => e
+      raise Error, "#{e.class}: #{e.message} for #{url}"
+    rescue URI::InvalidURIError => e
+      raise Error, "Invalid URL #{url}: #{e.message}"
     end
 
     private

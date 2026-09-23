@@ -111,7 +111,7 @@ module News
         raise Error, "Game identification base URL is invalid: #{e.message}"
       rescue JSON::ParserError => e
         raise Error, "Game identification returned invalid JSON: #{e.message}"
-      rescue SocketError, SystemCallError, Timeout::Error, Errno::ECONNREFUSED => e
+      rescue EOFError, IOError, SocketError, SystemCallError, Timeout::Error, Errno::ECONNREFUSED => e
         raise Error, "Game identification unavailable: #{e.message}"
       end
 

@@ -64,12 +64,13 @@ onMounted(() => {
 
 gsap.timeline({ repeat: -1 })
   .to(".hat__warriors", {
-    filter: "brightness(0.7)",
-    duration: 0.05,
-    delay: 1.1
+    filter: "brightness(0.9)",
+    duration: 2,
+    delay: 1.1,
+     ease: "circ.in"
   })
   .to(".hat__flash", {
-    opacity: 1,
+    opacity: 0.7,
     duration: 0.05
   }, "<")
   .to(".hat__warriors", {
@@ -79,9 +80,9 @@ gsap.timeline({ repeat: -1 })
   })
   .to(".hat__flash", {
     opacity: 0,
-    duration: 1.4,
+    duration: 2.2,
     ease: "sine.out"
-  }, "<")
+  }, "-=2.3", "<")
   .to(".hat__warriors", {
     filter: "brightness(0.7)",
     duration: 0.05,
@@ -93,12 +94,12 @@ gsap.timeline({ repeat: -1 })
   }, "<")
   .to(".hat__warriors", {
     filter: "brightness(1)",
-    duration: 2,
+    duration: 1.7,
     ease: "sine.out"
   })
   .to(".hat__flash", {
     opacity: 0,
-    duration: 2
+    duration: 5
   }, "<")
   }, hatRef.value)
 })
@@ -123,21 +124,23 @@ onUnmounted(() => animationContext?.revert())
 
 .hat__warriors {
   position: relative;
+  left: 50%;
   z-index: 11;
   display: flex;
   justify-content: center;
-  height: 100%;
-  width: 100%;
+  width: 1085px;
+  height: 146px;
   background-position: center bottom;
   background-repeat: no-repeat;
-  
+  transform: translateX(-50%) scale(clamp(0.72, calc(100vw / 1085px), 1));
+  transform-origin: center bottom;
 }
 
 .hat__warrior {
-  height: 100%;
+  flex: 0 0 auto;
+  height: 146px;
   background-repeat: no-repeat;
   background-size: auto 145%;
-  
 }
 
 .hat__warrior--one {
@@ -208,13 +211,7 @@ onUnmounted(() => animationContext?.revert())
 
 @media (max-width: 900px) {
   .hat__warriors {
-    transform: translateX(-8%);
-  }
-
-  .hat__warrior {
-    flex: 0 0 auto;
-    transform: scale(0.82);
-    transform-origin: center bottom;
+    transform: translateX(-50%) scale(clamp(0.72, calc(100vw / 1085px), 0.82));
   }
 }
 </style>
