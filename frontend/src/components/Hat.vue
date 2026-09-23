@@ -1,13 +1,14 @@
 <template>
   <div ref="hatRef" class="hat pb-1" aria-hidden="true">
-    <div class="hat__container">
-      <div class="hat__fog"></div>
+    <div class="hat__container d-flex align-end">
+      <div class="hat__fog 
+"></div>
       <div class="hat__flash"></div>
       <div class="hat__clouds hat__clouds--far"></div>
       <div class="hat__shadow hat__shadow--top"></div>
       <div class="hat__clouds hat__clouds--near"></div>
 
-      <div class="hat__warriors">
+      <div class="hat__warriors ">
         <div class="hat__warrior hat__warrior--one"></div>
         <div class="hat__warrior hat__warrior--two"></div>
         <div class="hat__warrior hat__warrior--three"></div>
@@ -38,7 +39,7 @@ onMounted(() => {
       stagger: 0.2
     })
 
-    gsap.fromTo(".hat__fog", { opacity: 1, scale: 1.1, y: 0 }, {
+    gsap.fromTo(".hat__fog", { opacity: 1, scale: 1.1, y: 10 }, {
       opacity: 0,
       scale: 1.8,
       y: -45,
@@ -64,7 +65,7 @@ onMounted(() => {
 
 gsap.timeline({ repeat: -1 })
   .to(".hat__warriors", {
-    filter: "brightness(0.9)",
+    filter: "brightness(0.7)",
     duration: 2,
     delay: 1.1,
      ease: "circ.in"
@@ -190,7 +191,7 @@ onUnmounted(() => animationContext?.revert())
 
 .hat__fog {
   z-index: 0;
-  background: url("/hat/fog2.jpg") center -52px / cover no-repeat;
+  background: url("/hat/fog2.jpg") center -0px / cover no-repeat;
 }
 
 .hat__flash {
