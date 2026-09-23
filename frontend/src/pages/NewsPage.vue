@@ -587,7 +587,7 @@ onBeforeUnmount(() => {
           density="comfortable"
           hide-details
         /> 
-        <v-select
+        <!-- <v-select
           v-model="selectedSectionId"
           v-if="false"
           :items="sectionItems"
@@ -597,8 +597,8 @@ onBeforeUnmount(() => {
           variant="outlined"
           density="comfortable"
           hide-details
-        />
-          <v-select
+        /> -->
+          <!-- <v-select
           v-model="selectedTagIds"
           v-if="false"
           :items="tagItems"
@@ -612,15 +612,16 @@ onBeforeUnmount(() => {
           variant="outlined"
           density="comfortable"
           hide-details
-        />
-        <v-autocomplete
+        /> -->
+        <v-autocomplete class="news-game-autocomplete"
           v-model="selectedGameId"
           v-model:search="gameSearch"
           :items="gameItems"
           item-title="name"
           item-value="id"
-          label="Игра"
+          aria-label="Game search"
           placeholder="Начните вводить название"
+          label="Игра"
           clearable
           menu-icon=""
           no-filter
@@ -754,6 +755,14 @@ onBeforeUnmount(() => {
   border-radius: 0;
   box-shadow: none;
   backdrop-filter: none;
+}
+.news-game-autocomplete :deep(.v-field__input > input) {
+  width: auto;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
 }
 .news-filters__grid {
   display: grid;
