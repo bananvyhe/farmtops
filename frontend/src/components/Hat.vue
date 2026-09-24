@@ -8,6 +8,11 @@
       <div class="hat__shadow hat__shadow--top"></div>
       <div class="hat__clouds hat__clouds--near"></div>
 
+      <div class="hat__matching" role="status">
+        <span class="hat__spinner" aria-hidden="true"></span>
+        <span>Подбор игроков<span class="hat__dots" aria-hidden="true">...</span></span>
+      </div>
+
       <div class="hat__warriors ">
         <div class="hat__warrior hat__warrior--one"></div>
         <div class="hat__warrior hat__warrior--two"></div>
@@ -31,9 +36,27 @@ let animationContext
 
 onMounted(() => {
   animationContext = gsap.context(() => {
+    gsap.set(".hat__warriors", { autoAlpha: 0 })
+    gsap.fromTo(".hat__matching", { autoAlpha: 0, y: 12, scale: 0.88 }, {
+      autoAlpha: 1,
+      y: 0,
+      scale: 1,
+      duration: 0.35,
+      ease: "back.out(1.7)"
+    })
+
+    const intro = gsap.timeline({ delay: 1.55 })
+    intro.to(".hat__matching", {
+      autoAlpha: 0,
+      y: -8,
+      scale: 0.96,
+      duration: 0.25,
+      ease: "power2.in"
+    }).set(".hat__warriors", { autoAlpha: 1 })
+
     gsap.fromTo(".hat__warrior", { backgroundPositionY: "165px" }, {
       backgroundPositionY: "0px",
-      delay: 0.3,
+      delay: 1.8,
       duration: 0.5,
       ease: "power4.out",
       stagger: 0.2
@@ -168,6 +191,56 @@ onUnmounted(() => animationContext?.revert())
 .hat__shadow {
   position: absolute;
   inset: 0;
+}
+
+.hat__matching {
+  position: absolute;
+  z-index: 12;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 17px;
+  color: #f3e8ce;
+  font: 600 13px/1.2 system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: rgba(13, 16, 21, 0.84);
+  border: 1px solid rgba(222, 184, 112, 0.58);
+  border-radius: 999px;
+  box-shadow: 0 4px 22px rgba(0, 0, 0, 0.55), inset 0 0 14px rgba(222, 184, 112, 0.08);
+  transform: translate(-50%, -50%);
+  backdrop-filter: blur(5px);
+}
+
+.hat__spinner {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  border: 2px solid rgba(243, 232, 206, 0.24);
+  border-top-color: #e2bb70;
+  border-right-color: #e2bb70;
+  border-radius: 50%;
+  animation: hat-spin 0.8s linear infinite;
+}
+
+.hat__dots {
+  display: inline-block;
+  width: 1.1em;
+  overflow: hidden;
+  vertical-align: bottom;
+  animation: hat-dots 1.1s steps(4, end) infinite;
+}
+
+@keyframes hat-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes hat-dots {
+  from { width: 0; }
+  to { width: 1.1em; }
 }
 
 .hat__clouds {
