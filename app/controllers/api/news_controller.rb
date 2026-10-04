@@ -17,7 +17,7 @@ module Api
       game_bookmark_counts = news_game_bookmark_counts_for(articles.filter_map { |article| article.news_article_game&.game_id })
       blocked_source_ids = NewsSource.blocked_source_ids
       render json: {
-        articles: articles.map { |article| news_article_payload(article, read: read_ids.include?(article.id), bookmarked_game_ids:, game_bookmark_counts:) },
+        articles: articles.map { |article| news_article_payload(article, read: read_ids.include?(article.id), bookmarked_game_ids:, game_bookmark_counts:, include_body_html: false, include_article_image: false) },
         sources: NewsSource.active.where.not(id: blocked_source_ids).includes(:news_sections).map { |source| news_source_payload(source) },
         sections: NewsSection.active.where.not(news_source_id: blocked_source_ids).includes(:news_source).map { |section| news_section_payload(section) },
         tags: news_tags_payload(base_scope),
@@ -32,7 +32,7 @@ module Api
 
       bookmarked_game_ids = news_game_bookmark_ids_for([article.news_article_game&.game_id].compact)
       game_bookmark_counts = news_game_bookmark_counts_for([article.news_article_game&.game_id].compact)
-      render json: { article: news_article_payload(article, read: news_article_read?(article), bookmarked_game_ids:, game_bookmark_counts:) }
+      render json: { article: news_article_payload(article, read: news_article_read?(article), bookmarked_game_ids:, game_bookmark_counts:, include_body_html: true, include_article_image: true) }
     end
 
     def reads

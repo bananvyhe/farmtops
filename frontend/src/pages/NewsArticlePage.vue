@@ -18,6 +18,7 @@ const showGamePrimeOverlaps = ref(false)
 const gamePrimeOverlaps = ref([])
 const loadingGamePrimeOverlaps = ref(false)
 const gamePrimeError = ref("")
+const failedArticleImage = ref(false)
 
 async function toggleGamePrimeOverlaps() {
   if (!showGamePrimeOverlaps.value || !article.value?.game?.id) return
@@ -155,6 +156,7 @@ function syncGameBookmarkInArticle(bookmarked, bookmarksCount, game = null) {
 
 async function loadArticle() {
   loading.value = true
+  failedArticleImage.value = false
   error.value = ""
   showGamePrimeOverlaps.value = false
   gamePrimeOverlaps.value = []
@@ -185,6 +187,10 @@ async function loadArticle() {
 }
 
 watch(() => route.params.id, loadArticle, { immediate: true })
+
+function markArticleImageFailed() {
+  failedArticleImage.value = true
+}
 
 function closeArticle() {
   const backPath = window.history.state?.back
@@ -224,10 +230,11 @@ onMounted(() => {
         </div> -->
 
         <img
-          v-if="article.image_url"
+          v-if="article.image_url && !failedArticleImage"
           :src="article.image_url"
           :alt="article.title"
           class="news-article-image"
+          @error="markArticleImageFailed"
         >
 
         <div class="news-article-content" v-html="bodyHtml" />

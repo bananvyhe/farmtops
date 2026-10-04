@@ -25,6 +25,7 @@ const nextCursor = ref(null)
 const hasMore = ref(true)
 const sentinel = ref(null)
 const hydrated = ref(false)
+const failedPreviewImages = ref(new Set())
 const activeQueryKey = ref("")
 const articleRefs = new Map()
 const readTimers = new Map()
@@ -234,6 +235,12 @@ function setArticleRef(articleId, element) {
   }
 
   articleRefs.delete(articleId)
+}
+
+function markPreviewImageFailed(articleId) {
+  const next = new Set(failedPreviewImages.value)
+  next.add(articleId)
+  failedPreviewImages.value = next
 }
 
 function syncReadObserver() {
@@ -651,9 +658,10 @@ onBeforeUnmount(() => {
       >
         <div class="news-card__media">
           <img
-            v-if="article.preview_image_url || article.image_url"
+            v-if="(article.preview_image_url || article.image_url) && !failedPreviewImages.has(article.id)"
             :src="article.preview_image_url || article.image_url"
             :alt="article.title || article.preview_text || 'news image'"
+            @error="markPreviewImageFailed(article.id)"
           >
           <div v-else class="news-card__placeholder">
             <span>NEWS</span>

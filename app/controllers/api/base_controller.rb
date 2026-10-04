@@ -132,9 +132,11 @@ module Api
       }
     end
 
-    def news_article_payload(article, read: nil, bookmarked_game_ids: nil, game_bookmark_counts: nil)
+    def news_article_payload(article, read: nil, bookmarked_game_ids: nil, game_bookmark_counts: nil, include_body_html: false, include_article_image: false)
       game = article.news_article_game&.game
-      {
+      article_image_url = news_article_image_url(article)
+      source_image_url = article.image_url.presence || article.raw_payload.to_h["source_listing_image_url"]
+      payload = {
         id: article.id,
         news_source_id: article.news_source_id,
         news_section_id: article.news_section_id,
@@ -147,8 +149,7 @@ module Api
         preview_html: sanitized_news_html(article.preview_html),
         preview_image_url: news_article_preview_image_url(article),
         body_text: article.body_text,
-        body_html: sanitized_news_html(rewrite_news_body_image_urls(article, news_article_body_html(article))),
-        image_url: news_article_image_url(article),
+        image_url: (include_article_image || !rate_limited_image_host?(source_image_url)) ? article_image_url : nil,
         published_at: article.published_at,
         fetched_at: article.fetched_at,
         translated_at: article.translated_at,
@@ -172,6 +173,8 @@ module Api
         ) : nil,
         read: read.nil? ? news_article_read?(article) : read
       }
+      payload[:body_html] = sanitized_news_html(rewrite_news_body_image_urls(article, news_article_body_html(article))) if include_body_html
+      payload
     end
 
     def news_tag_payload(tag, articles_count: nil)
@@ -395,15 +398,40 @@ module Api
 
     def news_article_preview_image_url(article)
       return if article.image_url.blank? && article.raw_payload.to_h["source_listing_image_url"].blank?
+      return if rate_limited_image_host?(article.image_url) || rate_limited_image_host?(article.raw_payload.to_h["source_listing_image_url"])
 
       "/api/news/#{article.id}/preview_image"
     end
 
     def news_article_body_html(article)
-      strip_duplicate_leading_featured_image(
+      body_html = strip_duplicate_leading_featured_image(
         article.body_html.to_s,
         [article.image_url, article.raw_payload.to_h["source_listing_image_url"]]
       )
+      remove_rate_limited_source_images(body_html)
+    end
+
+    def remove_rate_limited_source_images(html)
+      fragment = Nokogiri::HTML::DocumentFragment.parse(html.to_s)
+      fragment.css("img[src], img[data-src], img[data-lazy-src]").each do |image|
+        url = image["src"].presence || image["data-src"].presence || image["data-lazy-src"].presence
+        next unless rate_limited_image_host?(url)
+
+        image.remove
+      end
+      fragment.css("p, div, figure").reverse_each do |node|
+        node.remove if node.text.to_s.strip.blank? && node.element_children.empty?
+      end
+      fragment.to_html
+    end
+
+    def rate_limited_image_host?(url)
+      host = URI.parse(url.to_s).host.to_s.downcase
+      host == "playtoearn.com" || host.end_with?(".playtoearn.com") ||
+        host == "massivelyop.com" || host.end_with?(".massivelyop.com") ||
+        host == "massively.com" || host.end_with?(".massively.com")
+    rescue URI::InvalidURIError
+      false
     end
 
     def rewrite_news_body_image_urls(article, html)
