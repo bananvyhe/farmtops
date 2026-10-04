@@ -46,6 +46,7 @@ Rails.application.routes.draw do
     resources :news, only: %i[index show] do
       get :image, on: :member
       get :preview_image, on: :member
+      get "body_image/:index", action: :body_image, on: :member
       post :bookmark_game, on: :member
       delete :unbookmark_game, on: :member
       post :reads, on: :collection

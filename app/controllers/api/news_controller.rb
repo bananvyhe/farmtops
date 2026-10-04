@@ -107,6 +107,24 @@ module Api
       render_error("Image not available", status: :bad_gateway)
     end
 
+    def body_image
+      article = NewsArticle.find(params[:id])
+      return render_error("Image not available", status: :not_found) if article.news_source.blocked_source?
+
+      index = Integer(params[:index], 10)
+      return render_error("Image not available", status: :not_found) if index.negative?
+
+      url = body_image_urls(article)[index]
+      return render_error("Image not available", status: :not_found) if url.blank?
+
+      proxy_article_image(url)
+    rescue ArgumentError, TypeError
+      render_error("Image not available", status: :not_found)
+    rescue StandardError => e
+      Rails.logger.warn("[Api::NewsController] body image proxy failed for #{params[:id]}: #{e.class} #{e.message}")
+      render_error("Image not available", status: :bad_gateway)
+    end
+
     private
 
     def base_articles_scope
@@ -261,8 +279,32 @@ module Api
         return render_error("Image not available", status: :bad_gateway)
       end
 
-      content_type = response["content-type"].presence || "application/octet-stream"
+      content_type = image_content_type(response, url)
       send_data response.body.to_s, type: content_type, disposition: "inline"
+    end
+
+    def body_image_urls(article)
+      html = article.raw_payload.to_h["source_body_html"].presence || article.body_html
+      Nokogiri::HTML::DocumentFragment.parse(html.to_s).css("img").filter_map do |image|
+        image["src"].presence || image["data-src"].presence || image["data-lazy-src"].presence
+      end.select { |url| url.match?(%r{\Ahttps?://}i) }
+    end
+
+    def image_content_type(response, url)
+      upstream = response["content-type"].to_s.split(";", 2).first.to_s.strip.downcase
+      return upstream if upstream.start_with?("image/")
+
+      extension = URI.parse(url.to_s).path.to_s.downcase[/\.([a-z0-9]+)\z/, 1]
+      {
+        "avif" => "image/avif",
+        "webp" => "image/webp",
+        "jpg" => "image/jpeg",
+        "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "gif" => "image/gif"
+      }[extension] || "application/octet-stream"
+    rescue URI::InvalidURIError
+      "application/octet-stream"
     end
   end
 end

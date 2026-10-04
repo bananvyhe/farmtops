@@ -147,7 +147,7 @@ module Api
         preview_html: sanitized_news_html(article.preview_html),
         preview_image_url: news_article_preview_image_url(article),
         body_text: article.body_text,
-        body_html: sanitized_news_html(news_article_body_html(article)),
+        body_html: sanitized_news_html(rewrite_news_body_image_urls(article, news_article_body_html(article))),
         image_url: news_article_image_url(article),
         published_at: article.published_at,
         fetched_at: article.fetched_at,
@@ -404,6 +404,19 @@ module Api
         article.body_html.to_s,
         [article.image_url, article.raw_payload.to_h["source_listing_image_url"]]
       )
+    end
+
+    def rewrite_news_body_image_urls(article, html)
+      fragment = Nokogiri::HTML::DocumentFragment.parse(html.to_s)
+      image_index = 0
+      fragment.css("img[src]").each do |image|
+        source = image["src"].to_s
+        if source.match?(%r{\Ahttps?://}i)
+          image["src"] = "/api/news/#{article.id}/body_image/#{image_index}"
+          image_index += 1
+        end
+      end
+      fragment.to_html
     end
 
     def strip_duplicate_leading_featured_image(html, image_urls)
