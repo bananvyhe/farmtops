@@ -513,7 +513,7 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
     refute_includes result.errors.join(" "), "HTTP 403"
   end
 
-  test "uses the full article page for feed sources when it is richer than the feed excerpt" do
+  test "uses RSS only for MassivelyOP feed sources" do
     source = NewsSource.create!(
       name: "MassivelyOP",
       base_url: "https://massivelyop.com",
@@ -568,10 +568,8 @@ class News::SectionCrawlerTest < ActiveSupport::TestCase
 
     assert_equal 1, result.articles_saved
     article = section.news_articles.find_by!(canonical_url: "https://massivelyop.com/2026/03/20/patch-article/")
-    assert_includes article.body_text, "far more detail"
-    assert_includes article.body_html, "Another paragraph"
-    refute_includes article.body_html, "wp-post-image"
-    refute_includes article.body_text, "Short feed preview"
+    assert_includes article.body_text, "Short feed preview"
+    refute_includes article.body_text, "far more detail"
   end
 
   test "extracts body text from the same best container as body html" do

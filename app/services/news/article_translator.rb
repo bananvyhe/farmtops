@@ -14,6 +14,12 @@ module News
       return mark_failed!("Article is missing source text") if source_body_text.blank? && source_title.blank?
 
       source_tag_names = source_tag_names_for_translation
+      logger.info(
+        "[News::ArticleTranslator] sending article id=#{article.id} request_id=#{request_id} " \
+        "title_chars=#{source_title.length} preview_chars=#{source_preview_text.length} " \
+        "body_chars=#{source_body_text.length} body_blocks=#{source_body_text.split(/\n\s*\n+/).length} " \
+        "tags=#{source_tag_names.length}"
+      )
       translated = translator.translate_article(
         request_id: request_id,
         source_lang: source_lang,

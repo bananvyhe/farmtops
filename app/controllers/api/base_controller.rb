@@ -429,7 +429,7 @@ module Api
 
       normalized_src = normalize_url(first_image["src"].presence || first_image["data-src"].presence, image_urls.compact.first || "")
       comparison_urls = image_urls.compact.map { |url| normalize_url(url, normalized_src) }.compact
-      return html unless comparison_urls.include?(normalized_src)
+      return html unless comparison_urls.include?(normalized_src) || related_image_url?(normalized_src, comparison_urls)
       return html unless image_only_block?(first_block)
 
       first_block.remove
@@ -446,6 +446,30 @@ module Api
       return false if text.length > 120
 
       node.css("img, figure").any? && node.css("p, li, blockquote, figcaption, pre, h1, h2, h3, h4, h5, h6").empty?
+    end
+
+    def related_image_url?(candidate, comparison_urls)
+      candidate_uri = URI.parse(candidate.to_s)
+      return false unless playtoearn_host?(candidate_uri.host)
+
+      candidate_name = File.basename(candidate_uri.path.to_s).downcase
+      candidate_key = candidate_name.sub(/\A\d+(?=_news_article_)/, "")
+      return false if candidate_key.blank? || candidate_key == candidate_name
+
+      comparison_urls.any? do |url|
+        uri = URI.parse(url.to_s)
+        next false unless playtoearn_host?(uri.host)
+
+        name = File.basename(uri.path.to_s).downcase
+        name.sub(/\A\d+(?=_news_article_)/, "") == candidate_key
+      end
+    rescue URI::InvalidURIError
+      false
+    end
+
+    def playtoearn_host?(host)
+      value = host.to_s.downcase
+      value == "playtoearn.com" || value.end_with?(".playtoearn.com")
     end
 
     def normalize_url(url, base_url)

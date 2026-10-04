@@ -108,6 +108,12 @@ module News
 
       def post_json(path, payload)
         uri = URI.join(base_url.end_with?("/") ? base_url : "#{base_url}/", path.delete_prefix("/"))
+        started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        logger.info(
+          "[News::Translation::Client] request=#{payload[:request_id]} path=#{path} " \
+          "title_chars=#{payload[:title].to_s.length} preview_chars=#{payload[:preview_text].to_s.length} " \
+          "body_chars=#{payload[:body_text].to_s.length}"
+        )
 
         response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https", open_timeout:, read_timeout:) do |http|
           request = Net::HTTP::Post.new(uri)
@@ -119,6 +125,8 @@ module News
         end
 
         body_text = response.body.to_s
+        elapsed_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at) * 1000).round
+        logger.info("[News::Translation::Client] response request=#{payload[:request_id]} status=#{response.code} elapsed_ms=#{elapsed_ms} response_chars=#{body_text.length}")
         parsed_body = JSON.parse(body_text) rescue {}
         raise Error, parsed_body["error"].to_s.presence || "Translator returned HTTP #{response.code}" unless response.is_a?(Net::HTTPSuccess)
 

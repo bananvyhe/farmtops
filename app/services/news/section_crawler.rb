@@ -241,6 +241,14 @@ module News
 
     def crawl_article(candidate, page_url, seen_keys)
       if feed_mode? && candidate.raw_payload[:feed_description_html].present?
+        # MassivelyOP's article pages are expensive and frequently trigger
+        # anti-bot responses. Its RSS item already contains the usable body
+        # and featured image, so keep this source RSS-only.
+        if massivelyop_source?
+          article_data = extract_feed_article(candidate, page_url)
+          return save_article(article_data, seen_keys, candidate)
+        end
+
         if crawl_throttle.full_article_fetch_disabled?(source)
           article_data = extract_feed_article(candidate, page_url)
           return save_article(article_data, seen_keys, candidate)
@@ -798,7 +806,7 @@ module News
     end
 
     def massivelyop_source?
-      URI.parse(source.base_url.to_s).host.to_s.sub(/\Awww\./, "") == "massivelyop.com"
+      %w[massivelyop.com massively.com].include?(URI.parse(source.base_url.to_s).host.to_s.sub(/\Awww\./, ""))
     rescue URI::InvalidURIError, URI::Error
       false
     end
@@ -1057,7 +1065,9 @@ module News
     def feed_item_image_url(node, page_url)
       enclosure = node.at_css("enclosure")
       image = enclosure&.[]("url").presence ||
-        node.at_xpath(".//*[local-name()='content']")&.[]("url").presence
+        node.at_xpath(".//*[local-name()='content']")&.[]("url").presence ||
+        node.at_css("description img, summary img, content img")&.[]("src").presence ||
+        node.at_css("description img, summary img, content img")&.[]("data-src").presence
       normalize_url(image, page_url)
     end
 
