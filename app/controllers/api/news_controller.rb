@@ -17,7 +17,7 @@ module Api
       game_bookmark_counts = news_game_bookmark_counts_for(articles.filter_map { |article| article.news_article_game&.game_id })
       blocked_source_ids = NewsSource.blocked_source_ids
       render json: {
-        articles: articles.map { |article| news_article_payload(article, read: read_ids.include?(article.id), bookmarked_game_ids:, game_bookmark_counts:, include_body_html: false, include_article_image: false) },
+        articles: articles.map { |article| news_article_payload(article, read: read_ids.include?(article.id), bookmarked_game_ids:, game_bookmark_counts:, include_body_html: false, include_article_image: true) },
         sources: NewsSource.active.where.not(id: blocked_source_ids).includes(:news_sections).map { |source| news_source_payload(source) },
         sections: NewsSection.active.where.not(news_source_id: blocked_source_ids).includes(:news_source).map { |section| news_section_payload(section) },
         tags: news_tags_payload(base_scope),
@@ -69,11 +69,7 @@ module Api
       article = NewsArticle.find(params[:id])
       return render_error("Image not available", status: :not_found) if article.news_source.blocked_source?
 
-      url = article.image_url.to_s.strip
-
-      return render_error("Image not available", status: :not_found) if url.blank?
-
-      proxy_article_image(url)
+      proxy_first_available_image(article)
     rescue StandardError => e
       Rails.logger.warn("[Api::NewsController] image proxy failed for #{params[:id]}: #{e.class} #{e.message}")
       render_error("Image not available", status: :bad_gateway)
@@ -83,25 +79,7 @@ module Api
       article = NewsArticle.find(params[:id])
       return render_error("Image not available", status: :not_found) if article.news_source.blocked_source?
 
-      urls = [
-        article.raw_payload.to_h["source_listing_image_url"].presence,
-        article.image_url.to_s.strip
-      ].compact.uniq
-      return render_error("Image not available", status: :not_found) if urls.blank?
-
-      urls.each do |url|
-        begin
-          response = fetch_image_response(url)
-          next unless response.is_a?(Net::HTTPSuccess)
-
-          content_type = response["content-type"].presence || "application/octet-stream"
-          return send_data response.body.to_s, type: content_type, disposition: "inline"
-        rescue StandardError
-          next
-        end
-      end
-
-      render_error("Image not available", status: :bad_gateway)
+      proxy_first_available_image(article, preview: true)
     rescue StandardError => e
       Rails.logger.warn("[Api::NewsController] preview image proxy failed for #{params[:id]}: #{e.class} #{e.message}")
       render_error("Image not available", status: :bad_gateway)
@@ -262,15 +240,31 @@ module Api
     end
 
     def perform_image_request(uri)
-      Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https", open_timeout: 10, read_timeout: 20) do |http|
-        request = Net::HTTP::Get.new(uri)
-        request["User-Agent"] = ENV.fetch("NEWS_USER_AGENT", "FarmspotNewsCrawler/1.0")
-        request["Accept"] = "image/avif,image/webp,image/*,*/*;q=0.8"
-        request["Accept-Language"] = "en-US,en;q=0.9"
-        request["Cache-Control"] = "no-cache"
-        request["Pragma"] = "no-cache"
-        http.request(request)
+      addresses = Addrinfo.getaddrinfo(uri.host, uri.port, Socket::AF_INET, Socket::SOCK_STREAM)
+        .map(&:ip_address).uniq
+      addresses = [nil] if addresses.empty?
+      last_error = nil
+
+      addresses.each do |ipv4|
+        begin
+          options = { use_ssl: uri.scheme == "https", open_timeout: 3, read_timeout: 5 }
+          options[:ipaddr] = ipv4 if ipv4.present?
+          return Net::HTTP.start(uri.host, uri.port, **options) do |http|
+            request = Net::HTTP::Get.new(uri)
+            request["User-Agent"] = ENV.fetch("NEWS_USER_AGENT", "FarmspotNewsCrawler/1.0")
+            request["Accept"] = "image/avif,image/webp,image/*,*/*;q=0.8"
+            request["Accept-Language"] = "en-US,en;q=0.9"
+            request["Cache-Control"] = "no-cache"
+            request["Pragma"] = "no-cache"
+            http.request(request)
+          end
+        rescue SocketError, SystemCallError, Timeout::Error => e
+          last_error = e
+        end
       end
+
+      raise last_error if last_error
+      raise Net::HTTPError, "Unable to connect to image host #{uri.host}", nil
     end
 
     def proxy_article_image(url)
@@ -288,6 +282,42 @@ module Api
       Nokogiri::HTML::DocumentFragment.parse(html.to_s).css("img").filter_map do |image|
         image["src"].presence || image["data-src"].presence || image["data-lazy-src"].presence
       end.select { |url| url.match?(%r{\Ahttps?://}i) }
+    end
+
+    def proxy_first_available_image(article, preview: false)
+      urls = article_image_urls(article, preview:).compact.uniq
+      return render_error("Image not available", status: :not_found) if urls.blank?
+
+      urls.each do |url|
+        begin
+          response = fetch_image_response(url)
+          next unless response.is_a?(Net::HTTPSuccess)
+
+          return send_data response.body.to_s, type: image_content_type(response, url), disposition: "inline"
+        rescue StandardError
+          next
+        end
+      end
+
+      render_error("Image not available", status: :bad_gateway)
+    end
+
+    def article_image_urls(article, preview: false)
+      payload = article.raw_payload.to_h
+      urls = []
+      urls << payload["source_listing_image_url"] if preview
+      %w[source_preview_html source_body_html preview_html].each do |key|
+        html = payload[key].presence
+        next if html.blank?
+
+        urls.concat(
+          Nokogiri::HTML::DocumentFragment.parse(html).css("img").filter_map do |image|
+            image["src"].presence || image["data-src"].presence || image["data-lazy-src"].presence
+          end
+        )
+      end
+      urls << article.image_url
+      urls.map { |url| url.to_s.strip }.select { |url| url.match?(%r{\Ahttps?://}i) }
     end
 
     def image_content_type(response, url)

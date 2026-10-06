@@ -661,6 +661,8 @@ onBeforeUnmount(() => {
             v-if="(article.preview_image_url || article.image_url) && !failedPreviewImages.has(article.id)"
             :src="article.preview_image_url || article.image_url"
             :alt="article.title || article.preview_text || 'news image'"
+            loading="lazy"
+            decoding="async"
             @error="markPreviewImageFailed(article.id)"
           >
           <div v-else class="news-card__placeholder">

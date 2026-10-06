@@ -234,6 +234,8 @@ onMounted(() => {
           :src="article.image_url"
           :alt="article.title"
           class="news-article-image"
+          loading="lazy"
+          decoding="async"
           @error="markArticleImageFailed"
         >
 
