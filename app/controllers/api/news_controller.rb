@@ -1,4 +1,5 @@
 require "base64"
+require "digest"
 require "json"
 require "net/http"
 require "uri"
@@ -17,7 +18,7 @@ module Api
       game_bookmark_counts = news_game_bookmark_counts_for(articles.filter_map { |article| article.news_article_game&.game_id })
       blocked_source_ids = NewsSource.blocked_source_ids
       render json: {
-        articles: articles.map { |article| news_article_payload(article, read: read_ids.include?(article.id), bookmarked_game_ids:, game_bookmark_counts:, include_body_html: false, include_article_image: true) },
+        articles: articles.map { |article| news_article_payload(article, read: read_ids.include?(article.id), bookmarked_game_ids:, game_bookmark_counts:, include_body_html: false, include_article_image: true, include_preview_image: false) },
         sources: NewsSource.active.where.not(id: blocked_source_ids).includes(:news_sections).map { |source| news_source_payload(source) },
         sections: NewsSection.active.where.not(news_source_id: blocked_source_ids).includes(:news_source).map { |section| news_section_payload(section) },
         tags: news_tags_payload(base_scope),
@@ -32,7 +33,7 @@ module Api
 
       bookmarked_game_ids = news_game_bookmark_ids_for([article.news_article_game&.game_id].compact)
       game_bookmark_counts = news_game_bookmark_counts_for([article.news_article_game&.game_id].compact)
-      render json: { article: news_article_payload(article, read: news_article_read?(article), bookmarked_game_ids:, game_bookmark_counts:, include_body_html: true, include_article_image: true) }
+      render json: { article: news_article_payload(article, read: news_article_read?(article), bookmarked_game_ids:, game_bookmark_counts:, include_body_html: true, include_article_image: true, include_preview_image: false) }
     end
 
     def reads
@@ -290,16 +291,37 @@ module Api
 
       urls.each do |url|
         begin
-          response = fetch_image_response(url)
-          next unless response.is_a?(Net::HTTPSuccess)
+          image = cached_or_fetch_image(url)
+          next if image.blank?
 
-          return send_data response.body.to_s, type: image_content_type(response, url), disposition: "inline"
+          return deliver_cached_image(image)
         rescue StandardError
           next
         end
       end
 
       render_error("Image not available", status: :bad_gateway)
+    end
+
+    def cached_or_fetch_image(url)
+      cache_key = "news:image-proxy:v1:#{Digest::SHA256.hexdigest(url.to_s)}"
+      cached = Rails.cache.read(cache_key)
+      return cached if cached.present?
+
+      response = fetch_image_response(url)
+      return unless response.is_a?(Net::HTTPSuccess)
+
+      image = { body: response.body.to_s, content_type: image_content_type(response, url) }
+      Rails.cache.write(cache_key, image, expires_in: 24.hours)
+      image
+    end
+
+    def deliver_cached_image(image)
+      expires_in 1.day, public: true
+      send_data image[:body].to_s, type: image[:content_type].presence || "application/octet-stream", disposition: "inline"
+      response.headers["Cache-Control"] = "public, max-age=86400, s-maxage=604800"
+      response.headers["Vary"] = "Accept"
+      response
     end
 
     def article_image_urls(article, preview: false)

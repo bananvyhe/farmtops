@@ -132,7 +132,7 @@ module Api
       }
     end
 
-    def news_article_payload(article, read: nil, bookmarked_game_ids: nil, game_bookmark_counts: nil, include_body_html: false, include_article_image: false)
+    def news_article_payload(article, read: nil, bookmarked_game_ids: nil, game_bookmark_counts: nil, include_body_html: false, include_article_image: false, include_preview_image: false)
       game = article.news_article_game&.game
       article_image_url = news_article_image_url(article)
       source_image_url = article.image_url.presence || article.raw_payload.to_h["source_listing_image_url"]
@@ -147,7 +147,7 @@ module Api
         title: article.title,
         preview_text: article.preview_text,
         preview_html: sanitized_news_html(article.preview_html),
-        preview_image_url: news_article_preview_image_url(article),
+        preview_image_url: include_preview_image ? news_article_preview_image_url(article) : nil,
         body_text: article.body_text,
         image_url: (include_article_image || !rate_limited_image_host?(source_image_url)) ? article_image_url : nil,
         published_at: article.published_at,
