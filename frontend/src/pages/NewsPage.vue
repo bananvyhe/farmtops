@@ -20,6 +20,7 @@ const selectedSourceId = ref(null)
 const selectedSectionId = ref(null)
 const selectedTagIds = ref([])
 const selectedGameId = ref(null)
+const pendingReturnAnchor = ref(null)
 const gameSearch = ref("")
 const nextCursor = ref(null)
 const hasMore = ref(true)
@@ -33,6 +34,7 @@ const pendingReadIds = new Set()
 const READ_VISIBILITY_RATIO = 0.75
 const READ_VISIBILITY_MS = 1000
 let readObserver = null
+let returnAnchorObserver = null
 let flushTimer = null
 let requestToken = 0
 let gameSearchToken = 0
@@ -178,12 +180,97 @@ function captureFeedSnapshot() {
     nextCursor: nextCursor.value,
     hasMore: hasMore.value,
     scrollY: scrollY.value,
+    returnAnchor: pendingReturnAnchor.value,
     savedAt: Date.now()
   }
 }
 
 function saveFeedSnapshot() {
   newsUi.saveFeedSnapshot(captureFeedSnapshot())
+}
+
+function stopReturnAnchorAdjustment() {
+  returnAnchorObserver?.disconnect()
+  returnAnchorObserver = null
+  window.removeEventListener("wheel", clearReturnAnchor, true)
+  window.removeEventListener("touchstart", clearReturnAnchor, true)
+  window.removeEventListener("pointerdown", clearReturnAnchor, true)
+  window.removeEventListener("keydown", clearReturnAnchor, true)
+  window.removeEventListener("resize", clearReturnAnchor, true)
+}
+
+function clearReturnAnchor() {
+  if (!pendingReturnAnchor.value) return
+
+  pendingReturnAnchor.value = null
+  stopReturnAnchorAdjustment()
+  saveFeedSnapshot()
+}
+
+function restoreFeedPosition(state) {
+  const anchor = state.returnAnchor
+  if (!anchor) {
+    window.scrollTo({ top: state.scrollY || 0, behavior: "auto" })
+    return
+  }
+
+  pendingReturnAnchor.value = anchor
+  const alignAnchor = () => {
+    if (pendingReturnAnchor.value !== anchor) return
+
+    const card = articleRefs.get(Number(anchor.articleId))
+    const element = card?.querySelector(anchor.selector || ".news-card__title")
+    if (!element) return
+
+    const delta = element.getBoundingClientRect().top - anchor.viewportTop
+    if (Math.abs(delta) > 1) {
+      window.scrollTo({ top: window.scrollY + delta, behavior: "instant" })
+    }
+  }
+
+  const waitForAnchor = (framesRemaining = 120) => {
+    if (pendingReturnAnchor.value !== anchor) return
+
+    const anchorCard = articleRefs.get(Number(anchor.articleId))
+    if (!anchorCard) {
+      if (framesRemaining > 0) {
+        window.requestAnimationFrame(() => waitForAnchor(framesRemaining - 1))
+      }
+      return
+    }
+
+    alignAnchor()
+    if (typeof ResizeObserver === "function") {
+      returnAnchorObserver = new ResizeObserver(alignAnchor)
+      for (const [articleId, element] of articleRefs) {
+        returnAnchorObserver.observe(element)
+        if (Number(articleId) === Number(anchor.articleId)) break
+      }
+    }
+  }
+
+  window.addEventListener("wheel", clearReturnAnchor, true)
+  window.addEventListener("touchstart", clearReturnAnchor, true)
+  window.addEventListener("pointerdown", clearReturnAnchor, true)
+  window.addEventListener("keydown", clearReturnAnchor, true)
+  window.addEventListener("resize", clearReturnAnchor, true)
+  waitForAnchor()
+}
+
+function rememberArticleReturnPoint(articleId, event) {
+  const card = articleRefs.get(Number(articleId))
+  const link = event?.currentTarget
+  if (!card || !link) {
+    saveFeedSnapshot()
+    return
+  }
+
+  pendingReturnAnchor.value = {
+    articleId: Number(articleId),
+    selector: link.classList.contains("news-card__link") ? ".news-card__link" : ".news-card__title",
+    viewportTop: link.getBoundingClientRect().top
+  }
+  newsUi.saveFeedSnapshot({ ...captureFeedSnapshot(), scrollY: window.scrollY })
 }
 
 function restoreFeedSnapshot() {
@@ -218,11 +305,7 @@ function restoreFeedSnapshot() {
   loading.value = false
   loadingMore.value = false
 
-  nextTick(() => {
-    window.requestAnimationFrame(() => {
-      window.scrollTo({ top: state.scrollY || 0, behavior: "auto" })
-    })
-  })
+  nextTick(() => window.requestAnimationFrame(() => restoreFeedPosition(state)))
 
   return true
 }
@@ -551,12 +634,14 @@ onMounted(async () => {
   selectedTagIds.value = initialFilters.tagIds
   selectedGameId.value = initialFilters.gameId
 
+  const restored = restoreFeedSnapshot()
+  await nextTick()
   hydrated.value = true
-  if (!restoreFeedSnapshot()) {
+
+  if (!restored) {
     window.scrollTo({ top: 0, behavior: "auto" })
     await loadFeed()
   } else {
-    await nextTick()
     syncReadObserver()
   }
 
@@ -567,6 +652,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("farmspot:session-changed", handleSessionChanged)
+  stopReturnAnchorAdjustment()
   resetReadTracking()
   readObserver?.disconnect()
   saveFeedSnapshot()
@@ -692,14 +778,14 @@ onBeforeUnmount(() => {
             <span v-if="isUnread(article)" class="news-card__badge">Новая</span>
           </div>
 
-          <RouterLink class="news-card__title pt-4 pb-1" :to="{ path: articlePath(article), query: routeQueryForFilters() }">
+          <RouterLink class="news-card__title pt-4 pb-1" :to="{ path: articlePath(article), query: routeQueryForFilters() }" @click="rememberArticleReturnPoint(article.id, $event)">
             <h2>{{ article.title }}</h2>
           </RouterLink>
           <p class="news-card__preview">{{ article.preview_text || article.body_text }}</p>
 
           <div class="news-card__actions mt-2">
-            <RouterLink class="news-card__link" :to="{ path: articlePath(article), query: routeQueryForFilters() }">Читать полностью</RouterLink>
-            <a :href="article.canonical_url" target="_blank" rel="noreferrer">Открыть источник</a>
+            <RouterLink class="news-card__link" :to="{ path: articlePath(article), query: routeQueryForFilters() }" @click="rememberArticleReturnPoint(article.id, $event)">открыть</RouterLink> |
+            <a :href="article.canonical_url" target="_blank" rel="noreferrer">источник</a>
           </div>
         </div>
       </article>
