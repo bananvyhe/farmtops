@@ -40,6 +40,7 @@
   Правила слоев внутри шарда, лимит 10 активных участников на слой, выбор свободного слоя и ограничения изоляции.
 - [runbooks/news_translation.md](runbooks/news_translation.md)
   Короткий runbook по очереди перевода новостей, повторным job'ам, lock/recovery и проверке окружения Sidekiq.
+- [runbooks/news_playtoearn_crawler.md](runbooks/news_playtoearn_crawler.md) — PlayToEarn crawler: заголовки, порядок блоков перевода и lazy-loaded изображения.
 
 ## Рекомендуемый узкий вход по задачам
 

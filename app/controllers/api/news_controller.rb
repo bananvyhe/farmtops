@@ -279,7 +279,11 @@ module Api
     end
 
     def body_image_urls(article)
-      html = article.raw_payload.to_h["source_body_html"].presence || article.body_html
+      # rewrite_news_body_image_urls indexes images from the rendered body.
+      # Resolve against that same HTML: the source HTML can contain images that
+      # translation/rendering removed or reordered, which maps index 0 to the
+      # featured image instead of the visible inline image.
+      html = article.body_html.presence || article.raw_payload.to_h["source_body_html"]
       Nokogiri::HTML::DocumentFragment.parse(html.to_s).css("img").filter_map do |image|
         image["src"].presence || image["data-src"].presence || image["data-lazy-src"].presence
       end.select { |url| url.match?(%r{\Ahttps?://}i) }

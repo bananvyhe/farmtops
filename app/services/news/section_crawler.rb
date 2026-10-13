@@ -553,22 +553,54 @@ module News
 
     def strip_duplicate_leading_featured_image(html, image_urls)
       fragment = Nokogiri::HTML.fragment(html.to_s)
+      comparison_urls = image_urls.compact.map { |url| normalize_url(url, image_urls.compact.first || "") }.compact
+
+      # PlayToEarn places the same featured image in a __NewsImage wrapper
+      # after its lead paragraph. The lead means this is not the first body
+      # block, and their thumbnail/full-size URLs have different numeric
+      # prefixes despite sharing the same article image id.
+      if playtoearn_source?
+        fragment.css(".__NewsImage").each do |block|
+          next unless image_only_block?(block)
+
+          image = block.at_css("img[src], img[data-src]")
+          next if image.blank?
+
+          image_url = normalize_url(image["src"].presence || image["data-src"], comparison_urls.first || "")
+          block.remove if comparison_urls.any? { |url| same_article_image?(url, image_url) }
+        end
+      end
+
       first_block = fragment.children.find { |node| node.element? }
-      return html if first_block.blank?
+      return fragment.to_html if first_block.blank?
 
       first_image = first_block.at_css("img[src]") || first_block.at_css("img[data-src]")
-      return html if first_image.blank?
+      return fragment.to_html if first_image.blank?
 
       normalized_src = normalize_url(first_image["src"].presence || first_image["data-src"].presence, image_urls.compact.first || "")
       comparison_urls = image_urls.compact.map { |url| normalize_url(url, normalized_src) }.compact
-      return html unless comparison_urls.include?(normalized_src)
+      return fragment.to_html unless comparison_urls.any? { |url| same_article_image?(url, normalized_src) }
 
-      return html unless image_only_block?(first_block)
+      return fragment.to_html unless image_only_block?(first_block)
 
       first_block.remove
       fragment.to_html
     rescue StandardError
       html
+    end
+
+    def same_article_image?(left, right)
+      return true if left == right
+      return false unless playtoearn_source?
+
+      playtoearn_image_id(left).present? && playtoearn_image_id(left) == playtoearn_image_id(right)
+    end
+
+    def playtoearn_image_id(url)
+      path = URI.parse(url.to_s).path
+      path[%r{/blog_images/(?:avif/)?\d+_news_article_([0-9a-f]+)\.[a-z0-9]+\z}i, 1]
+    rescue URI::InvalidURIError, URI::Error
+      nil
     end
 
     def image_only_block?(node)

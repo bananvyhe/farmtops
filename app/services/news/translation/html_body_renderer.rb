@@ -83,9 +83,11 @@ module News
       end
 
       def text_block_node?(node)
+        # Empty publisher placeholders (for example <p></p> after an image)
+        # are not present in body_text and must not consume its next block.
+        return false if node.text.to_s.strip.empty?
         return true if node.matches?(TEXT_BLOCK_SELECTOR)
         return false unless node.element?
-        return false if node.text.to_s.strip.empty?
 
         # Some publishers mark headings as a div/strong/span instead of an
         # actual h2-h6. Treat an inline-only container as one block; otherwise
