@@ -59,15 +59,13 @@ async function animateNewsCards() {
     animatedArticleElements.add(card)
     gsap.fromTo(card, {
       autoAlpha: 0,
-      y: 28,
-      x: index % 2 === 0 ? -10 : 10
+      x: index % 2 === 0 ? -8 : 8
     }, {
       autoAlpha: 1,
       x: 0,
-      y: 0,
-      duration: 0.65,
-      delay: (index % 3) * 0.05,
-      ease: "power3.out",
+      duration: 0.1,
+      delay: (index % 3) * 0.035,
+      ease: "power0.in",
       clearProps: "transform,opacity,visibility",
       scrollTrigger: {
         trigger: card,

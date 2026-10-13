@@ -208,7 +208,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <main class="news-article-page">
+  <main class="news-article-page mt-0">
     <section class="news-article-shell card card--dark">
       <div v-if="loading">
         <v-skeleton-loader type="article, image, paragraph" />
