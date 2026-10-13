@@ -4,7 +4,7 @@
       <div class="hat__fog 
 "></div>
       <div class="hat__flash"></div>
-      <div class="hat__clouds hat__clouds--far"></div>
+      <div class="hat__clouds hat__clouds--far "></div>
       <div class="hat__shadow hat__shadow--top"></div>
       <div class="hat__clouds hat__clouds--near"></div>
 
@@ -87,43 +87,45 @@ onMounted(() => {
     })
 
 gsap.timeline({ repeat: -1 })
-  .to(".hat__warriors", {
-    filter: "brightness(0.7)",
-    duration: 2,
-    delay: 1.1,
-     ease: "circ.in"
-  })
+  .addLabel("firstStrike")
   .to(".hat__flash", {
     opacity: 0.7,
     duration: 0.05
-  }, "<")
-  .to(".hat__warriors", {
-    filter: "brightness(1)",
-    duration: 1.4,
-    ease: "sine.out"
-  })
+  }, "firstStrike")
+  .to(".hat__warrior", {
+    filter: "brightness(0.42)",
+    duration: 0.05
+  }, "firstStrike")
   .to(".hat__flash", {
     opacity: 0,
     duration: 2.2,
     ease: "sine.out"
-  }, "-=2.3", "<")
-  .to(".hat__warriors", {
-    filter: "brightness(0.7)",
-    duration: 0.05,
-    delay: 1.4
   })
+  .to(".hat__warrior", {
+    filter: "brightness(1)",
+    duration: 1.7,
+    ease: "expo.in"
+  }, "<")
+  .to({}, { duration: 1.4 })
+  .addLabel("secondStrike")
   .to(".hat__flash", {
     opacity: 1,
     duration: 0.05
-  }, "<")
-  .to(".hat__warriors", {
-    filter: "brightness(1)",
-    duration: 1.7,
-    ease: "sine.out"
-  })
+  }, "secondStrike")
+  .to(".hat__warrior", {
+    filter: "brightness(0.22)",
+    duration: 0.05,
+    ease: "expo.inOut"
+  }, "secondStrike")
   .to(".hat__flash", {
     opacity: 0,
-    duration: 5
+    duration: 4,
+    ease: "sine.out"
+  })
+  .to(".hat__warrior", {
+    filter: "brightness(1)",
+    duration: 1.7,
+    ease: "expo.in"
   }, "<")
   }, hatRef.value)
 })
