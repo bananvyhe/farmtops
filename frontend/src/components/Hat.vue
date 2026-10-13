@@ -62,31 +62,36 @@ onMounted(() => {
       stagger: 0.2
     })
 
-    gsap.fromTo(".hat__fog", { opacity: 1, scale: 1.1, y: 10 }, {
-      opacity: 0,
-      scale: 1.8,
-      y: -45,
-      duration: 6.4,
-      ease: "sine.out",
-      repeat: -1,
-      repeatDelay: 0.3
-    })
+    gsap.timeline({ repeat: -1 })
+      .fromTo(".hat__fog", { opacity: 0, scale: 1.08, y: 8 }, {
+        opacity: 0.58,
+        scale: 1.42,
+        y: -24,
+        duration: 3.5,
+        ease: "sine.out"
+      })
+      .to(".hat__fog", {
+        opacity: 0,
+        scale: 1.62,
+        y: -38,
+        duration: 5.5,
+        ease: "sine.in"
+      })
 
     gsap.to(".hat__clouds--near", {
-      scale: 1.2,
-      backgroundPositionX: "-1000px",
+      backgroundPositionX: "-300px",
       duration: 18,
       ease: "none",
       repeat: -1
     })
     gsap.to(".hat__clouds--far", {
-      backgroundPositionX: "-1000px",
+      backgroundPositionX: "-800px",
       duration: 18,
       ease: "none",
       repeat: -1
     })
 
-gsap.timeline({ repeat: -1 })
+gsap.timeline({ repeat: -1, delay: 2.8 })
   .addLabel("firstStrike")
   .to(".hat__flash", {
     opacity: 0.7,
@@ -103,7 +108,7 @@ gsap.timeline({ repeat: -1 })
   })
   .to(".hat__warrior", {
     filter: "brightness(1)",
-    duration: 1.7,
+    duration: 2.1,
     ease: "expo.in"
   }, "<")
   .to({}, { duration: 1.4 })
@@ -124,7 +129,7 @@ gsap.timeline({ repeat: -1 })
   })
   .to(".hat__warrior", {
     filter: "brightness(1)",
-    duration: 1.7,
+    duration: 2.1,
     ease: "expo.in"
   }, "<")
   }, hatRef.value)
@@ -253,20 +258,20 @@ onUnmounted(() => animationContext?.revert())
 .hat__clouds--far {
   z-index: 2;
   opacity: 0.9;
-  background-position: center 0;
+  background-position: 0 0;
   background-size: 800px auto;
 }
 
 .hat__clouds--near {
   z-index: 3;
   opacity: 0.3;
-  background-position: center 0;
+  background-position: 0 0;
   background-size: 300px auto;
 }
 
 .hat__fog {
   z-index: 0;
-  background: url("/hat/fog2.jpg") center -0px / cover no-repeat;
+  background: url("/hat/fog2.jpg") center center / cover no-repeat;
 }
 
 .hat__flash {
