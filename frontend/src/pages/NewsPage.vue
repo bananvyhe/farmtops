@@ -2,6 +2,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useIntersectionObserver, useWindowScroll, watchThrottled } from "@vueuse/core"
+import { gsap } from "gsap"
+import { ScrollTrigger } from "gsap/ScrollTrigger"
 import { api } from "../api"
 import { sessionState } from "../useSession"
 import NewsGameActions from "../components/NewsGameActions.vue"
@@ -29,6 +31,7 @@ const hydrated = ref(false)
 const failedPreviewImages = ref(new Set())
 const activeQueryKey = ref("")
 const articleRefs = new Map()
+const animatedArticleElements = new WeakSet()
 const readTimers = new Map()
 const pendingReadIds = new Set()
 const READ_VISIBILITY_RATIO = 0.75
@@ -42,6 +45,38 @@ const route = useRoute()
 const router = useRouter()
 const newsUi = useNewsUiStore()
 const { y: scrollY } = useWindowScroll()
+gsap.registerPlugin(ScrollTrigger)
+
+async function animateNewsCards() {
+  await nextTick()
+  if (!hydrated.value || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+
+  const cards = [...document.querySelectorAll(".news-page .news-feed > .news-card")]
+    .filter((card) => !animatedArticleElements.has(card))
+  if (!cards.length) return
+
+  cards.forEach((card, index) => {
+    animatedArticleElements.add(card)
+    gsap.fromTo(card, {
+      autoAlpha: 0,
+      y: 28,
+      x: index % 2 === 0 ? -10 : 10
+    }, {
+      autoAlpha: 1,
+      x: 0,
+      y: 0,
+      duration: 0.65,
+      delay: (index % 3) * 0.05,
+      ease: "power3.out",
+      clearProps: "transform,opacity,visibility",
+      scrollTrigger: {
+        trigger: card,
+        start: "top 88%",
+        once: true
+      }
+    })
+  })
+}
 const handleSessionChanged = () => {
   if (!hydrated.value) return
 
@@ -550,7 +585,7 @@ watch(
   () => displayArticles.value.map((article) => article.id).join(","),
   async () => {
     if (!hydrated.value) return
-    await nextTick()
+    await animateNewsCards()
     syncReadObserver()
   }
 )
@@ -643,6 +678,7 @@ onMounted(async () => {
     await loadFeed()
   } else {
     syncReadObserver()
+    animateNewsCards()
   }
 
   if (selectedGameId.value !== null) {
@@ -655,6 +691,9 @@ onBeforeUnmount(() => {
   stopReturnAnchorAdjustment()
   resetReadTracking()
   readObserver?.disconnect()
+  ScrollTrigger.getAll().forEach((trigger) => {
+    if (trigger.trigger?.closest?.(".news-page")) trigger.kill()
+  })
   saveFeedSnapshot()
 })
 </script>
