@@ -53,7 +53,15 @@ class NewsTranslateArticleJob
   private
 
   def advance_chain(lock_token, next_article_id = nil, crawl_run_id = nil)
-    return unless lock_held_by_chain?(lock_token)
+    unless lock_held_by_chain?(lock_token)
+      # A retry can arrive after the previous execution released the lock but
+      # failed while handing off to the pending-articles job (for example, a
+      # brief Redis outage). Reacquire through the normal entrypoint instead
+      # of silently dropping the remaining queue with a stale token.
+      Rails.logger.warn("[NewsTranslateArticleJob] lock token expired during handoff; restarting pending translation scan")
+      NewsTranslatePendingArticlesJob.perform_async
+      return
+    end
 
     if next_article_id.present?
       NewsTranslateArticleJob.perform_async(next_article_id, lock_token, crawl_run_id)

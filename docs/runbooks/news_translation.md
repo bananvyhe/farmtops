@@ -5,8 +5,8 @@
 ## Что считается нормой
 
 - `NewsTranslatePendingArticlesJob` и `NewsTranslateArticleJob` работают как цепочка на одну статью за раз.
-- `NewsTranslateArticleJob` ставит watchdog через `perform_in(1.minute)`.
-- `NewsTranslationRecoveryJob` нужен как one-shot recovery на старте/вручную, а не как регулярный cron.
+- Запрос к переводчику выполняется синхронно; production read timeout — 2400 секунд. Пока запрос не вернулся или не истёк timeout, текущая статья остаётся `translating`, а следующие ждут своей очереди.
+- Автоматического watchdog job на время запроса нет. `News::Translation::Recovery` запускается при старте Sidekiq или вручную, но не периодическим cron.
 - После завершения перевода pipeline переходит к идентификации игр.
 
 ## Что обычно ломается
@@ -15,6 +15,7 @@
 - У процесса `sidekiq` задан неправильный `NEWS_TRANSLATOR_BASE_URL`, и он ходит в `127.0.0.1:19191` вместо живого хоста.
 - В окружении задан URL, который формально присутствует, но недоступен из контейнера. В этом случае нужен health-based fallback.
 - Redis lock `news:translation:pending_articles_lock` может остаться stale, и очередь больше не стартует.
+- Краткий сбой Redis при передаче цепочки следующей job мог оставить pending-статьи без владельца lock. Повтор с уже освобождённым token теперь запускает общий скан pending-статей и заново захватывает lock.
 
 ## Быстрая проверка
 

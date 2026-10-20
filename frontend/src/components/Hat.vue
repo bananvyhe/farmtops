@@ -54,7 +54,8 @@ onMounted(() => {
       ease: "power2.in"
     }).set(".hat__warriors", { autoAlpha: 1 })
 
-    gsap.fromTo(".hat__warrior", { backgroundPositionY: "165px" }, {
+    gsap.fromTo(".hat__warrior", { backgroundPositionY: "365px" }, {
+       
       backgroundPositionY: "0px",
       delay: 1.8,
       duration: 0.5,
@@ -108,8 +109,8 @@ gsap.timeline({ repeat: -1, delay: 2.8 })
   })
   .to(".hat__warrior", {
     filter: "brightness(1)",
-    duration: 2.1,
-    ease: "expo.in"
+    duration: 1.9,
+    ease: "power4.in"
   }, "<")
   .to({}, { duration: 1.4 })
   .addLabel("secondStrike")
@@ -129,8 +130,8 @@ gsap.timeline({ repeat: -1, delay: 2.8 })
   })
   .to(".hat__warrior", {
     filter: "brightness(1)",
-    duration: 2.1,
-    ease: "expo.in"
+    duration: 2.2,
+    ease: "power4.in"
   }, "<")
   }, hatRef.value)
 })
