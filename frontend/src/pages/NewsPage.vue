@@ -815,13 +815,13 @@ onBeforeUnmount(() => {
             <span v-if="isUnread(article)" class="news-card__badge">Новая</span>
           </div>
 
-          <RouterLink class="news-card__title pt-4 pb-1" :to="{ path: articlePath(article), query: routeQueryForFilters() }" @click="rememberArticleReturnPoint(article.id, $event)">
+          <RouterLink class="news-card__title pt-4 pb-1" :to="articlePath(article)" @click="rememberArticleReturnPoint(article.id, $event)">
             <h2>{{ article.title }}</h2>
           </RouterLink>
           <p class="news-card__preview">{{ article.preview_text || article.body_text }}</p>
 
           <div class="news-card__actions mt-2">
-            <RouterLink class="news-card__link" :to="{ path: articlePath(article), query: routeQueryForFilters() }" @click="rememberArticleReturnPoint(article.id, $event)">открыть</RouterLink> |
+            <RouterLink class="news-card__link" :to="articlePath(article)" @click="rememberArticleReturnPoint(article.id, $event)">открыть</RouterLink> |
             <a :href="article.canonical_url" target="_blank" rel="noreferrer">источник</a>
           </div>
         </div>
