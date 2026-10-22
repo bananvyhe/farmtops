@@ -37,6 +37,12 @@ let animationContext
 onMounted(() => {
   animationContext = gsap.context(() => {
     gsap.set(".hat__warriors", { autoAlpha: 0 })
+    gsap.to(".hat__flash", {
+      opacity: 0,
+      delay: 0.18,
+      duration: 0.45,
+      ease: "sine.out"
+    })
     gsap.fromTo(".hat__matching", { autoAlpha: 0, y: 12, scale: 0.88 }, {
       autoAlpha: 1,
       y: 0,
@@ -277,7 +283,8 @@ onUnmounted(() => animationContext?.revert())
 
 .hat__flash {
   z-index: 4;
-  opacity: 0;
+  /* Show the opening flash on the first frame, then fade it out in GSAP. */
+  opacity: 0.7;
   background: url("/hat/flash2.jpg") center bottom / cover no-repeat;
 }
 

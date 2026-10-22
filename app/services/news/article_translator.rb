@@ -111,6 +111,7 @@ module News
       translated_body_text = translated.translated_body_text.to_s.strip.presence || source_body_text
       source_tags = Array(source_tag_names).map { |value| value.to_s.strip }.reject(&:blank?).uniq
       translated_tags = Array(translated_tag_names).map { |value| value.to_s.strip }.reject(&:blank?).uniq
+      translated_tags = source_tags unless valid_translated_tags?(translated_tags, source_tags.length)
 
       article.update!(
         title: normalize_text(translated_title),
@@ -142,6 +143,13 @@ module News
         ).compact
       )
       article.replace_news_tags!(translated_tags.presence || source_tags) if source_tags.present?
+    end
+
+    def valid_translated_tags?(tag_names, expected_count)
+      return false unless tag_names.length == expected_count
+
+      slugs = tag_names.map { |name| NewsTag.normalize_slug(name) }
+      slugs.none?(&:blank?) && slugs.uniq.length == expected_count
     end
 
     def mark_failed!(message)

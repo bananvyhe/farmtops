@@ -79,9 +79,8 @@ const articleKeywords = computed(() => {
   if (!article.value) return []
 
   const gameName = article.value.game?.name
-  if (!gameName) return []
-
   const tagNames = Array.isArray(article.value.tags) ? article.value.tags.map((tag) => tag.name) : []
+  if (!gameName && tagNames.length === 0) return []
 
   return [
     ...(gameName ? [gameName] : []),
@@ -100,8 +99,6 @@ const articleTags = computed(() => {
   if (!article.value) return []
 
   const gameName = article.value.game?.name
-  if (!gameName) return []
-
   const tagNames = Array.isArray(article.value.tags) ? article.value.tags.map((tag) => tag.name) : []
 
   return [...new Set([...(gameName ? [gameName] : []), ...tagNames])]
