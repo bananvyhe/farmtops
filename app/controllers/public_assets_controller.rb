@@ -78,9 +78,15 @@ class PublicAssetsController < ActionController::Base
   end
 
   def site_origin
-    Rails.application.credentials.dig(:app, :base_url).presence ||
-      ENV["APP_BASE_URL"].presence ||
-      request.base_url
+    origin = if Rails.env.production?
+      "https://farmspot.ru"
+    else
+      Rails.application.credentials.dig(:app, :base_url).presence ||
+        ENV["APP_BASE_URL"].presence ||
+        request.base_url
+    end
+
+    origin.to_s.strip.sub(%r{/+\z}, "")
   end
 
   def indent(text, spaces)

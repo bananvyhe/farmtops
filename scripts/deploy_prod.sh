@@ -14,42 +14,47 @@ else
   SERVICES=(web sidekiq frontend)
 fi
 
-needs_frontend_restart=0
+needs_rails_restart=0
 for service in "${SERVICES[@]}"; do
   if [ "$service" = "web" ] || [ "$service" = "sidekiq" ]; then
-    needs_frontend_restart=1
+    needs_rails_restart=1
   fi
 done
 
-if [ "$needs_frontend_restart" -eq 1 ]; then
-  has_frontend=0
+if [ "$needs_rails_restart" -eq 1 ]; then
   for service in "${SERVICES[@]}"; do
-    if [ "$service" = "frontend" ]; then
-      has_frontend=1
-      break
-    fi
+    case "$service" in
+      web|sidekiq|frontend)
+        ;;
+      *)
+        echo "Unknown service: $service" >&2
+        exit 1
+        ;;
+    esac
   done
 
-  if [ "$has_frontend" -eq 0 ]; then
-    SERVICES+=(frontend)
-  fi
+  for required_service in web sidekiq frontend; do
+    if [[ ! " ${SERVICES[*]} " =~ " ${required_service} " ]]; then
+      SERVICES+=("$required_service")
+    fi
+  done
 fi
-
-echo "Deploy host: $REMOTE_HOST"
-echo "Deploy path: $REMOTE_PATH"
-echo "Services: ${SERVICES[*]}"
 
 if [ "${#SERVICES[@]}" -eq 0 ]; then
   echo "No services selected." >&2
   exit 1
 fi
 
+echo "Deploy host: $REMOTE_HOST"
+echo "Deploy path: $REMOTE_PATH"
+echo "Services: ${SERVICES[*]}"
+
 BUILD_SERVICES=()
 for service in "${SERVICES[@]}"; do
   case "$service" in
     web|sidekiq)
-      if [[ ! " ${BUILD_SERVICES[*]} " =~ " web " ]]; then
-        BUILD_SERVICES+=(web)
+      if [[ ! " ${BUILD_SERVICES[*]} " =~ " ${service} " ]]; then
+        BUILD_SERVICES+=("$service")
       fi
       ;;
     frontend)
