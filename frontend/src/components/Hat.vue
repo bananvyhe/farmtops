@@ -1,5 +1,5 @@
 <template>
-  <div ref="hatRef" class="hat pb-1" aria-hidden="true">
+  <div ref="hatRef" class="hat" aria-hidden="true">
     <div class="hat__container d-flex align-end">
       <div class="hat__fog 
 "></div>

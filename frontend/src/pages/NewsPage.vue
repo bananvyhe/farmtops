@@ -32,6 +32,7 @@ const failedPreviewImages = ref(new Set())
 const activeQueryKey = ref("")
 const articleRefs = new Map()
 const animatedArticleElements = new WeakSet()
+let scrollTriggerRefreshFrame = 0
 const readTimers = new Map()
 const pendingReadIds = new Set()
 const READ_VISIBILITY_RATIO = 0.75
@@ -47,6 +48,14 @@ const newsUi = useNewsUiStore()
 const { y: scrollY } = useWindowScroll()
 gsap.registerPlugin(ScrollTrigger)
 
+function refreshNewsScrollTriggers() {
+  if (scrollTriggerRefreshFrame) cancelAnimationFrame(scrollTriggerRefreshFrame)
+  scrollTriggerRefreshFrame = requestAnimationFrame(() => {
+    scrollTriggerRefreshFrame = 0
+    ScrollTrigger.refresh()
+  })
+}
+
 async function animateNewsCards() {
   await nextTick()
   if (!hydrated.value || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
@@ -58,22 +67,24 @@ async function animateNewsCards() {
   cards.forEach((card, index) => {
     animatedArticleElements.add(card)
     gsap.fromTo(card, {
-      autoAlpha: 0,
+      autoAlpha: 0.45,
       x: index % 2 === 0 ? -8 : 8
     }, {
       autoAlpha: 1,
       x: 0,
-      duration: 0.1,
-      delay: (index % 3) * 0.035,
-      ease: "power0.in",
+      duration: 0.18,
+      delay: (index % 3) * 0.01,
+      ease: "expo.in",
+      // immediateRender: false,
       clearProps: "transform,opacity,visibility",
       scrollTrigger: {
         trigger: card,
-        start: "top 88%",
+        start: "top 92%",
         once: true
       }
     })
   })
+  refreshNewsScrollTriggers()
 }
 const handleSessionChanged = () => {
   if (!hydrated.value) return
@@ -685,6 +696,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  if (scrollTriggerRefreshFrame) cancelAnimationFrame(scrollTriggerRefreshFrame)
   window.removeEventListener("farmspot:session-changed", handleSessionChanged)
   stopReturnAnchorAdjustment()
   resetReadTracking()
@@ -786,6 +798,7 @@ onBeforeUnmount(() => {
             :alt="article.title || article.preview_text || 'news image'"
             loading="lazy"
             decoding="async"
+            @load="refreshNewsScrollTriggers"
             @error="markPreviewImageFailed(article.id)"
           >
           <div v-else class="news-card__placeholder">
@@ -845,7 +858,7 @@ onBeforeUnmount(() => {
 .news-page {
   min-height: calc(100vh - 7.5rem);
   display: grid;
-  gap: var(--space-m);
+  gap: var(--space-2xs);
 }
 
 .news-hero {
