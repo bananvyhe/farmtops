@@ -26,7 +26,8 @@ module News
         target_lang: target_lang,
         title: source_title,
         preview_text: source_preview_text,
-        body_text: source_body_text
+        body_text: source_body_text,
+        contextual_title: true
       )
 
       translated_tag_names = translate_tag_names(source_tag_names, request_id: request_id)

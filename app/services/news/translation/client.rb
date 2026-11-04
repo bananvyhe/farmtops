@@ -26,7 +26,7 @@ module News
         @read_timeout = read_timeout
       end
 
-      def translate_article(request_id: SecureRandom.uuid, source_lang:, target_lang:, title:, preview_text:, body_text:)
+      def translate_article(request_id: SecureRandom.uuid, source_lang:, target_lang:, title:, preview_text:, body_text:, contextual_title: false)
         response = post_json(
           DEFAULT_PATH,
           {
@@ -36,6 +36,7 @@ module News
             title: title.to_s,
             preview_text: preview_text.to_s,
             body_text: body_text.to_s,
+            contextual_title: contextual_title,
           }.compact
         )
 

@@ -486,7 +486,8 @@ module News
           target_lang: target_lang,
           title: article_data[:title],
           preview_text: article_data[:preview_text],
-          body_text: article_data[:body_text]
+          body_text: article_data[:body_text],
+          contextual_title: true
         )
       end
     end

@@ -104,18 +104,22 @@ module News
 
       def replace_block_text(copy, translated_paragraph)
         text_nodes = copy.xpath(".//text()").reject { |text| text.text.to_s.strip.empty? }
+        links = copy.css("a[href]").filter_map do |link|
+          href = link["href"].to_s.strip
+          label = link.text.to_s.strip
+          { href: href, label: label } if href.present?
+        end
 
         # Preserve the author's inline emphasis for the common case of a
-        # heading wrapped in <strong>/<span>. For mixed inline content (for
-        # example text + a link), replacing the whole block is safer than
-        # leaving source-language fragments behind.
-        if text_nodes.length == 1 && copy.element_children.all? { |child| inline_only_node?(child) }
+        # heading wrapped in <strong>/<span>. Links are handled separately so
+        # replacing mixed inline content does not silently discard them.
+        if links.empty? && text_nodes.length == 1 && copy.element_children.all? { |child| inline_only_node?(child) }
           text_nodes.first.content = translated_paragraph
           copy.xpath(".//text()").each do |text|
             text.remove if text != text_nodes.first && !text.text.to_s.strip.empty?
           end
         else
-          copy.inner_html = paragraph_to_html(translated_paragraph)
+          copy.inner_html = paragraph_to_html_with_links(translated_paragraph, links)
         end
       end
 
@@ -149,6 +153,34 @@ module News
 
       def paragraph_to_html(paragraph)
         ERB::Util.html_escape(paragraph).gsub(/\n/, "<br>")
+      end
+
+      def paragraph_to_html_with_links(paragraph, links)
+        html = paragraph_to_html(paragraph)
+        unplaced_links = []
+
+        links.each do |link|
+          label = link[:label].presence || link[:href]
+          escaped_label = ERB::Util.html_escape(label).to_s
+          linked_text = link_html(link[:href], label)
+          pattern = Regexp.new(Regexp.escape(escaped_label), Regexp::IGNORECASE)
+
+          if html.match?(pattern)
+            html = html.sub(pattern) { linked_text }
+          else
+            unplaced_links << linked_text
+          end
+        end
+
+        return html if unplaced_links.empty?
+
+        "#{html} (#{unplaced_links.join(' ')})"
+      end
+
+      def link_html(href, label)
+        escaped_href = ERB::Util.html_escape(href).to_s
+        escaped_label = ERB::Util.html_escape(label).to_s
+        %(<a href="#{escaped_href}">#{escaped_label}</a>)
       end
 
       def build_plain_html
