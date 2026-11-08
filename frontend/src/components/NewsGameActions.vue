@@ -48,30 +48,30 @@ async function handleToggle() {
       {{ gameFollowersLabel(article.game.bookmarks_count) }}
     </v-chip>
 
-    <v-tooltip v-if="article.game" :text="shardTooltip" location="top">
-      <template #activator="{ props }">
-        <span v-bind="props" class="news-card__world-button-wrap" v-if="article.game">
-          <button
-            v-if="article.game?.can_create_shard"
-            class="news-card__world-button"
-            type="button"
-            :disabled="!canEnterWorld || creatingShardGameId === article.game.id"
-            @click.stop.prevent="enterWorld"
-          >
-            {{ creatingShardGameId === article.game.id ? "Создаем..." : "поиск группы" }}
-          </button>
+    <span
+      v-if="article.game"
+      class="news-card__world-button-wrap"
+      :title="shardTooltip"
+    >
+      <button
+        v-if="article.game?.can_create_shard"
+        class="news-card__world-button"
+        type="button"
+        :disabled="!canEnterWorld || creatingShardGameId === article.game.id"
+        @click.stop.prevent="enterWorld"
+      >
+        {{ creatingShardGameId === article.game.id ? "Создаем..." : "поиск группы" }}
+      </button>
 
-          <button
-            v-else
-            class="news-card__world-button news-card__world-button--disabled"
-            type="button"
-            disabled
-          >
-            Найти группу
-          </button>
-        </span>
-      </template>
-    </v-tooltip>
+      <button
+        v-else
+        class="news-card__world-button news-card__world-button--disabled"
+        type="button"
+        disabled
+      >
+        Найти группу
+      </button>
+    </span>
   </div>
 </template>
 
