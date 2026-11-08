@@ -1,0 +1,9 @@
+# Farmspot
+
+Farmspot is a Russian-language gaming community with a public feed of gaming news and community features.
+
+## Public pages
+
+- [News feed](https://farmspot.ru/news): gaming news and articles.
+- [Sitemap](https://farmspot.ru/sitemap.xml): indexed public pages and articles.
+- [Robots policy](https://farmspot.ru/robots.txt): crawler access rules.

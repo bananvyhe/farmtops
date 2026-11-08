@@ -48,7 +48,7 @@ async function handleToggle() {
       {{ gameFollowersLabel(article.game.bookmarks_count) }}
     </v-chip>
 
-    <v-tooltip :text="shardTooltip" location="top">
+    <v-tooltip v-if="article.game" :text="shardTooltip" location="top">
       <template #activator="{ props }">
         <span v-bind="props" class="news-card__world-button-wrap" v-if="article.game">
           <button
