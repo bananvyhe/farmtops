@@ -1,8 +1,4 @@
 {
   "specVersion": "1.0",
-  "host": {
-    "displayName": "Farmspot",
-    "identifier": "https://farmspot.ru/"
-  },
   "entries": []
 }
