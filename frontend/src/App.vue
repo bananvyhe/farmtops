@@ -1,9 +1,11 @@
 <script setup>
-import { computed, onMounted, onUnmounted, watch } from "vue"
+import { computed, onMounted, onUnmounted, shallowRef, watch } from "vue"
 import { useRouter } from "vue-router"
 import { clearSession, loadSession, logout, sessionState } from "./useSession"
 import { useNewsUiStore } from "./stores/newsUi"
-import Hat from "./components/Hat.vue"
+
+const Hat = shallowRef(null)
+let hatLoadTimer
 
 const router = useRouter()
 const newsUi = useNewsUiStore()
@@ -36,6 +38,14 @@ watch(
 onMounted(async () => {
   window.addEventListener("farmspot:unauthorized", handleUnauthorized)
 
+  // Keep the animated header off the critical path for the first news card.
+  const loadHat = () => import("./components/Hat.vue").then((module) => { Hat.value = module.default })
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(loadHat, { timeout: 2500 })
+  } else {
+    hatLoadTimer = window.setTimeout(loadHat, 1200)
+  }
+
   try {
     await loadSession()
     if (sessionState.authenticated && currentPath.value === "/login") {
@@ -52,6 +62,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  if (hatLoadTimer) window.clearTimeout(hatLoadTimer)
   window.removeEventListener("farmspot:unauthorized", handleUnauthorized)
 })
 
@@ -64,7 +75,8 @@ async function handleLogout() {
 <template>
   <div class="app-shell">
      
-    <Hat class=" " /> 
+    <component :is="Hat" v-if="Hat" />
+    <div v-else class="hat-placeholder" aria-hidden="true"></div>
     <header class="app-topbar">
       <div class="app-brand">
         <div class="eyebrow">farmspot.ru</div>

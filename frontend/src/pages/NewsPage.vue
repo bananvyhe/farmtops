@@ -2,8 +2,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useIntersectionObserver, useWindowScroll, watchThrottled } from "@vueuse/core"
-import { gsap } from "gsap"
-import { ScrollTrigger } from "gsap/ScrollTrigger"
 import { api } from "../api"
 import { sessionState } from "../useSession"
 import NewsGameActions from "../components/NewsGameActions.vue"
@@ -46,13 +44,25 @@ const route = useRoute()
 const router = useRouter()
 const newsUi = useNewsUiStore()
 const { y: scrollY } = useWindowScroll()
-gsap.registerPlugin(ScrollTrigger)
+let animationRuntimePromise
+
+function getAnimationRuntime() {
+  if (!animationRuntimePromise) {
+    animationRuntimePromise = Promise.all([import("gsap"), import("gsap/ScrollTrigger")]).then(([gsapModule, triggerModule]) => {
+      const gsap = gsapModule.gsap
+      const ScrollTrigger = triggerModule.ScrollTrigger
+      gsap.registerPlugin(ScrollTrigger)
+      return { gsap, ScrollTrigger }
+    })
+  }
+  return animationRuntimePromise
+}
 
 function refreshNewsScrollTriggers() {
   if (scrollTriggerRefreshFrame) cancelAnimationFrame(scrollTriggerRefreshFrame)
   scrollTriggerRefreshFrame = requestAnimationFrame(() => {
     scrollTriggerRefreshFrame = 0
-    ScrollTrigger.refresh()
+    getAnimationRuntime().then(({ ScrollTrigger }) => ScrollTrigger.refresh())
   })
 }
 
@@ -63,6 +73,8 @@ async function animateNewsCards() {
   const cards = [...document.querySelectorAll(".news-page .news-feed > .news-card")]
     .filter((card) => !animatedArticleElements.has(card))
   if (!cards.length) return
+  const { gsap } = await getAnimationRuntime()
+  if (!hydrated.value) return
 
   cards.forEach((card, index) => {
     animatedArticleElements.add(card)
@@ -701,8 +713,10 @@ onBeforeUnmount(() => {
   stopReturnAnchorAdjustment()
   resetReadTracking()
   readObserver?.disconnect()
-  ScrollTrigger.getAll().forEach((trigger) => {
-    if (trigger.trigger?.closest?.(".news-page")) trigger.kill()
+  animationRuntimePromise?.then(({ ScrollTrigger }) => {
+    ScrollTrigger.getAll().forEach((trigger) => {
+      if (trigger.trigger?.closest?.(".news-page")) trigger.kill()
+    })
   })
   saveFeedSnapshot()
 })
@@ -784,7 +798,7 @@ onBeforeUnmount(() => {
 
     <section v-else class="news-feed">
       <article
-        v-for="article in displayArticles"
+        v-for="(article, articleIndex) in displayArticles"
         :key="article.id"
         :ref="(element) => setArticleRef(article.id, element)"
         :data-article-id="article.id"
@@ -796,7 +810,8 @@ onBeforeUnmount(() => {
             v-if="(article.preview_image_url || article.image_url) && !failedPreviewImages.has(article.id)"
             :src="article.preview_image_url || article.image_url"
             :alt="article.title || article.preview_text || 'news image'"
-            loading="lazy"
+            :loading="articleIndex === 0 ? 'eager' : 'lazy'"
+            :fetchpriority="articleIndex === 0 ? 'high' : 'auto'"
             decoding="async"
             @load="refreshNewsScrollTriggers"
             @error="markPreviewImageFailed(article.id)"

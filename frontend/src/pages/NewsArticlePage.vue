@@ -177,6 +177,12 @@ async function loadArticle() {
       return
     }
 
+    setSeo({
+      title: "Новость временно недоступна",
+      description: "Не удалось загрузить новость. Попробуйте открыть страницу позже.",
+      canonicalPath: `/news/${route.params.id}`,
+      robots: "noindex, follow"
+    })
     error.value = err.message
   } finally {
     loading.value = false

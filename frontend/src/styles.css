@@ -313,6 +313,11 @@ h3 {
   margin-left: calc(50% - 50vw);
 }
 
+.hat-placeholder {
+  height: 146px;
+  background: #13151a;
+}
+
 .app-topbar {
   display: flex;
   align-items: center;

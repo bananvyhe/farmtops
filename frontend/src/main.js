@@ -1,14 +1,6 @@
 import { createApp } from "vue"
 import { createRouter, createWebHistory } from "vue-router"
 import App from "./App.vue"
-import LoginPage from "./pages/LoginPage.vue"
-import DashboardPage from "./pages/DashboardPage.vue"
-import ProfilePage from "./pages/ProfilePage.vue"
-import AdminPage from "./pages/AdminPage.vue"
-import NewsPage from "./pages/NewsPage.vue"
-import NewsArticlePage from "./pages/NewsArticlePage.vue"
-import ShardWorldPage from "./pages/ShardWorldPage.vue"
-import NotFoundPage from "./pages/NotFoundPage.vue"
 import { createPinia } from "pinia"
 import vuetify from "./plugins/vuetify"
 import { setSeo } from "./seo"
@@ -33,7 +25,7 @@ const routes = [
   { path: "/", redirect: "/news" },
   {
     path: "/login",
-    component: LoginPage,
+    component: () => import("./pages/LoginPage.vue"),
     meta: {
       title: "Вход",
       description: "Войдите в Farmspot, чтобы открыть личный кабинет и дополнительные функции.",
@@ -42,7 +34,7 @@ const routes = [
   },
   {
     path: "/news",
-    component: NewsPage,
+    component: () => import("./pages/NewsPage.vue"),
     meta: {
       title: "Новости",
       description: "Свежие новости Farmspot и связанные игровые материалы."
@@ -50,7 +42,7 @@ const routes = [
   },
   {
     path: "/news/:id",
-    component: NewsArticlePage,
+    component: () => import("./pages/NewsArticlePage.vue"),
     meta: {
       title: "Новость",
       description: "Открыть полную версию новости Farmspot."
@@ -58,7 +50,7 @@ const routes = [
   },
   {
     path: "/profile",
-    component: ProfilePage,
+    component: () => import("./pages/ProfilePage.vue"),
     meta: {
       title: "Профиль",
       description: "Личный профиль пользователя Farmspot.",
@@ -67,7 +59,7 @@ const routes = [
   },
   {
     path: "/world/:id",
-    component: ShardWorldPage,
+    component: () => import("./pages/ShardWorldPage.vue"),
     meta: {
       title: "Мир",
       description: "Публичная страница мира Farmspot.",
@@ -76,7 +68,7 @@ const routes = [
   },
   {
     path: "/dashboard",
-    component: DashboardPage,
+    component: () => import("./pages/DashboardPage.vue"),
     meta: {
       title: "Кабинет",
       description: "Панель управления балансом и платежами Farmspot.",
@@ -85,7 +77,7 @@ const routes = [
   },
   {
     path: "/admin",
-    component: AdminPage,
+    component: () => import("./pages/AdminPage.vue"),
     meta: {
       title: "Админка",
       description: "Административная панель Farmspot.",
@@ -94,7 +86,7 @@ const routes = [
   },
   {
     path: "/404",
-    component: NotFoundPage,
+    component: () => import("./pages/NotFoundPage.vue"),
     meta: {
       title: "Страница не найдена",
       description: "Запрошенная страница Farmspot не найдена.",

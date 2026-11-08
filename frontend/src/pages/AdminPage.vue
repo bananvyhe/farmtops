@@ -117,7 +117,7 @@ onMounted(loadAdmin)
             <td>{{ tariff.billing_period_days }}</td>
             <td>
               <v-btn
-                icon="mdi-delete"
+                icon="$delete"
                 variant="tonal"
                 color="error"
                 size="small"
@@ -180,7 +180,7 @@ onMounted(loadAdmin)
             <td><button @click="saveUser(user)">Сохранить</button></td>
             <td>
               <v-btn
-                icon="mdi-delete"
+                icon="$delete"
                 variant="tonal"
                 color="error"
                 size="small"
