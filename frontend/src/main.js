@@ -8,17 +8,30 @@ import "./styles.css"
 
 if (import.meta.env.PROD) {
   const gaId = "G-QC89HYMM4R"
-  const gtagScript = document.createElement("script")
-  gtagScript.async = true
-  gtagScript.src = `https://www.googletagmanager.com/gtag/js?id=${gaId}`
-  document.head.appendChild(gtagScript)
+  const loadGoogleAnalytics = () => {
+    if (document.querySelector(`script[src*="googletagmanager.com/gtag/js?id=${gaId}"]`)) return
 
-  window.dataLayer = window.dataLayer || []
-  function gtag() {
-    window.dataLayer.push(arguments)
+    window.dataLayer = window.dataLayer || []
+    function gtag() {
+      window.dataLayer.push(arguments)
+    }
+    gtag("js", new Date())
+    gtag("config", gaId)
+
+    const gtagScript = document.createElement("script")
+    gtagScript.async = true
+    gtagScript.src = `https://www.googletagmanager.com/gtag/js?id=${gaId}`
+    document.head.appendChild(gtagScript)
   }
-  gtag("js", new Date())
-  gtag("config", gaId)
+
+  const analyticsViewport = window.matchMedia("(min-width: 768px)")
+  if (analyticsViewport.matches) {
+    loadGoogleAnalytics()
+  } else {
+    analyticsViewport.addEventListener("change", (event) => {
+      if (event.matches) loadGoogleAnalytics()
+    }, { once: true })
+  }
 }
 
 const routes = [

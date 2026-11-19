@@ -75,8 +75,9 @@ function refreshNewsScrollTriggers() {
 }
 
 async function animateNewsCards() {
+  if (!hydrated.value || isMobile.value || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
   await nextTick()
-  if (!hydrated.value || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+  if (!hydrated.value) return
 
   const cards = [...document.querySelectorAll(".news-page .news-feed > .news-card")]
     .filter((card) => !animatedArticleElements.has(card))
