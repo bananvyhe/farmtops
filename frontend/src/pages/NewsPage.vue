@@ -10,7 +10,12 @@ import { useNewsUiStore } from "../stores/newsUi"
 const articles = ref([])
 const mobileViewport = window.matchMedia("(max-width: 767px)")
 const isMobile = ref(mobileViewport.matches)
-const updateMobileLayout = (event) => { isMobile.value = event.matches }
+const newsPageLimit = computed(() => isMobile.value ? 5 : 20)
+const updateMobileLayout = (event) => {
+  if (isMobile.value === event.matches) return
+  isMobile.value = event.matches
+  if (hydrated.value) loadFeed()
+}
 const sources = ref([])
 const sections = ref([])
 const tags = ref([])
@@ -334,6 +339,7 @@ function rememberArticleReturnPoint(articleId, event) {
 
 function restoreFeedSnapshot() {
   const state = newsUi.feedSnapshot
+  if (isMobile.value && state?.articles?.length > newsPageLimit.value) return false
   const routeFilters = filtersFromRoute()
   const routeKey = filtersKey(routeFilters.sourceId, routeFilters.sectionId, routeFilters.tagIds, routeFilters.gameId)
 
@@ -539,7 +545,7 @@ async function loadFeed() {
       section_id: selectedSectionId.value,
       tag_ids: selectedTagIds.value.join(","),
       game_id: selectedGameId.value,
-      limit: 20
+      limit: newsPageLimit.value
     })
     if (currentToken !== requestToken || activeQueryKey.value !== queryKey) return
     articles.value = data.articles
@@ -584,7 +590,7 @@ async function loadMore() {
       section_id: selectedSectionId.value,
       tag_ids: selectedTagIds.value.join(","),
       game_id: selectedGameId.value,
-      limit: 20,
+      limit: newsPageLimit.value,
       cursor: nextCursor.value
     })
     if (currentToken !== requestToken || activeQueryKey.value !== queryKey) return
