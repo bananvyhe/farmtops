@@ -8,6 +8,9 @@ import NewsGameActions from "../components/NewsGameActions.vue"
 import { useNewsUiStore } from "../stores/newsUi"
 
 const articles = ref([])
+const mobileViewport = window.matchMedia("(max-width: 767px)")
+const isMobile = ref(mobileViewport.matches)
+const updateMobileLayout = (event) => { isMobile.value = event.matches }
 const sources = ref([])
 const sections = ref([])
 const tags = ref([])
@@ -662,6 +665,7 @@ useIntersectionObserver(
 )
 
 onMounted(async () => {
+  mobileViewport.addEventListener("change", updateMobileLayout)
   window.addEventListener("farmspot:session-changed", handleSessionChanged)
 
   if (typeof IntersectionObserver === "function") {
@@ -708,6 +712,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  mobileViewport.removeEventListener("change", updateMobileLayout)
   if (scrollTriggerRefreshFrame) cancelAnimationFrame(scrollTriggerRefreshFrame)
   window.removeEventListener("farmspot:session-changed", handleSessionChanged)
   stopReturnAnchorAdjustment()
@@ -792,7 +797,7 @@ onBeforeUnmount(() => {
 
     <section v-if="loading" class="news-feed">
       <article v-for="index in 4" :key="index" class="news-card card card--dark">
-        <v-skeleton-loader type="image, article, button" />
+        <v-skeleton-loader :type="isMobile ? 'article, button' : 'image, article, button'" />
       </article>
     </section>
 
@@ -805,7 +810,7 @@ onBeforeUnmount(() => {
         class="news-card card card--dark"
         :class="{ 'news-card--unread': isUnread(article) }"
       >
-        <div class="news-card__media">
+        <div v-if="!isMobile" class="news-card__media">
           <img
             v-if="(article.preview_image_url || article.image_url) && !failedPreviewImages.has(article.id)"
             :src="article.preview_image_url || article.image_url"

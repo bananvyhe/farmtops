@@ -5,7 +5,7 @@ import { clearSession, loadSession, logout, sessionState } from "./useSession"
 import { useNewsUiStore } from "./stores/newsUi"
 
 const Hat = shallowRef(null)
-let hatLoadTimer
+const desktopViewport = window.matchMedia("(min-width: 768px)")
 
 const router = useRouter()
 const newsUi = useNewsUiStore()
@@ -38,12 +38,9 @@ watch(
 onMounted(async () => {
   window.addEventListener("farmspot:unauthorized", handleUnauthorized)
 
-  // Keep the animated header off the critical path for the first news card.
-  const loadHat = () => import("./components/Hat.vue").then((module) => { Hat.value = module.default })
-  if ("requestIdleCallback" in window) {
-    window.requestIdleCallback(loadHat, { timeout: 2500 })
-  } else {
-    hatLoadTimer = window.setTimeout(loadHat, 1200)
+  // Do not download the animation component and its assets on mobile.
+  if (desktopViewport.matches) {
+    import("./components/Hat.vue").then((module) => { Hat.value = module.default })
   }
 
   try {
@@ -62,7 +59,6 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (hatLoadTimer) window.clearTimeout(hatLoadTimer)
   window.removeEventListener("farmspot:unauthorized", handleUnauthorized)
 })
 
