@@ -115,11 +115,13 @@ gsap.timeline({ repeat: -1, delay: 1.8, repeatDelay: 2.74 })
     scaleY: 0.999,
     duration: 0.5,
     stagger: { each: 0.025, from: "center" },
-    ease: "expo.out"
+         delay: 0.05,
+    ease: "circ.out"
   }, "firstStrike")
   .to(".hat__warrior", {
     y: 0,
     scaleY: 1,
+    delay: 0.7,
     duration: 2.15,
     stagger: { each: 0.045, from: "center" },
     ease: "none"
@@ -149,10 +151,12 @@ gsap.timeline({ repeat: -1, delay: 1.8, repeatDelay: 2.74 })
     scaleY: 0.999,
     duration: 0.5,
     stagger: { each: 0.025, from: "center" },
-    ease: "expo.out"
+     delay: 0.05,
+    ease: "circ.out"
   }, "secondStrike")
   .to(".hat__warrior", {
     y: 0,
+    delay: 0.7,
     scaleY: 1,
     duration: 2,
     stagger: { each: 0.045, from: "center" },
