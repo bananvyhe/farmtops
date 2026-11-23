@@ -9,7 +9,7 @@ const desktopViewport = window.matchMedia("(min-width: 768px)")
 
 const router = useRouter()
 const newsUi = useNewsUiStore()
-const publicPaths = new Set(["/login", "/news"])
+const publicPaths = new Set(["/login", "/news", "/404"])
 const currentPath = computed(() => router.currentRoute.value.path)
 const isPublicNewsRoute = computed(() => currentPath.value === "/news" || currentPath.value.startsWith("/news/"))
 

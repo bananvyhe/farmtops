@@ -108,9 +108,23 @@ gsap.timeline({ repeat: -1, delay: 2.8 })
     filter: "brightness(0.42)",
     duration: 0.05
   }, "firstStrike")
+  .to(".hat__warrior", {
+    y: 6,
+    scaleY: 0.999,
+    duration: 0.2,
+    stagger: { each: 0.025, from: "center" },
+    ease: "expo.out"
+  }, "firstStrike")
+  .to(".hat__warrior", {
+    y: 0,
+    scaleY: 1,
+    duration: 2.15,
+    stagger: { each: 0.045, from: "center" },
+    ease: "none"
+  }, "firstStrike+=0.2")
   .to(".hat__flash", {
     opacity: 0,
-    duration: 2.2,
+    duration: 1.2,
     ease: "sine.out"
   })
   .to(".hat__warrior", {
@@ -129,9 +143,23 @@ gsap.timeline({ repeat: -1, delay: 2.8 })
     duration: 0.05,
     ease: "expo.inOut"
   }, "secondStrike")
+  .to(".hat__warrior", {
+    y: 7,
+    scaleY: 0.999,
+    duration: 0.22,
+    stagger: { each: 0.025, from: "center" },
+    ease: "expo.out"
+  }, "secondStrike")
+  .to(".hat__warrior", {
+    y: 0,
+    scaleY: 1,
+    duration: 2,
+    stagger: { each: 0.045, from: "center" },
+    ease: "none"
+  }, "secondStrike+=0.22")
   .to(".hat__flash", {
     opacity: 0,
-    duration: 4,
+    duration: 1,
     ease: "sine.out"
   })
   .to(".hat__warrior", {
@@ -177,6 +205,7 @@ onUnmounted(() => animationContext?.revert())
 .hat__warrior {
   flex: 0 0 auto;
   height: 146px;
+  transform-origin: center bottom;
   background-repeat: no-repeat;
   background-size: auto 145%;
 }
