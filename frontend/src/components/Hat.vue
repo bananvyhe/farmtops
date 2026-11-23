@@ -111,17 +111,17 @@ gsap.timeline({ repeat: -1, delay: 1.8, repeatDelay: 2.74 })
     duration: 0.05
   }, "firstStrike")
   .to(".hat__warrior", {
-    y: 6,
-    scaleY: 0.999,
-    duration: 0.5,
-    stagger: { each: 0.025, from: "center" },
-         delay: 0.05,
-    ease: "circ.out"
+    y: 4,
+    scaleY: 0.94,
+    duration: 0.4,
+    // stagger: { each: 0.025, from: "center" },
+        //  delay: 0.05,
+    ease: "back.in"
   }, "firstStrike")
   .to(".hat__warrior", {
     y: 0,
     scaleY: 1,
-    delay: 0.7,
+    delay: 1.3,
     duration: 2.15,
     stagger: { each: 0.045, from: "center" },
     ease: "none"
@@ -136,7 +136,7 @@ gsap.timeline({ repeat: -1, delay: 1.8, repeatDelay: 2.74 })
     duration: 1.2,
     ease: "power4.in"
   }, "<")
-  .addLabel("secondStrike", "firstStrike+=5")
+  .addLabel("secondStrike", "firstStrike+=3.3")
   .to(".hat__flash", {
     opacity: 1,
     duration: 0.05
@@ -147,16 +147,16 @@ gsap.timeline({ repeat: -1, delay: 1.8, repeatDelay: 2.74 })
     ease: "expo.inOut"
   }, "secondStrike")
   .to(".hat__warrior", {
-    y: 7,
-    scaleY: 0.999,
-    duration: 0.5,
-    stagger: { each: 0.025, from: "center" },
-     delay: 0.05,
-    ease: "circ.out"
+    y: 2,
+    scaleY: 0.94,
+    duration: 0.4,
+    // stagger: { each: 0.025, from: "center" },
+     delay: 0.2,
+    ease: "back.in"
   }, "secondStrike")
   .to(".hat__warrior", {
     y: 0,
-    delay: 0.7,
+    delay: 1.3,
     scaleY: 1,
     duration: 2,
     stagger: { each: 0.045, from: "center" },
