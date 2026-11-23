@@ -98,20 +98,22 @@ onMounted(() => {
       repeat: -1
     })
 
-gsap.timeline({ repeat: -1, delay: 2.8 })
+// The first strike illuminates the warriors as they emerge from the shadows.
+// Keep the two strikes and the loop pause deliberate so the storm does not feel rushed.
+gsap.timeline({ repeat: -1, delay: 1.8, repeatDelay: 2.74 })
   .addLabel("firstStrike")
   .to(".hat__flash", {
     opacity: 0.7,
     duration: 0.05
   }, "firstStrike")
   .to(".hat__warrior", {
-    filter: "brightness(0.42)",
+    filter: "brightness(0.32)",
     duration: 0.05
   }, "firstStrike")
   .to(".hat__warrior", {
     y: 6,
     scaleY: 0.999,
-    duration: 0.2,
+    duration: 0.5,
     stagger: { each: 0.025, from: "center" },
     ease: "expo.out"
   }, "firstStrike")
@@ -124,16 +126,15 @@ gsap.timeline({ repeat: -1, delay: 2.8 })
   }, "firstStrike+=0.2")
   .to(".hat__flash", {
     opacity: 0,
-    duration: 1.2,
+    duration: 2.2,
     ease: "sine.out"
-  })
+  }, "firstStrike+=0.05")
   .to(".hat__warrior", {
     filter: "brightness(1)",
-    duration: 1.9,
+    duration: 1.2,
     ease: "power4.in"
   }, "<")
-  .to({}, { duration: 1.4 })
-  .addLabel("secondStrike")
+  .addLabel("secondStrike", "firstStrike+=5")
   .to(".hat__flash", {
     opacity: 1,
     duration: 0.05
@@ -146,7 +147,7 @@ gsap.timeline({ repeat: -1, delay: 2.8 })
   .to(".hat__warrior", {
     y: 7,
     scaleY: 0.999,
-    duration: 0.22,
+    duration: 0.5,
     stagger: { each: 0.025, from: "center" },
     ease: "expo.out"
   }, "secondStrike")
@@ -159,12 +160,12 @@ gsap.timeline({ repeat: -1, delay: 2.8 })
   }, "secondStrike+=0.22")
   .to(".hat__flash", {
     opacity: 0,
-    duration: 1,
+    duration: 2,
     ease: "sine.out"
-  })
+  }, "secondStrike+=0.05")
   .to(".hat__warrior", {
     filter: "brightness(1)",
-    duration: 2.2,
+    duration: 1.2,
     ease: "power4.in"
   }, "<")
   }, hatRef.value)
