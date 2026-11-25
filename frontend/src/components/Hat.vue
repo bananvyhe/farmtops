@@ -159,7 +159,7 @@ gsap.timeline({ repeat: -1, delay: 1.8, repeatDelay: 2.74 })
     delay: 1.3,
     scaleY: 1,
     duration: 2,
-    stagger: { each: 0.045, from: "center" },
+    // stagger: { each: 0.045, from: "center" },
     ease: "none"
   }, "secondStrike+=0.22")
   .to(".hat__flash", {
