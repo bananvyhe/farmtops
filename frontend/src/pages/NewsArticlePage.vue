@@ -173,7 +173,14 @@ async function loadArticle() {
     }
   } catch (err) {
     if (err.status === 404) {
-      await router.replace({ path: "/404", query: { from: route.fullPath } })
+      article.value = null
+      setSeo({
+        title: "Новость не найдена",
+        description: "Запрошенная новость не найдена.",
+        canonicalPath: `/news/${route.params.id}`,
+        robots: "noindex, nofollow"
+      })
+      error.value = "Запрошенная новость не найдена."
       return
     }
 
